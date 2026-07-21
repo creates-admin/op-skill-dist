@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# 機能概要: 実行環境の CPU アーキテクチャを判定し、対応する op バイナリへ exec する薄いラッパー。
+# 作成意図: plugin の bin/ は Bash tool の PATH に追加されるため、ここに置いた `op` が
+#           素のコマンドとして解決される。配布先が x86_64 (WSL / Cloud VM) と
+#           aarch64 (DGX Spark) に分かれるため、単一 plugin で両対応するには
+#           arch 判定を実行時に行う必要がある。cargo install を配布条件から外すのが目的。
+# 注意点: 対応バイナリが未配置の場合は silent fail させず、ビルド手順を添えて明示的に落とす。
+#         SKILL.md 群は `op` が PATH にある前提で書かれており、無言で失敗すると
+#         原因究明が困難になるため (fail-fast を優先する)。
+set -euo pipefail
+
+# symlink 経由で呼ばれても実体のあるディレクトリを解決する
+# (plugin は ~/.claude/skills/op-skill が repo への symlink というケースがある)
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  # 相対 symlink の場合は元ディレクトリ基準で解決する
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+BIN_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+
+ARCH="$(uname -m)"
+case "$ARCH" in
+  x86_64|amd64)  TARGET="$BIN_DIR/op-x86_64" ;;
+  aarch64|arm64) TARGET="$BIN_DIR/op-aarch64" ;;
+  *)
+    echo "op: 未対応のアーキテクチャです: $ARCH" >&2
+    echo "    対応: x86_64 / aarch64" >&2
+    exit 1
+    ;;
+esac
+
+# fail-fast: バイナリ未配置を無言で通さず、復旧手順を提示する
+if [ ! -x "$TARGET" ]; then
+  echo "op: $ARCH 向けバイナリが見つかりません: $TARGET" >&2
+  echo "    以下でビルドして配置してください:" >&2
+  echo "      cd op-tools && cargo build --release -p op" >&2
+  echo "      cp op-tools/target/release/op bin/$(basename "$TARGET")" >&2
+  exit 1
+fi
+
+exec "$TARGET" "$@"

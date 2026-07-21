@@ -1,0 +1,6 @@
+{
+  "$comment": "ADR-0008 (payload 軸) M1 PoC により正本を op-core::payload へ移管。本ファイルは pointer。",
+  "canonical_source": "op-core::payload::scan_finding (op-tools/crates/op-core/src/payload/scan_finding.rs)",
+  "self_describe": "op help payload scan-finding [--json]",
+  "note": "scan-finding の必須 field / shape / semantic rule は `op help payload scan-finding --json` で取得する。旧 JSON Schema の examples[] は op-core/tests/fixtures/payload/scan-finding-example.json に round-trip fixture として保持。"
+}
