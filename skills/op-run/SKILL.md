@@ -985,7 +985,7 @@ for each cluster in parallel_clusters:
 
   # Agent tool で ClusterOrchestrator を spawn (1 メッセージに全 parallel cluster 分を並べる)
   Agent({
-    subagent_type: "feature-expert",
+    subagent_type: "op-skill:feature-expert",
     description: "ClusterOrchestrator: ${cluster.id_short}",
     model: "${cluster.model}",
     prompt: `
@@ -1023,7 +1023,7 @@ for chain in serial_chains:
     # 1 クラスタずつ Agent spawn → 完了 await → 次へ
     CLUSTER_INPUT=... # (parallel_clusters と同じ組み立て)
     CHAIN_SUMMARY_JSON=$(Agent({
-      subagent_type: "feature-expert",
+      subagent_type: "op-skill:feature-expert",
       description: "ClusterOrchestrator: ${cluster.id_short} (serial)",
       model: "${cluster.model}",
       prompt: `...` # parallel_clusters と同じ prompt 構造

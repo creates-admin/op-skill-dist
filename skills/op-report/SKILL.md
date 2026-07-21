@@ -232,7 +232,7 @@ op-report controller は以下のテンプレートで scout を spawn する。
 
 ```
 Agent({
-  subagent_type: "scout",
+  subagent_type: "op-skill:scout",
   description: "op-report finding 調査起票: <finding タイトル 1行>",
   prompt: `
 invocation_mode: op_managed
@@ -271,7 +271,8 @@ If information is missing, return it as assumptions[] or needs_human_decision.
 ### scout を subagent_type に直接渡せる根拠
 
 scout は `active-expert-registry` に登録されていない utility worker だが、
-`agents/scout.md` が存在するため `subagent_type: "scout"` を直接渡せる。
+`agents/scout.md` が存在するため spawn 対象にできる (plugin 実行時の `subagent_type` は
+scoped 名 `op-skill:scout` を渡す。上記テンプレ参照)。
 op-codev が `feature-expert` を直接 subagent_type に渡すのと同じ前例に準じる。
 
 ---

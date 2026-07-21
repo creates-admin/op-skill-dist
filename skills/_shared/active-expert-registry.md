@@ -102,6 +102,12 @@ agent 名から skill ディレクトリ名を機械生成 (例: `skills/expert-
 | review-expert | yes | no | no | yes |
 | security-expert | yes | yes | yes | specialist |
 
+> **Runtime spawn 時の scoped 名 (plugin 配布)**: 本 registry の expert 名は **bare canonical 名**であり、
+> routing / marker (`op-run-expert` 等) / fingerprint / `op run expert-resolve` 出力の正本である。
+> 一方 plugin 配布では Agent tool の `subagent_type` に **plugin scoped 名 `op-skill:<name>`** を
+> 渡さないと spawn が失敗する。`op-skill:` 前置は **spawn 境界でのみ**適用し、registry 参照 / 比較 /
+> marker 値には bare 名を使う。正本は `_shared/expert-spawn.md`「Plugin scoped-name 規約」。
+
 ## Planned Experts
 
 Planned experts are defined in:

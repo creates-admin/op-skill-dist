@@ -227,7 +227,7 @@ esac
 
 ```
 Agent({
-  subagent_type: "designer-expert",
+  subagent_type: "op-skill:designer-expert",
   model: "opus",   // ADR-0013 決定K: op-explore design 系は全役 Opus 優先 (craft=ceiling 課題)。Sonnet に落とさない
   description: "playground: 試作 UI (thin)",
   prompt: """

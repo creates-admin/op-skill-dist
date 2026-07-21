@@ -302,8 +302,11 @@ if active_apply_expert == "needs_human_decision":
   skip_spawn()
   return
 
-# active fallback 適用後の expert のみ Task spawn に使用する
-spawn_task(subagent_type = active_apply_expert)
+# active fallback 適用後の expert のみ Task spawn に使用する。
+# Agent tool の subagent_type には plugin scoped 名 (op-skill:<name>) を渡す。
+# active_apply_expert は bare のまま比較・override・表示に使い、前置は spawn 境界でのみ適用する
+# (expert-spawn.md「Plugin scoped-name 規約」)。
+spawn_task(subagent_type = "op-skill:" + active_apply_expert)
 ```
 
 #### 適用タイミング
@@ -317,4 +320,9 @@ spawn_task(subagent_type = active_apply_expert)
 司令官は **正規化後の expert** (`active_apply_expert`) を `cluster.expert` に上書きしてから
 以降のフェーズに進める。クラスタの実行プラン提示時は **正規化後** の expert 名を表示する
 (ユーザーが planned expert 名を見て混乱するのを防ぐ)。
+
+> `cluster.expert` / 表示名 / payload の `expert` field は **bare 名のまま**保持する。
+> plugin scoped 名 (`op-skill:<name>`) への前置は **Agent tool の `subagent_type` を渡す瞬間だけ**
+> 適用する (ClusterOrchestrator の apply / review spawn 含む)。正本は
+> `_shared/expert-spawn.md`「Plugin scoped-name 規約」。
 

@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p \"$HOME/.claude/workflows\" 2>/dev/null; cp -f \"${CLAUDE_PLUGIN_ROOT}/workflows/\"op-*.js \"$HOME/.claude/workflows/\" 2>/dev/null; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -6,7 +6,12 @@ additive_only_policy:
   - breaking change (既存フィールドの削除 / 型変更 / required 化 / marker 仕様変更) のみ schema_version を bump する
   - 現行 schema_version 一覧は `~/.claude/skills/_shared/version-check.md` の
     「## _shared ファイル 現行 schema_version 一覧」節を参照する
-notes: v16 (2026-06-21, additive) — ADR-0017 W4: パターン2 (apply 用) に正本 native auto-inject 契約を追記
+notes: v16 (2026-07-21, additive) — plugin 配布移行: 「Plugin scoped-name 規約」節を追加し、
+       Agent tool の subagent_type に plugin scoped 名 (op-skill:<name>) を渡す契約を明文化。
+       spawn の3パターン template と post-check 節の例を scoped 表記へ更新。
+       bare canonical 名は resolution/registry/marker の正本として保持し、前置は spawn 境界のみ。
+       prose 追加 + 例更新のみ・marker schema 不変ゆえ schema_version 据置。
+       v16 (2026-06-21, additive) — ADR-0017 W4: パターン2 (apply 用) に正本 native auto-inject 契約を追記
        (controller は spawn prompt に正本を明示注入しない)。prose 追加のみ・marker schema 不変ゆえ schema_version 据置。
        v16 (2026-05-23, additive) — §369 「op CLI helper 活用推奨例」節に
        `op core debt-key` / `op core extract-pr-markers` / `op core fingerprint` 説明を拡充。Fixes #453。
@@ -136,13 +141,48 @@ post-check expert として **runtime spawn 可能** なのは以下に限る:
 
 ---
 
+## Plugin scoped-name 規約 (subagent_type の前置)
+
+本 repo は Claude Code **plugin** (`op-skill`) として配布される (CLAUDE.md「配布・運用方式」)。
+plugin 内の component は **`op-skill:` prefix 付き**で登録されるため、Agent tool の `subagent_type`
+には **登録名 = scoped 名を渡さなければならない**。bare 名を渡すと
+`Agent type '<name>' not found` で spawn が失敗する (実測確認済み: bare `debug-expert` = 失敗 /
+`op-skill:debug-expert` = 正常 spawn)。ハーネスに bare→scoped の自動補完は無い。
+
+### 規約
+
+- **repo 提供の expert / utility worker を Agent tool で spawn する際は必ず `op-skill:<name>` を渡す**。
+  対象 = active expert 9 体 (debug / feature / refactor / optimize / test / designer / ux-ui-audit /
+  security / review) + utility worker (`scout` / `spec-expert`)。
+- **bare canonical 名は正本として保持する**。`op run expert-resolve` の出力、
+  `active-expert-registry.md`、marker 値 (`op-run-expert` 等)、fingerprint、
+  `apply-prompt-directives.md` の `${EXPERT}` 節 lookup はすべて **bare 名**で扱う。
+  `op-skill:` 前置は **Agent tool の `subagent_type` 引数の境界でのみ**適用し、
+  内部の比較・正規化・payload の `expert` field には持ち込まない (前置すると section lookup 等が壊れる)。
+- **動的 spawn** (payload の解決済み expert を使う ClusterOrchestrator の apply / review 等) では
+  `subagent_type` を `"op-skill:" + <resolved bare expert>` として組み立てる。
+
+### 前置しない例外
+
+- **built-in agent** (`general-purpose` / `Explore` / `Plan`) は plugin component ではないため
+  **bare のまま**渡す (前置すると逆に解決失敗する)。
+- **planned expert** (`env-expert` / `release-expert` / `compatibility-expert`) は
+  そもそも spawn しない (前置対象外)。canonical schema に現れた場合は spawn 前に active /
+  `needs_human_decision` へ正規化する (下記 Planned Expert handling 節)。
+
+> 非 plugin の dev 実行 (agent を `~/.claude/agents/` へ直置きする等) は本 repo の配布モデル外であり、
+> OP skill の spawn は常に plugin 経由 (scoped) を前提とする。`claude --agent <name>` CLI フラグが
+> bare 名で解決するのは単発 human 起動の話であり、Agent tool の `subagent_type` 契約とは別 (混同しない)。
+
+---
+
 ## spawn の3パターン
 
 ### パターン1: scan 用 (read-only audit)
 
 ```
 Agent({
-  subagent_type: "<domain>-expert",
+  subagent_type: "op-skill:<domain>-expert",   ← plugin scoped 名 (「Plugin scoped-name 規約」節)
   model: "<from model-selection.md §5.2 by area complexity (single/typical→sonnet, complex/critical→opus)>",
   description: "scan: <domain>",
   prompt: """
@@ -170,7 +210,7 @@ Agent({
 
 ```
 Agent({
-  subagent_type: "<domain>-expert",
+  subagent_type: "op-skill:<domain>-expert",   ← plugin scoped 名 (「Plugin scoped-name 規約」節)
   model: "<from model-selection.md §5.3 by cluster.task_complexity (routine/extension→sonnet, design/integration/api-design→opus)>",
   isolation: "worktree",            ← 必須
   description: "apply: cluster-<id>",
@@ -221,7 +261,7 @@ Agent({
 
 ```
 Agent({
-  subagent_type: "review-expert",
+  subagent_type: "op-skill:review-expert",   ← plugin scoped 名 (「Plugin scoped-name 規約」節)
   model: "opus",                    ← global review は Opus default。§7.1 narrow opt-down 適用時は Sonnet (model-selection.md §5.1 / §7.1、具体 version は §1)
   isolation: "worktree",            ← 別 worktree で PR ブランチを checkout
   description: "global review PR #<N>",
@@ -460,7 +500,8 @@ spawn 規約上の最低限の不変則のみ本節に残す:
   としての記録目的であり、**runtime spawn 許可ではない**。op-run は当該 expert の agent 実体
   (`agents/<name>.md`) が存在しない限り直接 spawn してはならない。
 - 現時点で **runtime spawn 可能な post-check expert** は `ux-ui-audit-expert` (op-run フェーズ3.5-A)
-  および `security-expert` (op-run フェーズ3.5-B) のみ。`subagent_type` に直接渡してよいのはこの 2 体。
+  および `security-expert` (op-run フェーズ3.5-B) のみ。`subagent_type` に直接渡してよいのはこの 2 体
+  (spawn 時は plugin scoped 名 `op-skill:ux-ui-audit-expert` / `op-skill:security-expert` を渡す。「Plugin scoped-name 規約」節参照)。
 - `review-expert` は **post-check expert として指定不可** (global review 専任)。
   `<!-- op-post-check-expert: review-expert -->` を marker として書いてはならない。
 

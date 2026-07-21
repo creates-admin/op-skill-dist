@@ -349,7 +349,7 @@ echo "branch created: ${BRANCH_NAME}"
 ```javascript
 // op-codev Step A — 探索フェーズ (read-only)
 Agent({
-  subagent_type: "feature-expert",
+  subagent_type: "op-skill:feature-expert",
   description: "op-codev explore: <IU名>",
   prompt: `
     invocation_mode: op_managed
@@ -404,7 +404,7 @@ Agent({
 ```javascript
 // op-codev Step B — 実装フェーズ
 Agent({
-  subagent_type: "feature-expert",
+  subagent_type: "op-skill:feature-expert",
   description: "op-codev implement: <IU名>",
   prompt: `
     invocation_mode: op_managed
@@ -458,7 +458,7 @@ Agent({
 ```javascript
 // op-codev Step C — 検証フェーズ (read-only)
 Agent({
-  subagent_type: "feature-expert",
+  subagent_type: "op-skill:feature-expert",
   description: "op-codev verify: <IU名>",
   prompt: `
     invocation_mode: op_managed
@@ -666,7 +666,7 @@ export REVIEW_ROUND=$((PREV_ROUND + 1))
 ```javascript
 // review-expert spawn (proportional lens gating 適用後、REVIEW_ROUND 確定後)
 Agent({
-  subagent_type: "review-expert",
+  subagent_type: "op-skill:review-expert",
   description: "op-codev review: <PR番号>",
   prompt: `
     invocation_mode: op_managed
@@ -806,7 +806,7 @@ session を跨いで別 session で fix した場合も、PR 全体の op-review
 
 ```javascript
 Agent({
-  subagent_type: "feature-expert",
+  subagent_type: "op-skill:feature-expert",
   description: "op-codev explore: <goal>",
   prompt: `
     invocation_mode: op_managed
@@ -832,7 +832,7 @@ Agent({
 
 ```javascript
 Agent({
-  subagent_type: "feature-expert",
+  subagent_type: "op-skill:feature-expert",
   description: "op-codev implement: <goal>",
   prompt: `
     invocation_mode: op_managed
@@ -856,7 +856,7 @@ Agent({
 
 ```javascript
 Agent({
-  subagent_type: "feature-expert",
+  subagent_type: "op-skill:feature-expert",
   description: "op-codev verify: <goal>",
   prompt: `
     invocation_mode: op_managed

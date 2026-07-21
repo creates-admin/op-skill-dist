@@ -106,7 +106,9 @@ post-check が `null` のクラスタ (バックエンドのみの修正 / DB / 
 3.5-A (ux-ui) / 3.5-B (security) / 3.5-B-4 (aux ux-ui) の active post-check spawn は、
 すべて **ClusterOrchestrator (cluster-orchestrator-directives.md フェーズ5.5)** が担う。
 ClusterOrchestrator は dispatch 判定 (本ファイルの 3.5-A / 3.5-B / 3.5-C / 3.5-D / 3.5-E 分岐) に従って
-post-check expert を Agent tool で spawn する。
+post-check expert を Agent tool で spawn する。**`subagent_type` は plugin scoped 名**
+`"op-skill:ux-ui-audit-expert"` / `"op-skill:security-expert"` を渡す (下表 `expert` field は bare 名の正本、
+spawn 境界でのみ `op-skill:` を前置する。正本は `_shared/expert-spawn.md`「Plugin scoped-name 規約」)。
 
 ### 渡す値の契約 (ClusterOrchestrator → post-check expert)
 
