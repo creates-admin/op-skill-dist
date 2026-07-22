@@ -7,7 +7,9 @@ last_breaking_change: 2026-05-16
 作成意図: 「ADR 不要だが Issue 品質・UI 設計はほしい」中量級 Issue を底上げする共通基盤。
          Single Canonical Source Rule: 本ファイルが正本 (Design Plan + gate + cross-review)。
 注意点: 本層は「起票前 (pre-create) 専用」。apply / 起票 / scope 推定 / severity 判定は呼び出し側担当。
-notes: v2 据置 (2026-06-03, #642/#647/#648) — labels_to_add pro-* 制限 / cross-review graceful degrade /
+notes: v2 据置 (2026-07-22, ADR-0024 Phase 3 第二波) — §7.5 に mcp channel の素材注記を additive 追加
+       (`mcp__github__search_issues` 経由の `EXISTING` 取得)。非破壊のため schema_version 据え置き。
+       v2 据置 (2026-06-03, #642/#647/#648) — labels_to_add pro-* 制限 / cross-review graceful degrade /
        a11y-only Design Plan skip carve-out。全 additive。
        v2 据置 (2026-05-31, C4) — §5/§6 を op-enrichment.js workflow へ移行。§7.6 canonical 化。
        v2 (2026-05-16) — §7.5 Cross-instance Collision Gate 追加 (破壊的変更、#38/#42 防止)。
@@ -534,6 +536,11 @@ gate は以下の 4 クエリを順に評価する。**先行クエリが block 
 EXISTING=$(gh issue list --state open --label auto-report \
   --json number,title,body,labels --limit 100)
 ```
+
+`OP_GITHUB_CHANNEL=mcp` (Cloud) では本 fence (`gh issue list`) を実行せず、`github-channel.md` §6
+の手順 (`mcp__github__search_issues`、raw body に hidden marker が生存) で取得した JSON を
+`EXISTING` として用いる。`issue_read` / `list_issues` の返却 body は marker が sanitize されるため
+素材にしない。
 
 ##### Query 1: 直接 fingerprint 一致 → block
 
