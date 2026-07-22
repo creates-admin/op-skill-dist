@@ -9,7 +9,7 @@
     {
       "name": "op-skill",
       "source": "./",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "description": "Claude Code 用 OP skill / expert agent パッケージ。op-* ワークフロー skill (16) と expert agent (11) を同梱し、Issue 起票から worktree 実装・レビュー・マージまでを自律駆動する。",
       "author": {
         "name": "creates-admin"
