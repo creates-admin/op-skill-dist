@@ -76,7 +76,7 @@ scout は質問で停止しない。判断不能な場合は `needs_human_decisi
 
 ## 制約
 
-- **コード apply 禁止** (不変則7): 起票 (`gh issue create`) のみが許可された mutation
+- **コード apply 禁止** (不変則7): 起票 (`op issue create` 経由。mcp channel では emit された call-spec の verbatim 実行 + ingest を含む) のみが許可された mutation
 - **Design Plan・cross-review を回さない** (不変則8): collision gate (§7.5) のみ実行する
 - **質問で停止しない**: 判断不能は `needs_human_decision` (decision_type: "behavior") として構造化返却
 - **op-post-check-expert 指定不可**: scout 自身が post-check を担うことはない
