@@ -1,7 +1,11 @@
 <!--
-schema_version: 1
+schema_version: 2
 last_breaking_change: 2026-07-22
-notes: 初版 (ADR-0024)。Cloud (Claude Code on the web) で op CLI の GitHub I/O を成立させる
+notes: v2: §4 を read-back protocol に改訂。`mcp__github__issue_write` の返却は {id, url} の
+       最小 shape で ingest の必須 field (number / title) を満たさないことが Cloud 実機 E2E ×2
+       (2026-07-22, Issue #9 / #10) で確定したため、司令官は write 後に issue_read で読み戻した
+       JSON を ingest に渡す。MCP read 層の hidden marker sanitize 制約も追記。
+       v1: 初版 (ADR-0024)。Cloud (Claude Code on the web) で op CLI の GitHub I/O を成立させる
        channel abstraction (gh subprocess ⟷ MCP call-spec) のうち、司令官 (main Claude) が
        守る call-spec protocol のみを定義する。gh↔MCP の対応表・Cloud 対応コマンド一覧表は
        意図的に持たない (正本は Rust 側、Single Canonical Source Rule)。
@@ -83,9 +87,15 @@ call-spec を検出したら、司令官は次の手順を **順守** する。
    補完・別 tool への差し替え・payload の書き換え・値の付け足しは禁止。
    本文組み立て・hidden marker・fingerprint・labels の事前検証はすべて op 側で完結済みであり、
    司令官が「良かれと思って」手を加えると dedup / marker 整合が壊れる。
-2. **結果を保存する**: MCP tool の実行結果 JSON をファイルに保存する。
+2. **read-back で結果を組む**: `mcp__github__issue_write` の返却は `{id, url}` の最小 shape であり、
+   ingest の必須 field (number / title) を満たさない (2026-07-22 Cloud 実機 E2E ×2 で確定)。
+   返却 `url` 末尾の Issue 番号に対して `mcp__github__issue_read` (method: get) を実行し、
+   **その読み戻し JSON をファイルに保存する** — これが ingest に渡す result である。
+   write の echo ではなく server の実状態を照合する post-create verification になるため、
+   検証強度もこちらの方が高い (ADR-0005 の二度 fetch 黄金則と同思想)。
 3. **ingest を実行する**: `ingest` フィールドに書かれたコマンド (例: `op issue ingest-result`) を
-   保存した結果ファイルとともに実行する。
+   保存した read-back 結果ファイルとともに実行する。write の echo をそのまま渡すと
+   `missing required field 'number'` で block される (仕様通りの fail-closed)。
 4. **ingest の出力を後続処理の正とする**: ingest が出力する envelope は gh channel の
    `op issue create --ensure-labels` の成功出力と **同一 shape** の JSON envelope になる
    (plain 経路の「URL のみ stdout」ではない)。後続の SKILL.md fence / URL 抽出はこの envelope を使う。
@@ -107,7 +117,21 @@ mcp channel で未対応の op コマンドは、call-spec ではなく **構造
 出さないという ADR-0024 の判断根拠がここで崩れるため、代替実行は禁止行動として扱う。
 対応の要否・拡張タイミングは op-tools 側の段階導入判断 (ADR-0024 参照) に委ねる。
 
-## 6. 関連
+## 6. MCP read 層の hidden marker sanitize (制約)
+
+MCP の read 系 tool (`mcp__github__issue_read` 等) は、Issue body 中の HTML コメント
+(`<!-- op-fingerprint: ... -->` 等の hidden marker) を **sanitize して返す** (2026-07-22 実測:
+GitHub 本体には verbatim 保存されていることを `gh api` の生 body で確認済み — 消えるのは
+MCP read 経路の表示のみ)。
+
+- **write は無傷**: call-spec 経由の起票で marker は GitHub に verbatim 保存される。
+  fingerprint / dedup の marker 基盤は mcp channel でも成立する。
+- **禁止**: marker の存在・内容に依存する照合 (dedup 突き合わせ / marker 検証等) を
+  MCP read の返却 body に対して行ってはならない — 常に「marker なし」に見えるため
+  誤判定する。marker 依存の read は gh channel (ローカル) で行うか、gh 経由で取得した
+  生 body を `--input-json` 等で op に渡すこと。
+
+## 7. 関連
 
 - [ADR-0024](../../op-tools/docs/adr/0024-github-io-channel-abstraction.md) — 本 protocol の設計根拠・段階導入・test 戦略の正本。
 - `skills/_shared/runtime-contract.md` — expert spawn 境界の正本。本ファイルの channel/call-spec 層とは独立 (spawn 可否とは無関係に、司令官が GitHub I/O をどう実行するかのみを扱う)。
