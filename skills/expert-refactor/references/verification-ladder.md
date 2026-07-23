@@ -69,15 +69,7 @@ git diff -- '*.rs' | grep -E '^\+.*\bpub\b'
 | Flutter / Dart | `dart analyze` / `flutter analyze` |
 | すべての言語 | formatter (任意) |
 
-存在確認:
-
-```bash
-test -f Cargo.toml         # Rust crate / Tauri backend
-test -f package.json       # Vue / TS frontend
-test -f pubspec.yaml       # Flutter app
-command -v cargo
-command -v flutter
-```
+存在確認コマンドは本ドキュメント下部「検証コマンドの存在確認 → 実行 の前提」節を参照 (正本、1 箇所に集約)。
 
 ---
 

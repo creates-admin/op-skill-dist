@@ -113,7 +113,7 @@ scan モードの中心責務。コード読みで断定できる構造的問題
 - 入力規模が運用上大きくなることが既知 (page_count / job_count / OCR block_count 等)
 - 不要 clone / serde roundtrip が大きいデータ構造で発生
 
-「テストすれば分かる」「もしかしたら遅いかも」は detect ではなく investigation。
+detect の finding は静的証拠 (コード引用・呼出経路) で裏付けて報告する。静的に断定できず実測が必要な候補は investigation に回す。
 
 ### 2. Measure (再現可能な数値の取得)
 

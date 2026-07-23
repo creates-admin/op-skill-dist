@@ -81,6 +81,8 @@ OP-managed Mode の条件を **一つも満たさない** 場合は Direct Mode 
 - branch 作成 / PR open / push / merge / Issue close
 - 依存パッケージ追加・更新・削除
 - production 環境への影響を持つ操作
+- scope_out に指定された領域へ踏み込む
+- verification が実行できない場合に、それを成功扱いする (「未検証」と明示せず済ませる)
 
 「直接呼ばれている = なんでも自由」ではない。
 判断と提案までは Direct Mode の自由、副作用は明示許可後にだけ起こす。

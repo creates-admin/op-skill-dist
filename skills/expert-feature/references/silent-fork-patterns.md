@@ -8,32 +8,15 @@
 -->
 
 silent fork / implementation gap 7 カテゴリの言語別具体例と検出 grep。
-**Issue 化前に SKILL.md の severity / confidence / `asset_map` 必須記載と `needs_human_decision` 判定を必ず通す** (旧 `needs_human_judgment` は deprecated alias、互換目的のみ)。
+**Issue 化前に SKILL.md の severity / confidence / `asset_map` 必須記載と `needs_human_decision` 判定を必ず通す** (`needs_human_judgment` は旧名の deprecated alias、詳細は SKILL.md 冒頭の用語注記)。
 
 ---
 
 ## 判定表記の統一ポリシー
 
 本辞典の各カテゴリには「判定」が付くが、これは **action の方向性** を示すもので、
-**即実装の許可ではない**。SKILL.md の **enum 対応表** に従う:
-
-| bulk_group | issue_type | action |
-|------------|-----------|--------|
-| `feature-duplicate-helper` | `duplicate_helper` | `replace_with_existing_asset` |
-| `feature-bypass-wrapper` | `bypass_wrapper` | `replace_with_existing_asset` |
-| `feature-adhoc-error-type` | `adhoc_error_type` | `replace_with_existing_asset` |
-| `feature-pattern-deviation` | `pattern_deviation` | `align_to_pattern` |
-| `feature-missing-error-path` | `missing_error_path` | `complete_missing_state` |
-| `feature-stale-todo` | `stale_todo` | `add_implementation` |
-| `feature-spec-divergence` | `spec_divergence` | `align_to_pattern` |
-
-action enum の意味:
-
-- `replace_with_existing_asset`: 既存資産で置き換える。重複実装した自前コードを削除し既存 wrapper / helper / crate に切り替える
-- `align_to_pattern`: 類似機能のパターンに揃える。命名 / 構成 / error 処理を手本に合わせる
-- `complete_missing_state`: 欠けている状態 (loading / error / empty) を類似機能から移植
-- `add_implementation`: 未実装部分を新規追加 (既存資産再利用前提)
-- `needs_human_decision`: 既存パターンが揺らいでいて手本が定まらない場合は構造化された人間判断要求として返す (旧 `needs_human_judgment` は deprecated alias、互換目的のみ)
+**即実装の許可ではない**。bulk_group / issue_type / action の対応表と action enum の意味は
+SKILL.md の「bulk_group / issue_type / action enum 対応表」節が正本 (本ファイルでは重複保持しない)。
 
 > **重要**: 「判定: replace」と書かれていても、**`asset_map` で代替先資産が確定するまで実装に入らない**。
 > agent は判定文の勢いではなく `severity` / `confidence` / `needs_human_decision` の組み合わせに従う。

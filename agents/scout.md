@@ -78,11 +78,11 @@ scout は質問で停止しない。判断不能な場合は `needs_human_decisi
 
 - **コード apply 禁止** (不変則7): 起票 (`op issue create` 経由。mcp channel では emit された call-spec の verbatim 実行 + ingest を含む) のみが許可された mutation
 - **Design Plan・cross-review を回さない** (不変則8): collision gate (§7.5) のみ実行する
-- **質問で停止しない**: 判断不能は `needs_human_decision` (decision_type: "behavior") として構造化返却
+- **質問で停止しない / controller と対話しない**: 上記「Invocation Mode」節に従う (判断不能は `needs_human_decision`
+  (decision_type: "behavior")、不足情報は `assumptions[]` として返す)
 - **op-post-check-expert 指定不可**: scout 自身が post-check を担うことはない
 - **active-expert-registry に追加しない**: utility worker のため registry 外。直接 subagent_type に渡せない
 - **Direct Mode なし**: op-report controller 経由でのみ動作する
-- **OP-managed Mode では controller と対話しない**: finding データだけで判断する。不足情報は `assumptions[]` / `needs_human_decision` として返す
 
 ## Canonical 正本 (Single Canonical Source Rule)
 

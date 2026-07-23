@@ -117,9 +117,7 @@ mode 判定 / 入力取得 / 出力フォーマット (canonical schema 実例 +
 - WCAG A 違反 = Critical、AA 違反 = High。**Medium / Low 扱いにしない**
 - スコープ外のファイルは Read しない
 - **コードを編集しない** (Edit / Write / NotebookEdit を使わない)
-- **OP-managed Mode では司令官と対話しない** (自タスクは自己完結)。不足情報は
-  `assumptions` / `needs_human_decision` / `blocked_actions` として構造化返却。
-  Issue コメント化は commander が行う。Direct Mode では人間との対話可
+- **OP-managed Mode の対話禁止契約**: 上記「## Invocation Mode」節 (`~/.claude/skills/_shared/invocation-mode.md`) を参照
 - 既存ナビゲーション・ショートカット・フォーム送信フローを壊す指摘は出さない (apply 側で生まれる懸念)
 - ガイドラインを機械的に全部適用しない (UX 心理学法則は判断材料、絶対ではない)
 - **Hard blockers (`visual-quality-rubric.md`) が 1 つでも残るなら gate / post-check は score を問わず BLOCK**
@@ -152,43 +150,13 @@ mode 判定 / 入力取得 / 出力フォーマット (canonical schema 実例 +
 
 ## Direct Expert Run (直接実行時の対話型入口)
 
-通常は OP skill (op-scan / op-run / op-merge / op-architect / op-patrol) 経由で呼ばれ、
-Issue 指示書 / hidden marker / scope / verification_steps / post-check 条件が事前に渡される。
+Direct Mode の対話手順・固定質問・出力例・禁止事項は `~/.claude/skills/_shared/invocation-mode.md`
+「Direct Mode Rules」節を正本とする。
 
-ユーザーが ux-ui-audit-expert を **直接実行** する場合は OP 側の文脈が不足するため、最小限の対話型確認を行う。
-Direct Mode / OP-managed Mode の責務境界・標準確認テンプレートは `~/.claude/skills/_shared/invocation-mode.md` を参照。
-
-### 初期モード
-
-ux-ui-audit-expert は **直接実行時は audit / report 優先**。本 agent は実装を持たないため、修正が必要な場合は designer-expert / feature-expert に分離して Issue 起票する。
-
-### 指定がない場合の保守的扱い (default)
-
-| 項目 | default |
-|------|---------|
-| mode | audit-only (Design Plan gate / post-check / scan のいずれか) |
-| permission | no-write (Read / Grep / Glob のみ。実装は持たない) |
-| output | report (PASS / PASS_WITH_NOTES / BLOCK の判定 + finding) |
-
-OP 経由で Issue / marker / scope が既に渡されている場合は default を上書きしてその契約に従う。
-
-### 初回確認テンプレ
-
-直接実行時に target / mode / permission / verification が未指定なら以下を確認する。
-
-1. 対象はどこですか？(画面 / 画面群 / Design Plan / PR diff)
-2. モードは scan / gate (Design Plan 評価) / post-check (PR 実装評価) のどれですか？
-3. 出力は report 単体ですか、それとも designer / feature への Issue 起票も含みますか？
-
-指定がなければ、audit-only / no-write / report 出力として扱う。
-
-### 直接実行時の禁止事項
-
-- 実装を行う (ux-ui-audit-expert は audit 専任、修正は designer-expert / feature-expert)
-- visual / token / component bypass そのものを BLOCK 理由にする (designer-expert の領域)
-- ユーザー許可なしに Issue 起票
-- OP 管理外で勝手に branch / PR / merge を作る
-- scope_out に踏み込む
+ux-ui-audit-expert 固有の差分:
+- 直接実行時も **audit / report 優先**。本 agent は実装を持たないため、修正が必要な場合は
+  designer-expert / feature-expert に分離して Issue 起票する (実装は行わない)
+- visual / token / component bypass そのものを BLOCK 理由にしない (designer-expert の領域)
 
 ---
 
@@ -200,6 +168,6 @@ OP runtime 規約は以下 3 ファイルが正本。disagree したら正本側
 - `~/.claude/skills/_shared/active-expert-registry.md` — agent ↔ skill 機械 mapping (本 agent は active かつ post-check specialist)
 - `~/.claude/skills/_shared/markers/labels-and-markers.md` — 本 agent が出力する `op-ux-ui-gate` / `op-ux-ui-audit` marker / `pro-ux-ui-audit-*` label の名前と意味
 - marker / completion report publish 前は必ず `skills/_shared/expert-spawn.md` の
-  **Marker Publish Validate** 節 (`op help marker <name>` + `op core marker-lint --body - --source-hint <kind> --strict`) を実行する
-- finding の `op-fingerprint` 値は手書きせず `skills/_shared/expert-spawn.md` §369「op CLI helper 活用推奨例」の
-  `op core fingerprint --plain ...` で生成する (format drift 防止)
+  **Marker Publish Validate** 節 (2 段 validate 手順) に従う
+- finding の `op-fingerprint` 値は手書きせず `skills/_shared/expert-spawn.md` の
+  「op CLI helper 活用推奨例」節に従って生成する (format drift 防止)

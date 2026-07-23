@@ -16,7 +16,7 @@ Issue 起票は下流コストに直結するため、**起票範囲を厳格に
 
 ux-ui 観点で起票して良いのは、**観測可能な使いやすさ / a11y 破綻** に限る。
 
-- UI 種別ごとに該当する Applicable State (loading / failure / empty 等) の **欠落** (`recovery-and-states.md` 早見表参照、6 状態を機械的に全要求しない)
+- UI 種別ごとに該当する Applicable State (loading / failure / empty 等) の **欠落** (`recovery-and-states.md` 参照)
 - error から **復帰できない** 画面 (リロード以外に手段がない)
 - 危険操作が **確認 / Undo なし** で動く
 - keyboard 到達不可 (`<div @click>` で button を実装、`tabindex="-1"` の罠)
@@ -80,20 +80,8 @@ scan に加えて patrol では以下を厳守する。
 `~/.claude/skills/_shared/expert-spawn.md` の canonical schema に従う JSON 配列。
 `domain` フィールドには **`ux-ui`** を入れる (旧 `ux` / `ui` は廃止)。
 
-canonical 必須フィールド (`_shared/expert-spawn.md` v14 正本):
-
-- `title` / `severity` / `severity_reason` — Critical / High と判定した根拠を含む症状要約
-- `domain` — `ux-ui` 固定
-- `files` / `symbols` — 最低 1 件
-- `summary` / `evidence` / `evidence_grade` — 静的観測コード断片 5〜10 行と証拠強度 (`direct` / `inferred` / `requires_runtime`、`direct` 以外で Critical 不可)
-- `hypothesis` / `excluded_hypotheses` — UX 破綻の仮説と否定した代替仮説
-- `scope_in` / `scope_out` — apply 担当への context 継承
-- `verification_steps` / `success_criteria` / `gotchas` — apply / review の合否判定基盤
-- `recommendation` — type (`fix` / `redesign`) + steps
-- `bulk_group` — `ux-ui:` プレフィックスのグルーピングキー
-- `recommended_runner` — `designer-expert` (UI surface 修正) または `feature-expert` (state machine / data layer 修正)。ux-ui-audit-expert は apply を持たないため `recommended_runner` に自身を指定しない
-- `post_check_expert` — UI 側の再検証が必要な場合は `ux-ui-audit-expert`、security 領域に絡む場合は `security-expert`、それ以外は `null`
-- `blocking` / `blocking_reason` — 新規変更が既存 UX debt を悪化させる場合 `true`、`blocking: true` のとき `blocking_reason` 必須
+canonical 必須フィールドの一覧・詳細は `references/agent-instructions.md` の「出力契約」節を正本とする
+(`_shared/expert-spawn.md` v14 準拠。本ファイルでは重複保持しない)。
 
 ux 固有フィールド (canonical の後に併存維持、削除しない):
 

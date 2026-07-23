@@ -131,7 +131,7 @@ attack_path:
     - "結果として user 名 / 内部 directory 構造 / 文書名が他者に開示される"
 ```
 
-steps は **断定的かつ短い文** で書く。「〜かもしれない」「テストすれば分かる」相当は禁句。
+steps は **断定的かつ短い文** で書き、各 step を静的証拠 (コード引用・呼出経路) で裏付ける。
 
 ---
 
@@ -223,32 +223,30 @@ High:
 
 ## bulk_group 命名規則 (canonical)
 
-scan で同質な検出 5 件以上は bulk_group でバッチ Issue 化する。
+scan で同質な検出 5 件以上は bulk_group でバッチ Issue 化する。命名形式は `security:<concern>:<context>`。
+**本表が bulk_group 名の正本** (`SKILL.md` は代表例のみ、本表への pointer)。
 
-```text
-security:<concern>:<context>
-
-例:
-- security:path-traversal-in-export
-- security:unsafe-shell-args
-- security:capability-overreach
-- security:error-leak
-- security:secret-in-log
-- security:reparse-point-not-validated
-- security:device-path-not-rejected
-- security:reserved-name-not-rejected
-- security:ads-not-rejected
-- security:ipc-input-unvalidated
-- security:overwrite-without-confirm
-- security:extendscript-injection
-- security:com-shell-injection
-- security:updater-signature-skipped
-- security:unsafe-scheme-accepted
-- security:zip-slip
-- security:tls-skip
-- security:redirect-host-change
-- security:temp-file-mode-too-permissive
-```
+| bulk_group | 内容 |
+|-----------|------|
+| `security:path-traversal-in-export` | file IO の path 検証漏れが散在 |
+| `security:unsafe-shell-args` | shell 引数 escape 漏れが散在 |
+| `security:capability-overreach` | capability が必要以上に広い |
+| `security:error-leak` | error 出力に機密情報が漏れる |
+| `security:secret-in-log` | log に token / secret / production path が漏れる |
+| `security:reparse-point-not-validated` | symlink / junction / reparse point の検査欠落 |
+| `security:device-path-not-rejected` | `\\?\` device path / UNC path の reject 欠落 |
+| `security:reserved-name-not-rejected` | CON / PRN / AUX / NUL / COMx / LPTx の reject 欠落 |
+| `security:ads-not-rejected` | alternate data stream (`file:stream`) の reject 欠落 |
+| `security:ipc-input-unvalidated` | `#[tauri::command]` の入力検証欠落 |
+| `security:overwrite-without-confirm` | 上書き / 削除 / 外部アプリ起動の確認欠落 |
+| `security:extendscript-injection` | JSX 文字列に user input を直接 interpolate |
+| `security:com-shell-injection` | COM / external app launch を shell 文字列で組み立て |
+| `security:updater-signature-skipped` | updater payload の signature 検証 skip |
+| `security:unsafe-scheme-accepted` | javascript: / data: 等の unsafe scheme を accept |
+| `security:zip-slip` | archive extraction で `..` / 絶対 path entry の reject 欠落 |
+| `security:tls-skip` | TLS / cert 検証を無効化する dangerous flag が残存 |
+| `security:redirect-host-change` | redirect 先 host の allowlist 検査欠落 (updater / external URL) |
+| `security:temp-file-mode-too-permissive` | temp file の権限が過剰 (0600 等への縮小漏れ) |
 
 bulk_group の判定規則:
 
@@ -366,7 +364,7 @@ security:
       - "load_recent_files が config の path を std::path::Path::display() でそのまま log::error! に渡す"
       - "ログファイルが permission 644 で他ユーザー読める"
       - "user 名 / 文書名 / 内部 directory 構造が漏れる"
-  exploitability: theoretical
+  exploitability: reachable   # 「log permission が default 644 で漏洩」= 本ファイル §exploitability scoring の reachable exploit 例そのもの (theoretical ではない)
   impact:
     confidentiality: medium
     integrity: none
@@ -376,4 +374,5 @@ security:
     - document_content
 ```
 
-→ severity: high / evidence_grade: inferred (theoretical だが impact medium なので High 起票可)
+→ severity: high / evidence_grade: inferred (reachable AND impact medium なので High 起票可。exploitability を
+theoretical にすると「起票しない」規則に該当してしまうため注意)

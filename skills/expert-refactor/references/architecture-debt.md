@@ -95,7 +95,8 @@ stage 6: 重複 helper を削除
 - 新規実装が同じ負債を悪化させている
 - file IO / path / IPC / config / storage / serialized data に絡む
 - 依存逆流により複数 feature へ波及している
-- `seen_count >= 3`
+- `seen_count >= 3` (既存 Issue から **op-patrol が渡す値**。agent はこの値を推測・算出せず、
+  与えられた値をこの条件式にそのまま当てはめるだけ — 新規検出時は常に `seen_count=1` のため該当しない)
 - `affected_paths` が増加している
 - shared / common / utils に feature 固有責務が漏れている
 
@@ -146,53 +147,20 @@ op-patrol:
   既存 Issue が無ければ新規起票する。
 ```
 
-### op-patrol による seen_count / last_seen_at 更新フロー
+### op-patrol による seen_count / last_seen_at 更新フロー (controller 手順、pointer)
 
-1. refactor-expert が `architecture_debt` finding を返す
-2. op-patrol は **以下の優先順位で既存の `op:architecture-debt` ラベル付き Issue を検索**:
+既存 Issue 検索の優先順位・上書き手順・`risk_trend` 判定ルール・`needs:triage` 付与条件は
+**`skills/op-patrol/SKILL.md` の「architecture_debt の追跡方式 (Phase 1)」節が正本**。
+op-patrol がそこに従って再検出時に `seen_count` +1 / `last_seen_at` 更新 / `risk_trend` 再判定 /
+`needs:triage` ラベル付与を行う。**agent (refactor-expert) はこの更新フローに関与しない**
+(GitHub Issue を読みに行かず、既存値も推測しない)。
 
-   ```text
-   優先順位 1: op-refactor-debt-key 完全一致
-              `refactor:<bulk_group>:<root_path>:<symbol_or_boundary>`
-   優先順位 2: op-fingerprint 完全一致
-              `<domain>:<normalized_title>:<primary_file>:<symbol>` (共通仕様)
-   優先順位 3: affected_paths 類似 + bulk_group 一致 + symbols 類似 (タイブレーカ)
-   ```
+agent が返す責務はこの 1 点のみ (詳細は次節「役割分担」および本ドキュメント下部
+「新規実装による悪化の扱い」を参照):
 
-   最初に一致したものを「同一 debt」と判定する。
-3. **既存 Issue がある場合**:
-   - 新規 Issue を起票しない
-   - 既存 Issue 本文の `seen_count` を +1
-   - `last_seen_at` を今日に更新
-   - `affected_paths` が増えていれば本文に追記し、`risk_trend` を `spreading` に更新
-   - 同じ `affected_paths` 内で新規 violation が増えていれば `risk_trend` を `worsening` に
-   - 何も変わっていなければ `risk_trend = stable`
-   - 必要なら `needs:triage` ラベルを追加
-   - 新規 detection の概要をコメントに残す
-4. **既存 Issue がない場合**:
-   - 新規 Issue を起票
-   - Issue 本文に **`op-fingerprint` と `op-refactor-debt-key` の 2 つの marker** を埋める
-   - `first_detected_at = last_seen_at = today`
-   - `seen_count = 1`
-   - `risk_trend = stable`
-
-### risk_trend の判定 (op-patrol による更新ルール)
-
-```text
-stable     : affected_paths が前回と同じ、新規 violation 検出なし
-worsening  : 同じ affected_paths 内で新規 literal / new violation が増えた
-spreading  : affected_paths が増加した (別 feature / 別 layer に波及)
-```
-
-### needs:triage の付与条件 (op-patrol が判定)
-
-以下のいずれかを満たしたら op-patrol が `needs:triage` ラベルを付与する。
-
-- `seen_count >= 3`
-- `affected_paths` が増加した (前回比)
-- `risk_trend` が `worsening` または `spreading`
-
-agent 側は `needs:triage` を付与しない (op-patrol の責務)。
+- 新規検出時は常に `first_detected_at = last_seen_at = today` / `seen_count = 1` /
+  `risk_trend = "stable"` の暫定値を返す
+- 新規変更が既存 debt を悪化させたと判断した場合のみ `blocking: true` + `blocking_reason` を付与する
 
 ### 新規実装による悪化の扱い
 
@@ -208,33 +176,15 @@ agent 側は `needs:triage` を付与しない (op-patrol の責務)。
 
 ---
 
-## Labels
+## Labels (controller 手順、pointer)
 
-architecture_debt / staged_refactor 起票時のラベル
-(`_shared/pr-templates.md` のラベルカタログと一致):
+architecture_debt / staged_refactor 起票時のラベルカタログ (名前・色・付与条件) の正本は
+`skills/_shared/markers/labels-and-markers.md`、Issue/PR 本文への展開規約は
+`skills/_shared/pr-templates.md`。ラベル付与は op-scan / op-patrol の責務であり、
+agent (refactor-expert) はラベルを付与しない。
 
-```text
-op:architecture-debt           ← finding_type=architecture_debt の必須
-op:staged-refactor             ← finding_type=staged_refactor の場合
-op:blocking-finding            ← blocking=true の場合 (op-run / op-merge を止める)
-needs:triage                   ← op-patrol が seen_count >= 3 / affected_paths 増加時に付与
-needs:human-decision           ← needs_human_decision.required: true (構造化 block) の場合
-needs:human-decision-followup  ← needs_human_decision.required: true かつ can_continue_without_decision: true
-                                 かつ finding_type != needs_spec_decision の opt-out フラグ。
-                                 op-run はこの両ラベルが付いた Issue を manual_review_bucket に
-                                 落とさず通常 apply に流し、apply 担当は safe_first_step のみ実行する
-needs:boundary-decision        ← 境界判断が必要な場合 (decision_type: "boundary"。単独では apply を止めない)
-needs:spec-decision            ← finding_type=needs_spec_decision の場合
-severity:critical|high         ← severity に応じて (severity:* 完全形式)
-auto-report                    ← op-scan / op-patrol 共通
-pro-refactor-expert            ← apply 担当 (必須)
-pro-security-expert            ← post_check_expert=security-expert の場合のみ
-pro-ux-ui-audit-expert         ← post_check_expert=ux-ui-audit-expert の場合のみ
-```
-
-`pro-compatibility-expert` / `pro-release-expert` / `pro-test-expert` /
-`pro-designer-expert` は refactor finding の post-check ラベルとして付与しない (Phase 1)。
-これらの follow-up が必要な場合は `recommended_followup_experts` で記録する。
+post_check_expert 値 → pro-* ラベルの対応表は `references/post-check-policy.md`
+「ラベル付与」節が正本 (`pro-compatibility-expert` 等を Phase 1 で使わない理由も同節を参照)。
 
 ---
 
@@ -315,116 +265,62 @@ refactor:refactor-scattered-tokens:src/features/auth:auth-routes
 
 ---
 
-## 例: architecture_debt finding (json)
+## architecture_debt finding の出力契約
 
-architecture_debt の累積値 (`seen_count` / `risk_trend` / `last_seen_at`) は agent と op-patrol で
-担当が違うため、**例を 2 本立て** で示す。同じ debt を時系列で追ったときの 2 つの状態に対応する。
+必須フィールドの一覧・意味は本ドキュメント上部「Required Fields (architecture_debt)」節が正本。
+canonical 必須フィールド (severity_reason / files / symbols / summary / evidence / evidence_grade /
+hypothesis / scope_in / scope_out / recommendation / verification_steps / success_criteria /
+gotchas / confidence / requires_dynamic_verification) の定義は `_shared/expert-spawn.md` (正本)。
+実際の起票時には省略せず **すべて埋める**。完全例は `report-schema.md` の
+architecture_debt finding schema を参照。
 
-### A. agent (refactor-expert) が **新規検出時に返す finding** の例
+`seen_count` / `risk_trend` / `last_seen_at` は agent と op-patrol で担当が違う (「役割分担」節参照)。
+以下は agent が新規検出時に返す値と、op-patrol が再検出時に上書きする値の骨格スケルトン。
 
-agent は **過去の検出履歴を知らない**。必ず以下の暫定値を返す。op-patrol が既存 Issue を
-突合して累積値に上書きする。
+### A. agent (refactor-expert) が新規検出時に返す骨格
+
+agent は **過去の検出履歴を知らない**。必ず以下の暫定値 (`seen_count: 1` / `first_detected_at = last_seen_at = today` / `risk_trend: "stable"`) を返す。op-patrol が既存 Issue を突合して累積値に上書きする。
 
 ```json
 {
   "domain": "refactor",
-  "severity": "high",
-  "title": "Report feature mixes UI, path construction, Tauri command calls, and file open behavior",
   "finding_type": "architecture_debt",
   "execution_mode": "staged_refactor",
   "direct_apply_safe": false,
-  "why_not_direct_apply": "Directory and dependency movement crosses frontend and Tauri boundaries and would be risky as a single op-run.",
-  "bulk_group": "refactor-boundary-mixing",
-  "subtype": "feature-boundary-bleeding",
-  "affected_paths": [
-    "src/features/report/**",
-    "src-tauri/src/commands/report.rs"
-  ],
-  "first_detected_at": "2026-05-05",
-  "last_seen_at": "2026-05-05",
+  "why_not_direct_apply": "<一発では直せない理由>",
+  "bulk_group": "<refactor-*>",
+  "affected_paths": ["<path>/**"],
+  "first_detected_at": "<today>",
+  "last_seen_at": "<today>",
   "seen_count": 1,
   "risk_trend": "stable",
-  "needs_human_decision": {
-    "required": true,
-    "reason": "Path contract location crosses frontend (TS) and Tauri (Rust) runtimes; the choice fixes the boundary semantics for all subsequent stages.",
-    "decision_type": "boundary",
-    "options": [
-      {
-        "id": "A",
-        "label": "Feature-local TS contract + mirrored Rust constants",
-        "consequence": "Lower coupling but two sources of truth; drift risk remains, mitigated by lint/test."
-      },
-      {
-        "id": "B",
-        "label": "Single source of truth generated for both sides (build step)",
-        "consequence": "One source of truth but introduces a build dependency between TS and Rust."
-      }
-    ],
-    "recommended_option": "A",
-    "safest_default": "A",
-    "blocked_actions": [
-      "Moving directories",
-      "Changing the actual output path value",
-      "Changing Tauri command signatures",
-      "Creating a new path contract module on either side (deferred until boundary decision)",
-      "Replacing frontend or Tauri literals (deferred until boundary decision)"
-    ],
-    "can_continue_without_decision": true,
-    "next_safe_action": "Execute safe_first_step only (inventory of literals and call sites); do not create any new contract module until the boundary decision is resolved"
-  },
-  "human_decision_points": [
-    "Where should the report path contract live?",
-    "Should frontend and Tauri share a generated contract or keep parallel constants?"
-  ],
-  "proposed_stages": [
-    "Inventory current literals and call sites",
-    "Create feature-local path contract without moving directories",
-    "Replace frontend literals",
-    "Replace Tauri command literals",
-    "Extract file open behavior behind a small adapter",
-    "Remove duplicate helpers"
-  ],
-  "safe_first_step": "Inventory current literals and call sites for report path construction across frontend and Tauri sides. Record findings in the Issue body. Do not create a new contract or change any literal until the boundary decision is resolved.",
+  "proposed_stages": ["<stage 1>", "..."],
+  "safe_first_step": "<最初の stage で安全に実行できる作業>",
+  "needs_human_decision": { "required": false },
   "recommended_runner": "refactor-expert",
-  "post_check_expert": null,
-  "recommended_followup_experts": [
-    {
-      "expert": "test-expert",
-      "reason": "Existing tests for the report flow are thin; staged refactor will benefit from regression coverage",
-      "scope": "follow-up Issue"
-    }
-  ]
+  "post_check_expert": null
 }
 ```
 
 `first_detected_at = last_seen_at = today` / `seen_count = 1` / `risk_trend = "stable"` が
 agent 出力の **絶対条件**。`seen_count` を 2 以上で返したり、`risk_trend = worsening / spreading`
-を agent 側で確定するのは推測扱いとして禁止。
+を agent 側で確定するのは推測扱いとして禁止。`needs_human_decision.required: true` の場合は
+`_shared/invocation-mode.md` の正規スキーマ (`reason` / `decision_type` / `options[]` /
+`recommended_option` / `safest_default` / `blocked_actions[]` / `can_continue_without_decision` /
+`next_safe_action`) を全て埋める。
 
-### B. op-patrol が再検出時に **既存 Issue を突合して上書きした後** の例
+### B. op-patrol が再検出時に上書きする差分
 
-`affected_paths` が前回 (`src/features/report/**`, `src-tauri/src/commands/report.rs`) と同じで
-新規 violation も増えなかったため `risk_trend = "stable"`、`seen_count` は +1 されて 2、
-`last_seen_at` は今日に更新。`first_detected_at` は既存 Issue 側の値を維持。
+既存 Issue と fingerprint 突合後、op-patrol は以下のみを上書きする (他フィールドは A のまま維持):
 
-```json
-{
-  "...": "(他フィールドは A と同じ)",
-  "first_detected_at": "2026-05-04",
-  "last_seen_at": "2026-05-05",
-  "seen_count": 2,
-  "risk_trend": "stable"
-}
-```
+- `last_seen_at`: 今日に更新
+- `seen_count`: +1
+- `risk_trend`: `affected_paths` の増減・新規 violation の有無で再判定 (`stable` / `worsening` / `spreading`)
+- `first_detected_at`: 既存 Issue 側の値を維持 (更新しない)
 
 `seen_count >= 3` になったり `affected_paths` が増加した場合、op-patrol は **`needs:triage`
-ラベル** を追加し、`risk_trend` を `worsening` / `spreading` に更新する (本ドキュメント
-上部「risk_trend の判定」節と「needs:triage の付与条件」節を参照)。
-
-> 注: 上記は省略形の例。canonical schema の必須フィールド (severity_reason / files / symbols /
-> summary / evidence / evidence_grade / hypothesis / scope_in / scope_out / recommendation /
-> verification_steps / success_criteria / gotchas / confidence / requires_dynamic_verification)
-> は実際の起票時には **すべて埋める**。完全例は `report-schema.md` の architecture_debt finding schema を参照。
+ラベル** を追加し、`risk_trend` を `worsening` / `spreading` に更新する
+(`skills/op-patrol/SKILL.md` の「architecture_debt の追跡方式 (Phase 1)」節が正本)。
 
 ---
 

@@ -20,7 +20,7 @@ description: debug-expert agent の方法論教科書。Rust / Tauri v2 / Vue 3 
 
 debug-expert agent (`~/.claude/agents/debug-expert.md`) が `skills: [expert-debug]` で本ファイルを自動プリロードする。
 agent はここに書かれた **5 ステップの調査メソドロジー**、**3-bucket triage**、**Severity Policy**、**Verification Ladder**、**バグパターン catalog** に従って自走する。
-言語別深掘りは `references/patterns.md`、プロジェクト別検証 recipe は `references/tools.md`、対象外スタック (React / Go) は `references/archived-patterns.md` を必要時に Read する。
+言語別深掘りは `references/patterns.md`、プロジェクト別検証 recipe は `references/tools.md` (feature-expert とも共有する project-type 別 recipe 辞書の正本、2026-07-23 集約) を必要時に Read する (React / Go は対象外スタックとして通常検出しない)。
 
 ---
 
@@ -42,8 +42,8 @@ conditional_stack:
   - Python/FastAPI  # AI Gateway / Python backend リポジトリのみ参照
 
 disabled_by_default:
-  - React  # archived-patterns.md に退避、通常検出しない
-  - Go     # archived-patterns.md に退避、通常検出しない
+  - React  # 通常検出しない (主戦技術から除外)
+  - Go     # 通常検出しない (主戦技術から除外)
 ```
 
 scan モードの動作:
@@ -214,12 +214,12 @@ patrol_sample 由来の finding には `scope_origin: "patrol_sample"` を付け
 
 #### 内部 triage: 3-bucket 分類
 
-検出物を以下 3 つに分類する。**この分類を経てから JSON 出力にマップする** ことで、誤検知ノイズと「テストすれば分かる」推測報告を構造的に抑える。
+検出物を以下 3 つに分類する。**この分類を経てから JSON 出力にマップする** ことで、finding が静的証拠 (コード引用・呼出経路) で裏付けられた状態を構造的に担保する。
 
 ##### 1. confirmed_findings — 静的証拠だけで Critical / High と断定できる
 
 - 該当行のコードだけで重大さが確定する
-- 推測語句 (「可能性」「〜かもしれない」「テストすれば分かる」) を一切使わずに評価できる
+- 静的証拠 (コード引用・呼出経路) だけで断定的に評価でき、そのまま報告の裏付けに使える
 - → `_shared/expert-spawn.md` の **scan 共通スキーマ JSON 配列** にそのまま出力する (これが op-scan が Issue 化する対象)
 
 ##### 2. investigation_candidates — 静的では断定できないが、実行・テスト・ログで確認すべき有力候補
@@ -411,7 +411,7 @@ scan モード (detect) ではこの表で当たりを付け、apply モード (
 | 19 | initState で async 直扱い | `initState` で `await` できず未待機の future が走る |
 | 20 | platform channel / file picker の error 未処理 | desktop / mobile の path 差・permission 例外を catch していない |
 
-各パターンの言語別具体例・追加パターン (低頻度) は `references/patterns.md`、対象外スタック (React / Go) は `references/archived-patterns.md` を参照。
+各パターンの言語別具体例・追加パターン (低頻度) は `references/patterns.md` を参照 (React / Go は対象外スタックのため扱わない)。
 
 ---
 
@@ -518,8 +518,7 @@ skip 条件なし。apply 後は必ず invoke する。
 ## 深掘り参照
 
 - 言語別パターン全集 (active stack 中心): `~/.claude/skills/expert-debug/references/patterns.md`
-- 対象外スタック退避 (React / Go): `~/.claude/skills/expert-debug/references/archived-patterns.md`
-- プロジェクト別検証 recipe / ツール辞典: `~/.claude/skills/expert-debug/references/tools.md`
+- プロジェクト別検証 recipe / ツール辞典 (feature-expert とも共有する正本): `~/.claude/skills/expert-debug/references/tools.md`
 - ユニバーサルデザイン (UI 起因バグ): `~/.claude/skills/_shared/universal-design.md`
 
 ---

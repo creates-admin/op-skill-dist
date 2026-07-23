@@ -1,7 +1,9 @@
 # review-needs-fix.md — needs-fix 時の PR コメント雛形
 
+> **本テンプレの OP-managed 節は controller (ClusterOrchestrator、`op-run/references/global-review-spawn.md` §4-2-b) が投稿する際の本文雛形** — OP-managed の review-expert は構造化返却のみを行い、自身では `gh pr comment` しない (ADR-0011 決定6 / ADR-0016)。
+
 <!--
-機能概要: review-expert が needs-fix 判定時に投稿する PR コメントの雛形。
+機能概要: needs-fix 判定時に PR へ投稿されるコメントの雛形。
 作成意図: 3 条件 AND チェックリストと finding block を必ず含むようにし、
          同 PR / 単一 expert / 既知パターンが満たされるケースに限定する。
 注意点: 1 条件でも欠ける場合は needs-specialist-review に倒す。本テンプレは 3 条件 AND が
@@ -10,10 +12,10 @@
 
 ## 投稿モード (必読)
 
-- **OP-managed Mode (op-run フェーズ4 から spawn)**: 「OP-managed 投稿コマンド」節を使う。canonical `<!-- op-review-meta -->` を投稿し、op-run の Review Fix Loop の起点になる
-- **Direct Mode (review-expert を skill 直接実行)**: 「OP-managed 投稿コマンド」節を **絶対に使わない**。`<!-- op-review-meta -->` を出すと provenance 偽装になり、op-run / op-merge を不正に動かす可能性がある。ユーザーが PR コメント投稿を明示許可した場合のみ「Direct Mode 投稿コマンド」節 (`<!-- op-review-report -->` マーカ) を使う。許可前は判定結果と finding を会話に提示するだけに留める
+- **OP-managed Mode (op-run フェーズ4)**: 「OP-managed 投稿本文の雛形」節は **ClusterOrchestrator が §4-2-b で構造化返却 (verdict + findings) から組み立て、Marker Publish Validate を通して 1 回だけ投稿する**。review-expert は本節のコマンドを自身で実行しない。canonical `<!-- op-review-meta -->` が op-run の Review Fix Loop の起点になる
+- **Direct Mode (review-expert を skill 直接実行)**: 「OP-managed 投稿本文の雛形」節を **絶対に使わない**。`<!-- op-review-meta -->` を出すと provenance 偽装になり、op-run / op-merge を不正に動かす可能性がある。ユーザーが PR コメント投稿を明示許可した場合のみ「Direct Mode 投稿コマンド」節 (`<!-- op-review-report -->` マーカ) を使う。許可前は判定結果と finding を会話に提示するだけに留める
 
-## OP-managed 投稿コマンド (gh CLI、op-run フェーズ4 専用)
+## OP-managed 投稿本文の雛形 (ClusterOrchestrator §4-2-b が投稿 — review-expert は実行しない)
 
 ```bash
 # REVIEW_ROUND は op-run が spawn 前に必ずセットして渡す。未指定なら fail-fast

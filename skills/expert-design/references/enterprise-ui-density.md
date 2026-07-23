@@ -52,8 +52,8 @@
 - **primary goal**: 状態を俯瞰し、異常を素早く発見する
 - **density policy**: 高密度。ただし KPI / chart / table が画面で互いを邪魔しないこと
 - **layout**: grid 12 / KPI cards 上段 / chart 中段 / table 下段
-- **common mistakes**: chart を装飾色で塗る / 軸を切って差を誇張する / 凡例を凡例だけで説明する
-- **preferred patterns**: semantic color のみ / 軸は 0 始まり (理由ある時だけ切る) / chart に短い解釈テキスト
+- **common mistakes**: chart の data honesty 違反 (詳細規則は `data-viz-patterns.md` を正本として参照)
+- **preferred patterns**: semantic color のみ / data honesty を守る (`data-viz-patterns.md`) / chart に短い解釈テキスト
 
 ### diff / comparison (差分・比較)
 
@@ -98,5 +98,5 @@
 - 業務一覧で 1 画面 5 行以下になるレイアウト
 - status を **色だけで** 示すこと
 - 全 column を等幅にして主従を消すこと
-- chart の軸を **理由なく切る / 3D で誇張する** こと
+- chart の data honesty 違反 (軸切り / 3D 誇張等、詳細: `data-viz-patterns.md`)
 - 危険操作と通常操作を **同じ視覚重み** で並べること

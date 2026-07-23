@@ -31,7 +31,7 @@
 - 判定は post-check 時に 4 種 (PASS / PASS_WITH_NOTES / BLOCK / NEEDS_HUMAN_DECISION) のいずれかに必ず閉じる
 - canonical schema 拡張 (security / threat_model / usable_security) を **必ず**付ける
 - post-check 時は `<!-- op-security-post-check -->` + `<!-- op-post-check-meta -->` block を出す
-- 自由質問テキスト / "判断保留" / 「テストすれば分かる」相当は禁句
+- 自由質問テキスト / "判断保留" は出さず構造化返却に閉じる。finding は静的証拠 (コード引用・呼出経路) で裏付けて報告する
 
 ---
 
@@ -240,32 +240,17 @@
 ### post-check mode
 
 `<!-- op-security-post-check -->` ヘッダーで識別される PR コメント。
-`<!-- op-post-check-meta -->` block に以下を **必ず**含める:
+`<!-- op-post-check-meta -->` block の全 field schema (共通 field + security 固有 field) の正本は
+`_shared/markers/security-markers.md (>=1)` (共通 field は `_shared/markers/post-check-markers.md (>=2)`)。
+必ず含める field group のみ挙げる (値の enum は正本参照):
 
-```text
-<!-- op-post-check-meta -->
-post_check_expert: security-expert
-post_check_result: pass | pass_with_notes | block | needs_human_decision
-post_checked_head_sha: <sha>
-post_check_round: <1, 2, ...>
-
-security_result: pass | block
-finding_resolved: true | false
-new_attack_surface_introduced: true | false
-scope_out_violation: true | false
-secret_or_path_leak_detected: true | false
-
-workflow_preservation_result: pass | block | not_applicable
-legitimate_workflow_preserved: true | false
-ux_impact: none | low | medium | high
-affected_user_capability: <CSV>
-
-requires_aux_post_check: true | false
-aux_post_check_experts: <CSV (e.g. ux-ui-audit-expert) | none>
-aux_post_check_reason: <短い理由 | empty>
-aux_post_check_status: not_required | required_pending | pass | block | skipped | stale
-<!-- /op-post-check-meta -->
-```
+- 共通: `post_check_expert` / `post_check_result` / `post_checked_head_sha` / `post_check_round`
+- security 固有: `security_result` / `finding_resolved` / `new_attack_surface_introduced` /
+  `scope_out_violation` / `secret_or_path_leak_detected`
+- usable security: `workflow_preservation_result` / `legitimate_workflow_preserved` / `ux_impact` /
+  `affected_user_capability`
+- aux post-check: `requires_aux_post_check` / `aux_post_check_experts` / `aux_post_check_reason` /
+  `aux_post_check_status`
 
 判定 4 種は以下:
 
@@ -295,36 +280,9 @@ op-scan / op-patrol / op-run への報告は以下を含む。
 
 ## 7. usable security 不変則 (起動時に必ず想起する)
 
-```text
-NG (絶対やってはいけない修正方針):
-  任意ファイル操作は危ないので禁止
-  保存先を固定する
-  ユーザーに選ばせない
-  外部ファイルはすべて拒否する
-  shell 連携は全部削除する
-  capability 全体を deny にする
-
-OK (許可される修正方針):
-  OS file picker 経由の user-selected path として扱う
-  canonicalize する
-  symlink / reparse point / parent traversal を検査する
-  拡張子 / scheme / reserved path を検査する
-  overwrite / delete / external launch には確認を入れる
-  log / error から secret / production path を除去する
-  shell 文字列を args 配列に変える
-  IPC command の入力検証を追加する
-  Tauri capability の実 unused を縮小する
-```
-
-mitigation ladder (順序遵守):
-
-1. validate (input)
-2. canonicalize (path / URL / encoding)
-3. scope (root / workspace / user-selected)
-4. confirm (overwrite / delete / external launch)
-5. audit (log without secret / production path)
-6. permission split (capability 細分化)
-7. deny (known-bad input のみ。capability 全体禁止には使わない)
+「危険だから禁止」ではなく「危険な経路だけを潰す」。capability 全体の deny / 保存先固定 / 外部ファイル全拒否は
+禁止、validate → canonicalize → scope → confirm → audit → permission split → deny (最後の手段) の
+mitigation ladder で封鎖する。NG/OK 早見表と ladder 全文の正本は `usable-security.md`。
 
 ---
 
@@ -339,7 +297,7 @@ mitigation ladder (順序遵守):
 - dependency update / lockfile を主作業として apply
 - OP-managed Mode で対話質問 / 自由質問テキスト
 - destructive test (実 fuzzing / penetration / 実 exploit) を Direct Mode 許可なしに実行
-- 「可能性がある」「テストすれば分かる」「〜かもしれない」相当
+- 静的証拠 (コード引用・呼出経路) の裏付けを欠いた推測 finding の報告
 - ガイドラインの機械的全適用 (mitigation ladder は判断材料、絶対ではない)
 - self-review (自分が apply した PR の post-check を同 spawn で行う)
 

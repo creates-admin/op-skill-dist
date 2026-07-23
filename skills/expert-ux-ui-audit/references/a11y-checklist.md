@@ -138,15 +138,6 @@ NG 例:
 ユーザー環境の主戦場 (Vue 3 / Flutter / Tauri v2) に固有の観点。
 本節は a11y / 復帰性 / 状態可視性に直結するもののみを扱う (装飾の好みは扱わない)。
 
-### Vue 3 (再掲ポイント)
-
-- `<div @click>` / `<span @click>` で button を実装 → `<button>` を使う
-- icon-only `<button>` に `aria-label` 欠
-- `<input>` に `<label>` または `aria-labelledby` 欠
-- inline error が `aria-describedby` で input と紐付いていない
-- modal / drawer に Esc close と focus trap が無い
-- `:focus-visible` 未実装 / `outline:none` の代替なし
-
 ### Flutter
 
 - `GestureDetector` / `InkWell` で button 相当の操作を作っているのに `Semantics(button: true)` / `Tooltip` / focus 対応が無い

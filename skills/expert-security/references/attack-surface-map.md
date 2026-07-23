@@ -67,7 +67,7 @@ canonical schema の `security.attack_surface` には以下のいずれかを設
 - エラーパス: panic / unwrap / expect が user input 経路で発火しないか
 - 出力: error message / response に secret / production path が漏れていないか
 
-詳細は `tauri-ipc.md` / `tauri-command-contract.md`。
+詳細は `tauri-ipc.md`。
 
 ---
 
@@ -144,75 +144,81 @@ canonical schema の `security.attack_surface` には以下のいずれかを設
 
 ---
 
-## 5. secret / token / log
+## 5. secret / token / log / error / dialog / Toast
 
 ### audit 対象
 
 - env::var / std::env / dotenv 経由の取得
 - Keychain (macOS) / Credential Manager (Windows) / Secret Service (Linux) 経由の取得
 - log::info! / log::error! / println! / eprintln! / dbg!
-- error message (Result::Err / Box<dyn Error> / anyhow::Error)
-- panic message
-- Toast / dialog / status bar 表示
+- error message (Result::Err / Box<dyn Error> / anyhow::Error) / panic message の chain
+- dialog / Toast / status bar / error 画面の表示
+- crash report / telemetry
 - generated artifact (生成された JSX / 生成された JSON / 生成された PDF) に secret が混入していないか
 
 ### 検査観点
 
-- secret を log / error / Toast / artifact / commit に出力していないか
-- production path (絶対 path / ユーザー名を含む path) を log に出力していないか
-- document content (顧客の文書 / 個人情報) を log に出力していないか
+- secret / production path (絶対 path / ユーザー名を含む path) / document content (顧客の文書 / 個人情報) / token を log / error / Toast / artifact / commit に出力していないか
 - error chain で source error をそのまま転送していないか (sanitize 漏れ)
+- crash report / telemetry に user content が含まれないか
+- dialog / Toast 文言に技術詳細を出しすぎていないか
 
 詳細は `secrets-and-logs.md`。
 
 ---
 
-## 6. external URL / updater
+## 6. external URL / updater / installer / signing
 
 ### audit 対象
 
 - reqwest / ureq / fetch の呼び出し
-- tauri-updater / `app.updater` の設定
+- tauri-updater / `app.updater` の設定 / updater manifest (latest.json / version)
 - `<a href="...">` の external URL
 - redirect 追跡
 - TLS / cert 検証
-- updater payload signature 検証
-- public key の管理
+- updater payload signature 検証 / public key の管理
+- tauri-bundler / MSI / DMG / AppImage / deb 生成
+- signtool / codesign / authenticode
+- artifact の完整性検証
 
 ### 検査観点
 
-- scheme allowlist (https のみ等)
-- host allowlist (production domain のみ)
+- scheme allowlist (https のみ等) / host allowlist (production domain のみ)
 - redirect 追跡時に scheme / host が変わったら reject
 - TLS は default (rustls / system roots) を使い、`accept_invalid_certs` 等の dangerous setting を有効化していないか
 - updater payload の signature 検証を skip していないか
-- public key を hard-coded していないか / 適切に管理されているか
+- public key / signing key を hard-coded / repo・artifact に commit していないか、適切に管理されているか
+- updater manifest の URL が trusted host か
+- signing が CI / release pipeline で必須化されているか
+- artifact のハッシュ / 署名検証を skip していないか
 
-詳細は `external-url-updater.md`。
+詳細は `external-url-updater.md` (updater 節) および別途 release-expert (Phase 4) と分担。
 
 ---
 
-## 7. parser / archive / serializer
+## 7. parser / archive / serializer (zip-slip 含む)
 
 ### audit 対象
 
 - serde_json / serde_yaml / toml / quick_xml の deserialize
 - pdf-rs / lopdf / poppler の PDF parse
 - image / zune-image / kamadak-exif の image parse
-- zip / tar / flate2 / brotli の archive extraction
+- zip / tar / flate2 / brotli の archive extraction (ユーザーが import した archive を含む)
 - IDML (XML over zip) の parse / extraction
 - CSV (csv crate) の parse
 
 ### 検査観点
 
-- archive extraction で zip-slip (path traversal in zip) を防いでいるか
-- 解凍先が scope (workspace / user-selected) 内に閉じているか
-- ファイルサイズ / エントリ数 / 圧縮比 の上限があるか (zip bomb / decompression bomb 対策)
+- archive extraction で zip-slip (entry name の `..` / 絶対 path / path traversal in zip) を防いでいるか
+- 解凍先が canonicalize 後に scope (workspace / user-selected) 内に閉じているか
+- 個別 entry のファイルサイズ / archive 全体のサイズ / エントリ数 / 圧縮比 / 解凍後合計サイズの上限があるか (zip bomb / decompression bomb 対策)
+- ネストされた archive (zip in zip) の扱い
+- symlink / hardlink を含む archive の扱い (作成時 reject)
 - deserialize で巨大配列 / 深い nesting / 巨大 string を reject しているか (deserialize DOS)
 - recursion limit / depth limit / size limit / count limit
 - parser に user input を直接渡す前に file size / encoding を確認しているか
 
-詳細は `parser-boundary.md`。
+詳細は `parser-boundary.md` (archive 節含む)。
 
 ---
 
@@ -240,70 +246,7 @@ canonical schema の `security.attack_surface` には以下のいずれかを設
 
 ---
 
-## 9. updater / installer / signing
-
-### audit 対象
-
-- tauri-bundler / tauri-updater
-- MSI / DMG / AppImage / deb 生成
-- signtool / codesign / authenticode
-- updater manifest (latest.json / version)
-- public key / signing key の管理
-- artifact の完整性検証
-
-### 検査観点
-
-- signing が CI / release pipeline で必須化されているか
-- signing key を repo / artifact に commit していないか
-- updater public key が hard-coded で適切な値か
-- updater manifest の URL が trusted host か
-- artifact のハッシュ / 署名検証を skip していないか
-
-詳細は `external-url-updater.md` (updater 節) および別途 release-expert (Phase 4) と分担。
-
----
-
-## 10. archive extraction (zip-slip)
-
-### audit 対象
-
-- zip crate / tar crate / flate2 / brotli の extraction
-- IDML (XML over zip) の extraction
-- ユーザーが import した archive の解凍
-
-### 検査観点
-
-- entry name に `..` / 絶対 path / symlink を含むものを reject しているか
-- 解凍先が canonicalize 後に scope 内か確認しているか
-- 個別 entry のファイルサイズ / archive 全体のサイズ / 解凍後合計サイズの上限
-- ネストされた archive (zip in zip) の扱い
-- symlink / hardlink を含む archive の扱い (作成時 reject)
-
-詳細は `parser-boundary.md` の archive 節。
-
----
-
-## 11. log / error / dialog / Toast
-
-### audit 対象
-
-- log::* / println / eprintln / dbg!
-- panic / Result::Err / anyhow::Error の chain
-- dialog / Toast / status bar / error 画面の表示
-- crash report / telemetry
-
-### 検査観点
-
-- secret / production path / document content / token を出力していないか
-- error chain の source error をそのまま転送せず、sanitize しているか
-- crash report / telemetry に user content が含まれないか
-- dialog / Toast 文言に技術詳細を出しすぎていないか
-
-詳細は `secrets-and-logs.md`。
-
----
-
-## 12. temp / cache / backup
+## 9. temp / cache / backup
 
 ### audit 対象
 
@@ -323,7 +266,7 @@ canonical schema の `security.attack_surface` には以下のいずれかを設
 
 ---
 
-## 13. drag & drop / clipboard
+## 10. drag & drop / clipboard
 
 ### audit 対象
 
@@ -340,7 +283,7 @@ canonical schema の `security.attack_surface` には以下のいずれかを設
 
 ---
 
-## 14. CLI argument / env var
+## 11. CLI argument / env var
 
 ### audit 対象
 
@@ -356,7 +299,7 @@ canonical schema の `security.attack_surface` には以下のいずれかを設
 
 ---
 
-## 15. 新規追加変更の最優先 patrol 対象
+## 12. 新規追加変更の最優先 patrol 対象
 
 `op-patrol` で最近の変更を優先する場合、以下を最優先 candidate に含める:
 

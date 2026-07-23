@@ -257,53 +257,20 @@ apply 時の制約:
 - **CLAUDE.md 規約最優先**: ネスト 2 階層、日本語コメント、フラット構造優先、過剰抽象化禁止
 - **挙動非変更の保証**: 変更前後で外部挙動・型・入出力・エラー・保存形式・実値・file location を変えない
 - **scope_out に踏み込まない**
-- **OP-managed Mode では司令官と対話しない**: Issue / marker / scope を source of truth とする。
-  不足情報は質問せず `assumptions[]` / `needs_human_decision` / `blocked_actions[]` として完了報告に返す。
-  Direct Mode では人間との対話可
+- **OP-managed Mode での対話禁止契約**は `~/.claude/skills/_shared/invocation-mode.md`「OP-managed Mode Rules」節に従う
+  (Issue / marker / scope を source of truth とする)
 
 ---
 
 ## Direct Expert Run (直接実行時の対話型入口)
 
-通常は OP skill (op-scan / op-run / op-merge / op-architect / op-patrol) 経由で呼ばれ、
-Issue 指示書 / hidden marker / scope / verification_steps / post-check 条件が事前に渡される。
+対話手順・確認テンプレの正本は `~/.claude/skills/_shared/invocation-mode.md`「Direct Mode Rules」節に従う。
 
-ユーザーが refactor-expert を **直接実行** する場合は OP 側の文脈が不足するため、最小限の対話型確認を行う。
-Direct Mode / OP-managed Mode の責務境界・標準確認テンプレートは `~/.claude/skills/_shared/invocation-mode.md` を参照。
+refactor-expert 固有の差分:
 
-### 初期モード
-
-refactor-expert は **no-behavior-change を明示**。apply 前に対象範囲と verification (既存テスト pass) を確認する。
-
-### 指定がない場合の保守的扱い (default)
-
-| 項目 | default |
-|------|---------|
-| mode | scan-only (構造問題の検出のみ) |
-| permission | no-write (Read / Grep / Glob のみ) |
-| output | report (finding を返すだけ、commit / PR 作成はしない) |
-
-OP 経由で Issue / marker / scope が既に渡されている場合は default を上書きしてその契約に従う。
-
-### 初回確認テンプレ
-
-直接実行時に target / mode / permission / verification が未指定なら以下を確認する。
-
-1. 対象はどこですか? (ファイル / ディレクトリ / PR / Issue / diff)
-2. モードは scan / apply のどれですか?
-3. 既存テスト全 pass を確認できますか? (no-behavior-change 保証)
-4. 実行してよい確認コマンドはありますか?
-
-指定がなければ、scan-only / no-write / report 出力として扱う。
-
-### 直接実行時の禁止事項
-
-- 機能変更を含む refactor (no-behavior-change 違反)
-- インターフェース / シグネチャ変更を単独で実施 (要 escalation)
-- ユーザー許可なしに apply へ進む
-- OP 管理外で勝手に branch / PR / merge を作る
-- scope_out に踏み込む
-- public API / serialized format / IPC contract / 実値の変更
+- **no-behavior-change を明示**: apply 前に対象範囲と検証手段 (既存テスト全 pass) を確認する
+- インターフェース / シグネチャ変更は Direct Mode でも単独実施せず escalation する (機能変更を伴う refactor は no-behavior-change 違反として拒否)
+- 既定は scan-only / no-write / report (commit / PR 作成はしない)
 
 ---
 
@@ -314,11 +281,6 @@ OP runtime 規約は以下 3 ファイルが正本。disagree したら正本側
 - `~/.claude/skills/_shared/runtime-contract.md` — runtime spawn 境界 / apply・post-check 解決 / merge-blocking state
 - `~/.claude/skills/_shared/active-expert-registry.md` — agent ↔ skill 機械 mapping (本 agent の identity / runtime 適格性確認)
 - `~/.claude/skills/_shared/markers/labels-and-markers.md` — 本 agent が出力する `op-domain: refactor` marker / `op-refactor-debt-key` 等の名前と意味
-- marker / completion report publish 前は必ず `skills/_shared/expert-spawn.md` の
-  **Marker Publish Validate** 節 (`op help marker <name>` + `op core marker-lint --body - --source-hint <kind> --strict`) を実行する
-- finding の `op-fingerprint` 値は手書きせず `skills/_shared/expert-spawn.md` §369「op CLI helper 活用推奨例」の
-  `op core fingerprint --plain ...` で生成する (format drift 防止)
-- architecture_debt finding 起票時の `op-refactor-debt-key` も同節の `op core debt-key --plain ...` で採番する
-  (手書き衝突を回避、1 agent 1 場所)
-- merged PR 引用 (`Fixes #N` / decisive marker) の抽出は同節の `op core extract-pr-markers --input-json - --plain` で
-  決定論的に行う (over-match / under-match 防止。`## 残存リスク / follow-up` 節の自然文補完は別途手読みする)
+- marker / completion report publish 前は `skills/_shared/expert-spawn.md`「Marker Publish Validate」節の 2 段 validate に従う
+- `op-fingerprint` / `op-refactor-debt-key` / merged PR 引用 (`Fixes #N` 等) の抽出は同ファイル「prompt 規約 (共通)」節の
+  「op CLI helper 活用推奨例」の CLI helper で生成する (手書き禁止。`## 残存リスク / follow-up` 節の自然文補完のみ別途手読みする)

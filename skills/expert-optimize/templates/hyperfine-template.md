@@ -1,130 +1,25 @@
-# hyperfine template — CLI / command の Before / After 計測
+# hyperfine template — CLI / command の Before / After 計測 (即使う雛形)
 
 <!--
-機能概要: hyperfine による CLI / build / pipeline 全体の wall-clock 計測テンプレ。
-作成意図: apply mode の Before / After 計測を即用意するための雛形。
+機能概要: hyperfine による CLI / build / pipeline 全体の wall-clock 計測の「そのまま使う」雛形集。
+作成意図: apply mode の Before / After 計測を即用意するための雛形。基本パターン (単発計測 /
+         Before-After 比較 / cold-warm 区別) と禁止事項の説明は references/benchmark-protocol.md
+         が正本のため、本ファイルは protocol に無い追加オプション雛形と、apply mode の
+         標準シーケンスのみを持つ (verbatim 重複解消)。
 注意点: hyperfine は warmup と min-runs の機能を備えるが、本テンプレでは明示する。
-       Windows / WSL では drop_caches が使えないので cold cache 計測は限定的。
+       Windows / WSL では drop_caches が使えないので cold cache 計測は限定的
+       (詳細は references/benchmark-protocol.md 「hyperfine の使いどころ」節)。
 -->
 
 ## 前提
 
-- `hyperfine` のインストール:
-  - Linux: `cargo install hyperfine` または `apt install hyperfine`
-  - Windows: `winget install hyperfine` または `cargo install hyperfine`
-  - macOS: `brew install hyperfine`
-- 計測対象は **release build**:
-  - Rust: `cargo build --release`
-  - Node: `npm run build` 後の dist
-  - Tauri: `cargo build --release --bin <app>` で sidecar binary
+基本的な install / release build 前提、単発計測・Before/After 比較・cold/warm cache 区別の
+コマンド例は `references/benchmark-protocol.md` の「hyperfine の使いどころ」節が正本。
+本ファイルはそこに無い **追加オプション雛形** と **apply mode の標準シーケンス** のみを扱う。
 
 ---
 
-## 1. baseline 取得 (Before)
-
-### 単純な single command
-
-```bash
-hyperfine \
-  --warmup 3 \
-  --runs 10 \
-  --export-json target/bench/baseline.json \
-  --export-markdown target/bench/baseline.md \
-  './target/release/app input/sample-large.json'
-```
-
-### 入力規模ごとに baseline
-
-```bash
-hyperfine \
-  --warmup 3 \
-  --runs 10 \
-  --parameter-list size small,medium,large \
-  --export-markdown target/bench/baseline-by-size.md \
-  './target/release/app input/sample-{size}.json'
-```
-
----
-
-## 2. Before / After 比較
-
-### Before / After binary を別名で保存しておくパターン (推奨)
-
-`git checkout` を hyperfine 内に入れるとノイズが増えるため、
-**事前に before / after の binary を別名でビルドして並べる** のが安定。
-
-```bash
-# 1. Before binary を保存
-git stash  # apply 中の変更を退避
-cargo build --release --bin app
-cp target/release/app target/bench/before
-git stash pop  # 変更を復元
-
-# 2. After binary をビルド
-cargo build --release --bin app
-cp target/release/app target/bench/after
-
-# 3. 比較
-hyperfine \
-  --warmup 3 \
-  --runs 10 \
-  --export-markdown target/bench/result.md \
-  --export-json target/bench/result.json \
-  './target/bench/before input/sample-large.json' \
-  './target/bench/after input/sample-large.json'
-```
-
-### 入力規模 × Before/After
-
-```bash
-hyperfine \
-  --warmup 3 \
-  --runs 10 \
-  --parameter-list size small,medium,large \
-  --export-markdown target/bench/before-after-by-size.md \
-  './target/bench/before input/sample-{size}.json' \
-  './target/bench/after input/sample-{size}.json'
-```
-
----
-
-## 3. cold / warm cache 区別 (I/O 影響時)
-
-### Linux
-
-```bash
-# cold: OS page cache を毎回クリア
-hyperfine \
-  --warmup 0 \
-  --runs 10 \
-  --prepare 'sync && echo 3 | sudo tee /proc/sys/vm/drop_caches' \
-  './target/bench/after input/large.idml'
-
-# warm: warmup 込み (定常状態)
-hyperfine \
-  --warmup 3 \
-  --runs 10 \
-  './target/bench/after input/large.idml'
-```
-
-### Windows / WSL
-
-drop_caches が使えないので簡易的に:
-
-```bash
-# cold proxy: 入力ファイルを毎回 copy で touch
-hyperfine \
-  --warmup 0 \
-  --runs 10 \
-  --prepare 'cp input/large-source.idml input/large-fresh.idml' \
-  './target/bench/after input/large-fresh.idml'
-```
-
-> 厳密な cold 計測は Linux native でのみ可能。WSL は file system 越しなので注意。
-
----
-
-## 4. setup / cleanup の使い分け
+## 1. setup / prepare / cleanup の使い分け
 
 ```bash
 hyperfine \
@@ -142,7 +37,7 @@ hyperfine \
 
 ---
 
-## 5. shell 起動オーバーヘッドを除く
+## 2. shell 起動オーバーヘッドを除く
 
 ```bash
 # command 内で複雑な shell 構文を書くとき
@@ -155,7 +50,7 @@ hyperfine \
 
 ---
 
-## 6. 結果の確認・export
+## 3. 結果の export
 
 ```bash
 # Markdown 表 (PR description 貼付用)
@@ -170,31 +65,7 @@ jq '.results[] | {command, mean, stddev}' result.json
 hyperfine ... --export-csv result.csv
 ```
 
----
-
-## 7. 安定化 tips
-
-```bash
-# warmup を増やす (CPU governor / cache が安定するまで待つ)
-hyperfine --warmup 5 --runs 20 ...
-
-# CPU governor を performance に固定 (Linux)
-sudo cpupower frequency-set -g performance
-
-# 他プロセスの干渉を抑える
-# - browser, IDE, antivirus を止める
-# - laptop は AC 接続、低消費電力モード OFF
-
-# baseline を 2 回取って差分が誤差内か確認 (ベンチ自体の信頼性)
-hyperfine --warmup 3 --runs 10 \
-  './target/bench/before input.json' \
-  './target/bench/before input.json'
-# 同じ binary なら差は誤差内のはず
-```
-
----
-
-## 8. 出力例 (Markdown export)
+出力例 (Markdown export、そのまま PR description に貼り付け可能):
 
 ```markdown
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
@@ -203,24 +74,9 @@ hyperfine --warmup 3 --runs 10 \
 | `./target/bench/after input/sample-large.json` | 82.1 ± 3.0 | 78.4 | 87.9 | 1.00 |
 ```
 
-そのまま PR description に貼り付け可能。
-
 ---
 
-## 9. 失敗パターン (避ける)
-
-- **debug build で計測**: `cargo run` のまま hyperfine → 数倍遅い結果になる
-- **warmup なし**: cold cache の偏差が大きい
-- **runs 1 回のみ**: 統計値が出ない (hyperfine は最低 10 推奨)
-- **mean が 1 ms 未満の関数を hyperfine**: hyperfine の精度限界 (criterion を使う)
-- **入力 fixture が毎回変わる**: 再現性なし
-- **Before / After で異なる入力**: 比較不能
-- **system noise を放置**: Browser / IDE 動作中、antivirus scan 中で計測
-- **Windows native で drop_caches 想定**: 動かない (Linux 限定機能)
-
----
-
-## 10. apply mode での標準シーケンス
+## 4. apply mode での標準シーケンス
 
 ```bash
 # 1. Before の binary を保存 (まだ apply 前)
@@ -256,5 +112,13 @@ hyperfine \
 cat target/bench/result.md
 
 # 7. 統計判定 (clear / marginal / none / unstable)
-#    → benchmark-protocol.md / risk-and-rollback.md
+#    → references/benchmark-protocol.md 「統計的有意性の判定」節 / references/risk-and-rollback.md
 ```
+
+---
+
+## 禁止事項・安定化 tips
+
+基本パターン (単発計測・Before/After 比較・cold/warm cache) の禁止事項・環境ノイズ抑制 tips は
+`references/benchmark-protocol.md` の「禁止事項」「ベンチマーク環境ノイズの抑制」節が正本
+(ここでは再定義しない)。

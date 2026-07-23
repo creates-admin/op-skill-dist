@@ -1,20 +1,23 @@
 # review-approve.md — approve 時の PR コメント雛形
 
+> **本テンプレの OP-managed 節は controller (ClusterOrchestrator、`op-run/references/global-review-spawn.md` §4-2-b) が投稿する際の本文雛形** — OP-managed の review-expert は構造化返却のみを行い、自身では `gh pr comment` しない (ADR-0011 決定6 / ADR-0016)。
+
 <!--
-機能概要: review-expert が approve 判定時に投稿する PR コメントの雛形。
+機能概要: approve 判定時に PR へ投稿されるコメントの雛形。
 作成意図: ~/.claude/skills/_shared/pr-templates.md の canonical テンプレに追従しつつ、
-         review-expert が gh CLI で直接投稿するときに参照する実用テンプレ。
-注意点: canonical schema は pr-templates.md を正とする。本ファイルは review-expert 用の写し。
+         controller (ClusterOrchestrator) が marker 組立・投稿するときに参照する本文雛形。
+         Direct Mode のユーザー許可後の参考投稿 (op-review-report) にも使う。
+注意点: canonical schema は pr-templates.md を正とする。本ファイルは作業用の写し。
        label 操作は op-run の責務。コメント本文は "op-run が pro-reviewed を付与する想定" と
        読める表現にする (review-expert が gh pr edit を直接実行することは禁止)。
 -->
 
 ## 投稿モード (必読)
 
-- **OP-managed Mode (op-run フェーズ4 から spawn)**: 「OP-managed 投稿コマンド」節を使う。canonical `<!-- op-review-meta -->` を投稿し、op-merge gate の対象になる
-- **Direct Mode (review-expert を skill 直接実行)**: 「OP-managed 投稿コマンド」節を **絶対に使わない**。`<!-- op-review-meta -->` を出すと provenance を偽装したことになり、op-merge gate を不正に通す可能性がある。ユーザーが PR コメント投稿を明示許可した場合のみ「Direct Mode 投稿コマンド」節 (`<!-- op-review-report -->` マーカ) を使う。許可前は判定結果と finding を会話に提示するだけに留める
+- **OP-managed Mode (op-run フェーズ4)**: 「OP-managed 投稿本文の雛形」節は **ClusterOrchestrator が §4-2-b で組み立てて投稿する**。review-expert は verdict + findings を構造化返却するだけで、本節のコマンドを自身で実行しない。canonical `<!-- op-review-meta -->` は controller が Marker Publish Validate (`op core marker-lint --strict`) を通して 1 回だけ投稿し、op-merge gate の対象になる。approve は通常 `op review publish-approval` (Issue #756) が marker 組立 + 投稿 + label 付与を atomic に行うため、本雛形は本文構造の参照用
+- **Direct Mode (review-expert を skill 直接実行)**: 「OP-managed 投稿本文の雛形」節を **絶対に使わない**。`<!-- op-review-meta -->` を出すと provenance を偽装したことになり、op-merge gate を不正に通す可能性がある。ユーザーが PR コメント投稿を明示許可した場合のみ「Direct Mode 投稿コマンド」節 (`<!-- op-review-report -->` マーカ) を使う。許可前は判定結果と finding を会話に提示するだけに留める
 
-## OP-managed 投稿コマンド (gh CLI、op-run フェーズ4 専用)
+## OP-managed 投稿本文の雛形 (ClusterOrchestrator §4-2-b が投稿 — review-expert は実行しない)
 
 ```bash
 # REVIEW_ROUND は op-run が spawn 前に必ずセットして渡す。未指定なら fail-fast
@@ -120,12 +123,12 @@ EOF
 - HEREDOC は `<<EOF` (`<<'EOF'` ではなく) を使い、`${REVIEWED_SHA}` を展開する
 - 他の `$` リテラル (例: bash パス展開) が必要な場合は `\$` でエスケープ
 - `reviewed_head_sha` は判定確定の直前に取得する (op-merge の stale gate の根拠)
-- `REVIEW_ROUND` は op-run が spawn prompt 経由で渡す (1 origin)。未指定だと `:?` で即 fail させる
+- `REVIEW_ROUND` は op-run が確定させる (1 origin)。未指定だと `:?` で即 fail させる
   (default で 1 に倒すと Review Fix Loop の round 管理が壊れる)
 - `OP_RUN_SESSION_ID` は OP-managed Mode では必須・`unknown` 不可 (op-merge gate 3i 対応)
 - `REVIEW_WT_HEAD_SHA` は OP-managed Mode では必須 (provenance 監査ログ)
 - Direct Mode は `<!-- op-review-report -->` のみ。`<!-- op-review-meta -->` を絶対に出さない
-- `pro-reviewed` ラベルの付与は **op-run の責務**。review-expert は本コメント本文で
+- `pro-reviewed` ラベルの付与は **op-run の責務**。コメント本文は
   「op-run が付与する想定」と読める表現にする
 
 ## review_mode == light-after-security-postcheck の場合

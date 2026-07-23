@@ -28,9 +28,7 @@ Design Plan に対して PASS / PASS_WITH_NOTES / BLOCK を判定するための
 > gate が BLOCK できるのは **Static Hard blocker の「有無」のみ** (上記 NG 例 = `motion-patterns.md` の Static Hard blocker と対応)。
 > motion 方法論・到達ライン・token scale の詳細は `~/.claude/skills/expert-design/references/motion-patterns.md` を参照。
 
-> **Applicable States vs Required States**: 6 状態 (loading / success / failure / empty / disabled / focus) を
-> 機械的に全要求してはいけない。UI 種別ごとに該当する state だけ Plan に書き、該当しない state は
-> `not_applicable_reason` を 1 行添える方針。詳細は `recovery-and-states.md` の「UI 種別ごとの applicable state 早見表」。
+> **Applicable States vs Required States**: 6 状態の機械的全要求は禁止 (詳細・早見表は `recovery-and-states.md` 参照)。
 
 ---
 
@@ -54,9 +52,7 @@ Design Plan に対して PASS / PASS_WITH_NOTES / BLOCK を判定するための
 - accessibility 要件 (focus / aria / contrast / keyboard) が Plan に書かれていない
 - 業務フローと画面構成の齟齬
 
-> 「6 状態すべてが書かれていないから BLOCK」は不可。
-> 静的画面 / toast / 単純 modal などは applicable state が少なく、
-> not_applicable_reason 付きで省略されているなら PASS。
+> 6 状態の機械的な全要求で BLOCK しない (詳細は `recovery-and-states.md` 参照)。
 
 ---
 

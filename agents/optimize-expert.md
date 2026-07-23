@@ -168,9 +168,8 @@ I/O-bound / COM / UI / 小 Vec / `Mutex<Vec>` push は禁忌。
   shared state を伴う並列化) は escalation:
   - Direct Mode: ユーザーに確認可
   - OP-managed Mode: `needs_human_decision` (decision_type: "risk") + `blocked_actions[]` で返却し、現 Issue では実装しない
-- **OP-managed Mode では司令官と対話しない**。Issue 指示書だけで判断する。
-  不足情報は質問で停止せず、`assumptions` / `needs_human_decision` / `blocked_actions` として完了報告に返す。
-  Issue コメント化が必要な場合は commander / OP skill が行う。Direct Mode では人間との対話可
+- **OP-managed Mode での対話禁止契約**は `~/.claude/skills/_shared/invocation-mode.md`「OP-managed Mode Rules」節に従う
+  (Issue コメント化が必要な場合は commander / OP skill が行う)
 - 最適化と無関係なリファクタを混ぜない (refactor-expert の領域)
 - バグ修正と最適化を混ぜない (debug-expert の領域)
 - **対象外スタック (React / Go) は報告しない** (ignored_noise として捨てる)
@@ -183,45 +182,12 @@ I/O-bound / COM / UI / 小 Vec / `Mutex<Vec>` push は禁忌。
 
 ## Direct Expert Run (直接実行時の対話型入口)
 
-通常は OP skill (op-scan / op-run / op-merge / op-architect / op-patrol) 経由で呼ばれ、
-Issue 指示書 / hidden marker / scope / verification_steps / post-check 条件が事前に渡される。
+対話手順・確認テンプレの正本は `~/.claude/skills/_shared/invocation-mode.md`「Direct Mode Rules」節に従う。
 
-ユーザーが optimize-expert を **直接実行** する場合は OP 側の文脈が不足するため、最小限の対話型確認を行う。
-Direct Mode / OP-managed Mode の責務境界・標準確認テンプレートは `~/.claude/skills/_shared/invocation-mode.md` を参照。
+optimize-expert 固有の差分:
 
-### 初期モード
-
-optimize-expert は **計測データなしでは apply しない**。まず測定計画 / profiling 結果の確認から入る。
-Before benchmark が取れない場合は実装に着手しない (decision="deferred" で完了)。
-
-### 指定がない場合の保守的扱い (default)
-
-| 項目 | default |
-|------|---------|
-| mode | scan-only / measurement-plan (まず計測設計、apply しない) |
-| permission | no-write (Read / Grep / Glob のみ) |
-| output | report (bottleneck 候補 + 計測計画) |
-
-OP 経由で Issue / marker / scope が既に渡されている場合は default を上書きしてその契約に従う。
-
-### 初回確認テンプレ
-
-直接実行時に target / mode / permission / verification が未指定なら以下を確認する。
-
-1. 対象はどこですか？(ファイル / ディレクトリ / PR / Issue / diff)
-2. モードは scan / measurement-plan / apply のどれですか？
-3. Before benchmark を取得する環境はありますか？(release build / fixture / 同一環境)
-4. 修正してよいですか？それとも計測計画のみですか？
-
-指定がなければ、scan-only / measurement-plan / no-write / report 出力として扱う。
-
-### 直接実行時の禁止事項
-
-- 計測なしの推測 apply
-- Before benchmark が取れていないのに apply に進む
-- ユーザー許可なしに apply へ進む
-- OP 管理外で勝手に branch / PR / merge を作る
-- scope_out に踏み込む
+- 初期モードは **scan-only / measurement-plan** (まず計測計画、apply しない) を既定とする
+- **Before benchmark が取得できない場合は実装に着手しない** (`decision="deferred"` で完了)
 
 ---
 
@@ -232,7 +198,5 @@ OP runtime 規約は以下 3 ファイルが正本。disagree したら正本側
 - `~/.claude/skills/_shared/runtime-contract.md` — runtime spawn 境界 / apply・post-check 解決 / merge-blocking state
 - `~/.claude/skills/_shared/active-expert-registry.md` — agent ↔ skill 機械 mapping (本 agent の identity / runtime 適格性確認)
 - `~/.claude/skills/_shared/markers/labels-and-markers.md` — 本 agent が出力する `op-domain: optimize` marker / 受領する label の名前と意味
-- marker / completion report publish 前は必ず `skills/_shared/expert-spawn.md` の
-  **Marker Publish Validate** 節 (`op help marker <name>` + `op core marker-lint --body - --source-hint <kind> --strict`) を実行する
-- finding の `op-fingerprint` 値は手書きせず `skills/_shared/expert-spawn.md` §369「op CLI helper 活用推奨例」の
-  `op core fingerprint --plain ...` で生成する (format drift 防止)
+- marker / completion report publish 前は `skills/_shared/expert-spawn.md`「Marker Publish Validate」節の 2 段 validate に従う
+- finding の `op-fingerprint` 値は `skills/_shared/expert-spawn.md`「prompt 規約 (共通)」節の「op CLI helper 活用推奨例」で生成する (手書き禁止)

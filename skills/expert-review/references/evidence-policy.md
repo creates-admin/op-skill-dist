@@ -59,99 +59,20 @@ Step 4. required post-check 結果コメントを読む
         - <!-- op-security-post-check --> (3.5-B 通過の証跡 = light-after-security-postcheck の根拠)
         $ gh pr view "$PR_NUMBER" --json comments --jq '.comments[].body'
 Step 5. **変更ファイル一覧を status 付きで取得し、base 側 (origin/${BASE_REF}) のファイルを先に読む** (PR diff も現在ツリーも見ない)
-        # 5-a: 変更されたファイル一覧を **--name-status --find-renames** で取得する。
-        #      `--name-only` だと A (added) / D (deleted) / R (renamed) が見分けられず、
-        #      A 行に対して `git show "origin/${BASE_REF}:<new path>"` を呼んで失敗する事故が起きる。
-        $ CHANGED=$(git diff --name-status --find-renames "origin/${BASE_REF}...HEAD")
-        #      出力例:
-        #        M       src/foo.rs
-        #        A       src/new_module.rs
-        #        D       src/old_module.rs
-        #        R094    src/old_path.rs    src/new_path.rs
-        #      列の意味: <STATUS><similarity?> <TAB> <path1> [<TAB> <path2>]
-        #      R/C は similarity score (0-100) が status に付随する。R0 ≠ rename / R100 = exact rename。
-        #      C は copy detection (`--find-copies` を併用した場合)。本契約では rename のみ扱う。
+        $ git diff --name-status --find-renames "origin/${BASE_REF}...HEAD"
+        # 判定規則 (status 別):
+        # - `--name-only` は禁止 (A / D / R を見分けられず、A 行に git show して fatal になる)
+        # - base 内容の取得は `git show "origin/${BASE_REF}:<path>"` のみ。worktree 作成は禁止
+        #   (handoff-boundaries §8-1)。temp file が必要なら mktemp -d + mkdir -p の上で
+        #   stdout を redirect し、終了時に rm -rf する (Step 12)
+        # - R/C の similarity (R094 等) が低い rename は実質書き換えとして Step 7/8 で M に近い扱いで再評価
         #
-        # 5-b: status ごとの base-first 取り扱い
-        #
-        #  ┌────────┬──────────────────────────────────────────────────────────────────────────┐
-        #  │ status │ base 側の読み方 / 評価観点                                                │
-        #  ├────────┼──────────────────────────────────────────────────────────────────────────┤
-        #  │ M      │ base 側を `git show "origin/${BASE_REF}:<path>"` で読む。                 │
-        #  │        │ 推論メモ → diff の順に進み、変更後との差分を 7 lens で検証する。         │
-        #  ├────────┼──────────────────────────────────────────────────────────────────────────┤
-        #  │ A      │ base 側に path が存在しないため `git show "origin/${BASE_REF}:<path>"` は │
-        #  │        │ 必ず失敗する (fatal: path '...' does not exist in 'origin/...')。         │
-        #  │        │ 「base = /dev/null 扱い」と明示的に処理する:                              │
-        #  │        │   - base 内容の取得は行わない                                             │
-        #  │        │   - 代わりに「なぜ新規ファイルが必要か」を Issue / PR 本文 / Design Plan │
-        #  │        │     から推論メモする (Step 6 と同じ手順)                                  │
-        #  │        │   - 命名規則 / 配置ディレクトリ / 既存類似ファイルとの整合は近傍 path を │
-        #  │        │     `git show "origin/${BASE_REF}:<sibling>"` または                      │
-        #  │        │     `git ls-tree origin/${BASE_REF} <dir>` で確認する                     │
-        #  │        │   - silent fork / 重複実装の疑いは特に注意 (feature-expert lens)         │
-        #  ├────────┼──────────────────────────────────────────────────────────────────────────┤
-        #  │ D      │ head 側に path が存在しない。base 側を                                    │
-        #  │        │ `git show "origin/${BASE_REF}:<path>"` で読み、削除理由と scope 整合      │
-        #  │        │ (callers / imports / re-exports / public API surface) を確認する。       │
-        #  │        │ 削除によって他の変更ファイル / 残存ファイルが壊れていないかを diff から   │
-        #  │        │ 横断確認する (Compatibility / Release lens)。                             │
-        #  ├────────┼──────────────────────────────────────────────────────────────────────────┤
-        #  │ R      │ **Step 5 時点では old path のみ base から取得する**:                      │
-        #  │        │   - old path は base 側を `git show "origin/${BASE_REF}:<old>"` で読む    │
-        #  │        │   - new path は **ファイル名として記録するだけ** に留める                 │
-        #  │        │     (内容の確認は Step 7 の diff、または Step 8 以降の current tree 読み) │
-        #  │        │   - 「diff を見る前に current tree を読まない」base-first / no current   │
-        #  │        │     tree before diff の不変条件を守るため、Step 5 で new path を head    │
-        #  │        │     から先読みしてはならない                                              │
-        #  │        │   - similarity (R094 等) が低い場合は実質書き換え。後続 Step 7 / 8 で    │
-        #  │        │     M に近い扱いで再評価する                                              │
-        #  │        │   - rename 自体が import path / public API / release artifact / docs に  │
-        #  │        │     与える影響を Compatibility / Release / Spec lens で確認する          │
-        #  └────────┴──────────────────────────────────────────────────────────────────────────┘
-        #
-        # 5-c: M / D / R の old path に対する base 内容取得 (git show を stdout から読む。worktree 作成は禁止)
-        $ git show "origin/${BASE_REF}:path/to/file.ext"
-        #     git show の出力をそのまま review-expert の context に取り込み、
-        #     現在ツリー (= 変更後) と頭の中で対比する。
-        #     temp file への redirect が必要な場合 (大きなファイル等) は、
-        #     redirect 先のディレクトリを mkdir -p で先に作る:
-        $ TMP_BASE=$(mktemp -d)
-        $ mkdir -p "$(dirname "${TMP_BASE}/path/to/file.ext")"
-        $ git show "origin/${BASE_REF}:path/to/file.ext" > "${TMP_BASE}/path/to/file.ext"
-        #     この $TMP_BASE は read-only path として review-expert が利用するだけで、
-        #     git worktree add は使わない (review-expert は worktree 作成・削除しない契約)。
-        #
-        # 5-d: status を分岐させる shell パターン (実運用例)
-        #      base から取り出すケース (M / D / R-old / C-old) のみ TMP_BASE 配下に書き出す。
-        #      redirect 先ディレクトリは mkdir -p で先に作る (-p なので既存でも安全)。
-        $ while IFS=$'\t' read -r STATUS PATH1 PATH2; do
-            case "$STATUS" in
-              M)
-                mkdir -p "$(dirname "${TMP_BASE}/${PATH1}")"
-                git show "origin/${BASE_REF}:${PATH1}" > "${TMP_BASE}/${PATH1}"
-                ;;
-              A)
-                : "# A: base に存在しないため取得しない (Step 5-b の A 手順へ)"
-                ;;
-              D)
-                mkdir -p "$(dirname "${TMP_BASE}/${PATH1}")"
-                git show "origin/${BASE_REF}:${PATH1}" > "${TMP_BASE}/${PATH1}"
-                ;;
-              R*|C*)
-                # PATH1 = old (base 側に存在), PATH2 = new (head 側に存在)
-                # Step 5 時点では old (PATH1) のみ取得する。
-                # new (PATH2) は **ファイル名として記録するだけ** に留め、内容確認は Step 7 (git diff)
-                # または Step 8 以降の current tree 読みで行う (base-first / no current tree before diff)。
-                mkdir -p "$(dirname "${TMP_BASE}/${PATH1}")"
-                git show "origin/${BASE_REF}:${PATH1}" > "${TMP_BASE}/${PATH1}"
-                # PATH2 は記録のみ (例: echo "$PATH2" >> "${TMP_BASE}/.rename_new_paths.txt")
-                ;;
-              *)
-                echo "⚠️  unknown status: ${STATUS} ${PATH1}" >&2
-                ;;
-            esac
-          done <<< "$CHANGED"
+        #  | status | base 側の読み方 / 評価観点 |
+        #  |--------|--------------------------|
+        #  | M      | base 側を git show で読む → 推論メモ → diff の順で 7 lens 検証 |
+        #  | A      | base = /dev/null 扱い (git show しない)。「なぜ新規か」を Issue / PR 本文 / Design Plan から推論メモし、命名・配置は近傍 path (`git ls-tree origin/${BASE_REF} <dir>` / sibling の git show) で確認。silent fork / 重複実装に特に注意 |
+        #  | D      | base 側を git show で読み、削除理由と callers / imports / re-exports / public API surface への影響を diff から横断確認 (Compatibility / Release lens) |
+        #  | R (C)  | Step 5 時点では **old path のみ** base から git show で読む。new path は **ファイル名の記録だけ** に留める (内容確認は Step 7 の diff / Step 8 以降 = base-first / no current tree before diff)。rename の import path / public API / release artifact / docs への影響を Compatibility / Release / Spec lens で確認 |
 Step 6. 変更が「なぜ必要か」を自分で推論しメモする (base のみを読んだ状態で、PR 本文と Issue から動機を再構成)
 Step 7. 自分の推論を持ったうえで、初めて PR diff を見る (triple-dot で merge-base 差分を取る)
         $ git diff "origin/${BASE_REF}...HEAD"
@@ -160,8 +81,12 @@ Step 8. 推論と diff のズレ・見落としを探す
         - 「意図通りなら問題なし」ではなく「意図に対して不足はないか / 副作用はないか」を疑う
 Step 9. 7 lens で横断 review (lens-catalog.md)
 Step 10. review_result を決定 (result-decision.md)
-Step 11. <!-- op-review-meta --> + (必要なら) <!-- op-review-finding --> を出力 (finding-schema.md)
-Step 12. Step 5-b で mktemp ベースの $TMP_BASE を作った場合は終了時に削除する
+Step 11. review 結果 (verdict + findings) を構造化返却する (field: finding-schema.md / review-markers.md)。
+        OP-managed では <!-- op-review-meta --> / <!-- op-review-finding --> の組立・PR コメント投稿は
+        ClusterOrchestrator の責務 (op-run/references/global-review-spawn.md §4-2-b、ADR-0011 決定6)。
+        review-expert 自身は gh pr comment しない。Direct Mode はユーザー許可後に
+        <!-- op-review-report --> のみ投稿可 (templates/ の Direct Mode 節)
+Step 12. Step 5 で mktemp ベースの $TMP_BASE を作った場合は終了時に削除する
         $ rm -rf "${TMP_BASE}"
         ※ git worktree は作成・削除しない (handoff-boundaries §8-1 で禁止)。
 ```
@@ -373,7 +298,10 @@ review-expert は以下をすべて満たすまで終わらない。
 
 - 7 lens すべての観点で観測 (review_mode に応じて Security/Abuse Lens の重みを調整)
 - review_result を 4 種のいずれかに確定
-- `<!-- op-review-meta -->` block を生成 (reviewed_head_sha 含む)
-- needs-fix / needs-specialist-review / blocked の場合は各 finding を `<!-- op-review-finding -->` block で記録
-- PR コメントとして投稿 (OP-managed Mode は必須、Direct Mode はユーザー許可後)
-- 司令官への完了報告 (review_result + reviewed_head_sha + finding 一覧 + 投稿コメント URL)
+- reviewed_head_sha を確定し、構造化 review 結果 (verdict + meta field) に含める
+- needs-fix / needs-specialist-review / blocked の場合は各 finding を finding-schema.md の field で構造化記録
+- 構造化 review 結果を caller (ClusterOrchestrator / op-run) に返却。
+  `<!-- op-review-meta -->` / `<!-- op-review-finding -->` の組立・PR コメント投稿は
+  **controller の責務** (`op-run/references/global-review-spawn.md` §4-2-b、ADR-0011 決定6)。
+  Direct Mode のみ、ユーザー許可後に `<!-- op-review-report -->` で参考投稿してよい
+- caller への完了報告 (review_result + reviewed_head_sha + finding 一覧)

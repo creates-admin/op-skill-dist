@@ -140,19 +140,14 @@ patrol が選んだ area と巡回理由を尊重し、**テスト専門の read
 - **Critical / High のみ** 返す。Medium 以下、好みの fixture 整理、命名整理、薄い coverage 提案は返さない
 - 実行しないと確定できないものは `evidence_grade = requires_runtime` + `reproduction_hint` で返し、`--auto` 起票対象にしない
 
-patrol 経由で起票してよいテスト指摘:
+起票可否の一般規則: **Critical / High のみ起票**。severity 判定の正本は `_shared/severity-rubric.md`
+(test 固有の severity 目安は expert-test skill の「severity / confidence の判定」節)。
 
-| severity | 該当する検出 |
-|----------|------------|
-| Critical | テスト collect 不能で CI を壊している / 主要テストが false pass で何も検証していない / Critical 機能 (認証・ファイル削除・課金・永続化) のテストが構造的に欠如 / flaky が CI を継続的に壊している |
-| High | snapshot のみで主要 UI 仕様を守れていない / mock 過多で本体ロジックを通っていない / Critical 機能の error path / permission path 未検証 / `sleep` / `Date.now` / `random` / 実 HTTP 依存で再現性破壊 / `skip` / `xfail` 多発で主要導線検証が実質無効化 |
+test 固有の判断差分 (op-scan モードなら報告可だが patrol では返さないもの):
 
-patrol 経由で **起票しないもの** (op-scan モードなら可だが patrol では禁止):
-
-- 命名が微妙、parametrize できそう、fixture を綺麗にできる
-- coverage が少し上がりそう (Critical 機能でない限り)
-- テストの書き方の好み
-- Medium 以下の重複テスト
+- 命名 / parametrize / fixture 整理などの整理・好み系
+- Critical 機能に該当しない coverage 向上提案
+- テストの書き方の好み / Medium 以下の重複テスト
 
 出力: canonical schema の JSON 配列。検出 0 件なら `[]` を返す。
 
@@ -208,52 +203,19 @@ patrol 経由で **起票しないもの** (op-scan モードなら可だが pat
 - **他 expert の "ついで" テストには手を入れない**: debug の 1 本リグレッション、feature の 1〜2 本 happy-path はスコープ外
 - **テスト追加で実装本体は変更しない**: テスト容易性のための実装変更が必要なら refactor-expert に Issue 起票
 - **Critical/High のみ起票**: スイート品質の些末な改善 (Medium/Low) は対象外
-- **OP-managed Mode では司令官と対話しない**: Issue 指示書だけで判断する。
-  不足情報は質問で停止せず、`assumptions` / `needs_human_decision` / `blocked_actions` として完了報告に返す。
-  Issue コメント化が必要な場合は commander / OP skill が行う。Direct Mode では人間との対話可
+- **OP-managed Mode の対話禁止契約**: 上記「## Invocation Mode」節 (`~/.claude/skills/_shared/invocation-mode.md`) を参照
 
 ---
 
 ## Direct Expert Run (直接実行時の対話型入口)
 
-通常は OP skill (op-scan / op-run / op-merge / op-architect / op-patrol) 経由で呼ばれ、
-Issue 指示書 / hidden marker / scope / verification_steps / post-check 条件が事前に渡される。
+Direct Mode の対話手順・固定質問・出力例・禁止事項は `~/.claude/skills/_shared/invocation-mode.md`
+「Direct Mode Rules」節を正本とする。
 
-ユーザーが test-expert を **直接実行** する場合は OP 側の文脈が不足するため、最小限の対話型確認を行う。
-Direct Mode / OP-managed Mode の責務境界・標準確認テンプレートは `~/.claude/skills/_shared/invocation-mode.md` を参照。
-
-### 初期モード
-
-test-expert は **test 追加・修正は apply 扱い**。production code 修正は原則しない (テスト容易性のための実装変更が必要なら refactor-expert に Issue 起票)。
-
-### 指定がない場合の保守的扱い (default)
-
-| 項目 | default |
-|------|---------|
-| mode | scan-only (ゴミテスト / カバレッジ穴の検出のみ) |
-| permission | no-write (Read / Grep / Glob のみ) |
-| output | report (finding を返すだけ、テスト追加 / 修正はしない) |
-
-OP 経由で Issue / marker / scope が既に渡されている場合は default を上書きしてその契約に従う。
-
-### 初回確認テンプレ
-
-直接実行時に target / mode / permission / verification が未指定なら以下を確認する。
-
-1. 対象はどこですか？(ファイル / ディレクトリ / PR / Issue / diff)
-2. モードは scan / apply のどれですか？
-3. テスト追加 / 修正をしてよいですか？(production code は触らない)
-4. 実行してよい確認コマンドはありますか？
-
-指定がなければ、scan-only / no-write / report 出力として扱う。
-
-### 直接実行時の禁止事項
-
-- production code の修正 (refactor-expert に Issue 起票)
-- 即削除のテスト除去 (`.skip` 化 → 1 週間観察 → 別 PR の段階を踏む)
-- ユーザー許可なしに apply へ進む
-- OP 管理外で勝手に branch / PR / merge を作る
-- scope_out に踏み込む
+test-expert 固有の差分:
+- test 追加・修正は apply 扱い。production code 修正は原則しない (テスト容易性のための実装変更が
+  必要なら refactor-expert に Issue 起票する)
+- テストの即削除は禁止 (`.skip` 化 → 1 週間観察 → 別 PR での実削除、という段階を必ず踏む)
 
 ---
 
@@ -265,6 +227,6 @@ OP runtime 規約は以下 3 ファイルが正本。disagree したら正本側
 - `~/.claude/skills/_shared/active-expert-registry.md` — agent ↔ skill 機械 mapping (本 agent の identity / runtime 適格性確認)
 - `~/.claude/skills/_shared/markers/labels-and-markers.md` — 本 agent が出力する `op-domain: test` marker / 受領する label の名前と意味
 - marker / completion report publish 前は必ず `skills/_shared/expert-spawn.md` の
-  **Marker Publish Validate** 節 (`op help marker <name>` + `op core marker-lint --body - --source-hint <kind> --strict`) を実行する
-- finding の `op-fingerprint` 値は手書きせず `skills/_shared/expert-spawn.md` §369「op CLI helper 活用推奨例」の
-  `op core fingerprint --plain ...` で生成する (format drift 防止)
+  **Marker Publish Validate** 節 (2 段 validate 手順) に従う
+- finding の `op-fingerprint` 値は手書きせず `skills/_shared/expert-spawn.md` の
+  「op CLI helper 活用推奨例」節に従って生成する (format drift 防止)

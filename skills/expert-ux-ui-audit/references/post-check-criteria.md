@@ -27,10 +27,9 @@ ux-ui-audit-expert が **op-run** から呼ばれたとき、designer-expert が
 | 6 | Issue 範囲外の redesign が混入していないか | scope_out のファイル変更、無関係な component の見た目変更 |
 | 7 | 美しさのために使いやすさが退化していないか | アニメーション過多で操作がブロックされる、視覚優先で keyboard 操作が壊れる |
 
-> **Applicable States vs 機械的 6 状態**: 6 状態 (loading/success/failure/empty/disabled/focus) を
-> 機械的に全要求してはいけない。Design Plan の Applicable States 節に該当する state のみ実装、
-> 該当しない state は apply 側の完了報告に `not_applicable_reason` が書かれていれば PASS。
-> (例: 静的 about ページに empty / disabled は不要、コミットメッセージで省略理由を確認)
+> **Applicable States vs 機械的 6 状態**: 6 状態の機械的全要求は禁止 (詳細は `recovery-and-states.md` 参照)。
+> Design Plan の Applicable States 節に該当する state のみ実装、該当しない state は apply 側の
+> 完了報告に `not_applicable_reason` が書かれていれば PASS。
 
 > hard-coded style 混入そのものは **designer-expert の post-check 領域**。本エージェントが
 > post-check で見るのは、それが a11y や使いやすさを直接破壊している場合のみ。
@@ -59,9 +58,7 @@ ux-ui-audit-expert が **op-run** から呼ばれたとき、designer-expert が
 - Design Plan で約束した UI が実装されていない
 - Issue scope_out のファイルに無関係な変更が入っている
 
-> 「6 状態すべてが実装されていないから BLOCK」は不可。
-> 静的画面 / toast / 単純 modal などは applicable state が少なく、
-> not_applicable_reason 付きで省略されているなら PASS。
+> 6 状態の機械的な全要求で BLOCK しない (詳細は `recovery-and-states.md` 参照)。
 
 ---
 
@@ -101,7 +98,7 @@ gate モードと同じテーブル形式で出力する (`gate-criteria.md` 参
 
 - [ ] Design Plan の `Components to Use` / `Tokens to Use` と差分が一致するか
 - [ ] Design Plan の `Applicable States` がすべて実装されているか (該当しない state に not_applicable_reason 説明があれば PASS)
-- [ ] 6 状態を機械的に全要求していないか (Applicable States 節に無い state を「未実装」として BLOCK しない)
+- [ ] 6 状態を機械的に全要求していないか (`recovery-and-states.md` 参照)
 - [ ] Hard blockers を `visual-quality-rubric.md` で確認したか
 - [ ] PR diff に scope_out のファイル変更が無いか
 - [ ] keyboard / focus / contrast を `a11y-checklist.md` で再確認したか

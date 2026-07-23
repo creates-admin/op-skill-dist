@@ -4,121 +4,42 @@
 機能概要: テストランナー / カバレッジ / parametrize / fixture / mock の言語別最小テンプレ集
 作成意図: agent が "どう書くか" で迷ったときの参照辞典。実用最小形のみ
 注意点: 環境にツールがない場合は提案 (インストール強制はしない)
+       2026-07-23 の重複解消編集で、他 tools.md (expert-debug / expert-feature) と
+       重複していた基礎テンプレ節 (カバレッジ / parametrize / fixture / 時刻凍結 /
+       env 隔離) は節名 + 要点 1〜2 行に圧縮した (削除はしていない)。
+       test-expert 固有価値 (mock 方針判断・flaky 診断・git blame によるゴミテスト判定)
+       は圧縮せず全文残す。
 -->
 
 ---
 
 ## カバレッジ計測コマンド
 
-| 言語 | コマンド | 出力先 |
-|------|---------|-------|
-| Python (pytest-cov) | `pytest --cov=src --cov-branch --cov-report=term-missing` | 標準出力 |
-| Python (pytest-cov, html) | `pytest --cov=src --cov-report=html` | `htmlcov/index.html` |
-| TS (vitest) | `vitest run --coverage` | `coverage/` |
-| TS (jest) | `jest --coverage` | `coverage/` |
-| Rust | `cargo tarpaulin --out Stdout` | 標準出力 |
-| Go | `go test -cover ./...` | 標準出力 |
-| Dart | `dart test --coverage=coverage` + `format_coverage` | `coverage/` |
+| 言語 | コマンド |
+|------|---------|
+| Python (pytest-cov) | `pytest --cov=src --cov-branch --cov-report=term-missing` (html は `--cov-report=html` → `htmlcov/index.html`) |
+| TS (vitest / jest) | `vitest run --coverage` / `jest --coverage` → `coverage/` |
+| Rust | `cargo tarpaulin --out Stdout` |
+| Go | `go test -cover ./...` |
+| Dart | `dart test --coverage=coverage` + `format_coverage` → `coverage/` |
 
-カバレッジ未導入の場合は `pip install pytest-cov` / `npm i -D @vitest/coverage-v8` を提案。
+未導入時は `pip install pytest-cov` / `npm i -D @vitest/coverage-v8` を提案。
 
 ---
 
 ## parametrize テンプレ (重複テスト統合の主要手段)
 
-### Python (pytest)
-
-```python
-@pytest.mark.parametrize("input,expected", [
-    ("", []),
-    ("foo", ["foo"]),
-    ("foo,bar", ["foo", "bar"]),
-])
-def test_parse(input, expected):
-    assert parse(input) == expected
-
-# id を付けて読みやすく
-@pytest.mark.parametrize("input,expected", [
-    pytest.param("", [], id="empty"),
-    pytest.param("foo", ["foo"], id="single"),
-    pytest.param("foo,bar", ["foo", "bar"], id="multi"),
-])
-def test_parse(input, expected): ...
-```
-
-### TS (vitest / jest)
-
-```ts
-test.each([
-  ['empty', '', []],
-  ['single', 'foo', ['foo']],
-  ['multi', 'foo,bar', ['foo', 'bar']],
-])('parse %s: input=%s', (_, input, expected) => {
-  expect(parse(input)).toEqual(expected)
-})
-```
-
-### Rust
-
-```rust
-#[rstest]
-#[case::empty("", vec![])]
-#[case::single("foo", vec!["foo"])]
-#[case::multi("foo,bar", vec!["foo", "bar"])]
-fn test_parse(#[case] input: &str, #[case] expected: Vec<&str>) {
-    assert_eq!(parse(input), expected);
-}
-```
+同一ロジックを入力違いで繰り返すテストは 1 本に畳む。Python は `@pytest.mark.parametrize`
+(`pytest.param(..., id="name")` で読みやすく)、TS は `test.each([[...], ...])`、
+Rust は `rstest` の `#[case::name(...)]` を使う。具体構文は各言語のテストランナー doc 参照。
 
 ---
 
 ## fixture テンプレ (DRY 化の主要手段)
 
-### Python (pytest)
-
-```python
-@pytest.fixture
-def authenticated_client(db):
-    user = User.create(email="test@example.com")
-    client = TestClient(app)
-    client.headers["Authorization"] = f"Bearer {token_for(user)}"
-    yield client
-    user.delete()  # teardown
-
-def test_get_profile(authenticated_client):
-    res = authenticated_client.get("/api/profile")
-    assert res.status_code == 200
-```
-
-scope を活用して高コスト fixture を効率化:
-- `function` (default) — 各テストで作り直し
-- `class` — クラス内で共有
-- `module` — ファイル内で共有
-- `session` — 全テスト実行で共有
-
-### TS (vitest)
-
-```ts
-import { beforeEach, afterEach, test, expect } from 'vitest'
-
-let client: TestClient
-let userId: string
-
-beforeEach(async () => {
-  const user = await User.create({ email: 'test@example.com' })
-  userId = user.id
-  client = new TestClient({ token: tokenFor(user) })
-})
-
-afterEach(async () => {
-  await User.delete(userId)
-})
-
-test('get profile', async () => {
-  const res = await client.get('/api/profile')
-  expect(res.status).toBe(200)
-})
-```
+Python は `@pytest.fixture` (yield で teardown、`scope=function/class/module/session` で
+高コスト fixture を共有範囲に応じて使い分け)、TS は `beforeEach`/`afterEach` でセットアップ/後始末を書く。
+authorization token 付き client などの共有セットアップは fixture 化してテスト本体を薄く保つ。
 
 ---
 
@@ -169,104 +90,23 @@ mock しすぎると「振る舞いではなく呼び出し順の写経」にな
 
 ## mock テンプレ
 
-### Python (unittest.mock / monkeypatch)
-
-```python
-def test_send_email_called_with_correct_args(monkeypatch):
-    sent = []
-    monkeypatch.setattr("app.email.send", lambda to, subj: sent.append((to, subj)))
-
-    notify_user(user_id=1, message="hi")
-
-    assert sent == [("user1@example.com", "hi")]
-```
-
-### TS (vitest)
-
-```ts
-import { vi, test, expect } from 'vitest'
-
-test('send_email called with correct args', () => {
-  const sendMock = vi.fn()
-  vi.mock('../email', () => ({ send: sendMock }))
-
-  notifyUser(1, 'hi')
-
-  expect(sendMock).toHaveBeenCalledWith('user1@example.com', 'hi')
-})
-```
-
-### HTTP mock (msw — TS 推奨)
-
-```ts
-import { setupServer } from 'msw/node'
-import { http, HttpResponse } from 'msw'
-
-const server = setupServer(
-  http.get('/api/users', () => HttpResponse.json([{ id: 1 }]))
-)
-beforeAll(() => server.listen())
-afterEach(() => server.resetHandlers())
-afterAll(() => server.close())
-```
+上記「mock 方針」で決めた対象を実装するときの最小形。Python は `unittest.mock` /
+`monkeypatch.setattr` で差し替え、TS (vitest) は `vi.fn()` + `vi.mock(...)` で差し替える。
+外部 HTTP は TS では `msw` (`setupServer` + `http.get(...)`) が推奨 (request/response の形まで検証できる)。
 
 ---
 
 ## 時刻 / 乱数の凍結
 
-flaky の主要原因。テストでは必ず固定する。
-
-### Python
-
-```python
-def test_token_expires_after_1h(freezer):  # pytest-freezegun
-    freezer.move_to("2026-01-01 12:00:00")
-    token = generate_token()
-    freezer.move_to("2026-01-01 13:00:01")
-    assert is_expired(token)
-```
-
-### TS (vitest)
-
-```ts
-import { vi, test, expect, beforeEach, afterEach } from 'vitest'
-
-beforeEach(() => vi.useFakeTimers())
-afterEach(() => vi.useRealTimers())
-
-test('token expires after 1h', () => {
-  vi.setSystemTime(new Date('2026-01-01T12:00:00'))
-  const token = generateToken()
-  vi.advanceTimersByTime(60 * 60 * 1000 + 1)
-  expect(isExpired(token)).toBe(true)
-})
-```
+flaky の主要原因。テストでは必ず固定する。Python は `pytest-freezegun` の `freezer.move_to(...)`、
+TS (vitest) は `vi.useFakeTimers()` + `vi.setSystemTime(...)` + `vi.advanceTimersByTime(...)` で凍結・進行させる。
 
 ---
 
 ## 環境変数 / 設定の隔離
 
-### Python
-
-```python
-def test_uses_test_db(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
-    db = connect()
-    assert db.url == "sqlite:///:memory:"
-```
-
-### TS (vitest)
-
-```ts
-import { vi } from 'vitest'
-
-beforeEach(() => {
-  vi.stubEnv('DATABASE_URL', 'sqlite:///:memory:')
-})
-afterEach(() => {
-  vi.unstubAllEnvs()
-})
-```
+Python は `monkeypatch.setenv(...)`、TS (vitest) は `vi.stubEnv(...)` / `vi.unstubAllEnvs()` で
+テスト用の環境変数 (DB URL 等) に差し替え、他テストへ漏らさない。
 
 ---
 

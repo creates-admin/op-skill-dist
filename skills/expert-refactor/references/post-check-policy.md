@@ -30,11 +30,8 @@ null                    # post-check 不要
 > **重要 (Phase 2 以降の動作)**: `security-expert` は **active dispatch** であり、
 > file IO / path traversal / permission / credential / network / deserialization / command execution
 > 周辺の refactor では `post_check_expert: security-expert` を必ず指定する
-> (silent merge gate stall は発生しない)。
-> ただし、入力源・権限境界・実値の到達範囲が変わらない単純な定数化 / 命名変更 / import 整理
-> では `post_check_expert: null` とし、`gotchas` に
-> `path_values_changed=false / permission_unchanged=true` を記録する
-> (詳細は本ドキュメント下部「security-expert を **選ばない** ケース」節参照)。
+> (silent merge gate stall は発生しない)。例外条件と理由は本ドキュメント下部
+> 「security-expert を **選ばない** ケース」節 (正本) を参照。
 
 > **注意 — `_shared/pr-templates.md` の marker enum 全体について**: pr-templates.md の
 > `<!-- op-post-check-expert: ... -->` marker enum は **他 domain (env など) も含む全 domain 共通**
@@ -193,9 +190,11 @@ canonical schema の `post_check_expert` field と完全一致させる。
 
 ---
 
-## ラベル付与
+## ラベル付与 (正本)
 
-post_check_expert に応じて pro-* ラベルを追加する:
+ラベル名・色・core semantics の正本は `skills/_shared/markers/labels-and-markers.md`。
+本節は refactor domain 固有の **post_check_expert → pro-* 対応表** のみを正本として持つ
+(architecture-debt.md の Labels 節はここを参照する):
 
 | post_check_expert | 追加するラベル |
 |-------------------|-------------|

@@ -4,7 +4,10 @@
 機能概要: security-expert が apply mode で「何を apply してよいか / してはいけないか」を判定する規約。
 作成意図: UX impact high の自動 apply を構造的に防ぎ、UX 中立な mitigation のみ実装する。
 注意点: 修正方針 (mitigation ladder) は usable-security.md。
-       affected_user_capability / legitimate_workflow_preserved / ux_impact の判定は user-capability-preservation.md。
+       affected_user_capability / legitimate_workflow_preserved / ux_impact の判定、および
+       apply_allowed / requires_aux_post_check の判定マトリクスは user-capability-preservation.md が正本
+       (本ファイルは pointer のみ)。本ファイル固有なのは apply してよい/いけないものの許可リストと
+       apply の標準フロー・失敗時の扱い。
 -->
 
 ## apply mode の前提
@@ -31,17 +34,9 @@ apply_decision:
 
 ## 判定マトリクス
 
-| security_risk | ux_impact | legitimate_workflow | apply_allowed | requires_aux_post_check |
-|---------------|-----------|--------------------|--------------|------------------------|
-| **high** | none | true | **true** | false |
-| **high** | low | true | **true** | true (UI 変更ありなら) |
-| **high** | medium | true | **needs_human_decision** | — |
-| **high** | high | true | **needs_human_decision** | — |
-| any | any | **false** | **needs_human_decision** | — |
-| medium | none | true | true (UX 中立 hardening) | false |
-| medium | low | true | true (case by case) | true |
-| medium | medium/high | any | needs_human_decision | — |
-| low | any | any | false (apply しない、別 PR) | — |
+`security_risk × ux_impact × legitimate_workflow_preserved` から `apply_allowed` /
+`requires_aux_post_check` を導く判定マトリクスの正本は `user-capability-preservation.md` の
+「判定マトリクス (apply mode)」節。本ファイルでは再掲しない。
 
 ---
 
@@ -94,7 +89,7 @@ apply_decision:
    - scope_in / scope_out / verification_steps / success_criteria / gotchas
    - canonical schema 拡張 (security / threat_model / usable_security)
 
-2. apply 可否を判定 (上記マトリクス)
+2. apply 可否を判定 (`user-capability-preservation.md` の判定マトリクス)
    - UX impact が medium / high なら needs_human_decision で停止
    - legitimate_workflow_preserved == false なら needs_human_decision で停止
    - security_risk が low なら apply しない (別 PR)
@@ -137,24 +132,9 @@ apply_decision:
 
 ## requires_aux_post_check の判定
 
-apply 後の post-check で UX/UI auxiliary post-check が必要か:
-
-`requires_aux_post_check: true` にすべきケース:
-
-- save_as / open_file / export / import の UI に新規 confirmation dialog を追加
-- error / warning Toast の文言を大きく変更
-- workflow の step 数が増えた (1 click → 2 click)
-- batch processing UI に確認段階を増やした
-- focus / keyboard 操作経路に影響しうる UI 変更
-- a11y 要素 (aria-label / role / contrast) が変わった
-
-`requires_aux_post_check: false` (= `not_required`) にできるケース:
-
-- backend のみの修正 (UI / WebView 領域に diff なし)
-- log / error 文字列の変更 (Toast / dialog 表示しない部分)
-- capability JSON / 設定 file 変更 (UI ボタン / メニューに影響なし)
-- IPC command の入力 validation 追加 (frontend がエラーを既存 error path で扱う)
-- Tauri capability 縮小 (実 unused のみ削除、UI から呼ばれない command の削除)
+`requires_aux_post_check: true / false (not_required)` の判定リスト (どのケースで aux post-check が
+必要 / 不要か) の正本は `user-capability-preservation.md` の「判定マトリクス (apply mode)」節。
+本ファイルでは再掲しない。
 
 ---
 

@@ -120,7 +120,7 @@ designer-expert は `skills:` で `expert-design` skill を自動プリロード
 | 既存 Button / Dialog / Card / Form / Toast の bypass | silent fork / 視覚的不統一の温床 |
 | 新規 design token の安易な追加 | 既存 token で表現できる場合は禁止 |
 | accessibility を犠牲にした見た目優先の変更 | WCAG AA 違反は High 起票対象 |
-| 司令官との対話 (OP-managed Mode) | 自タスクは自己完結。追加情報は `needs_human_decision` / `design_assumptions[]` で構造化返却。Issue コメント化は commander が行う |
+| 司令官との対話 (OP-managed Mode) | 禁止。挙動は上記「Invocation Mode」節 (`~/.claude/skills/_shared/invocation-mode.md` 参照) に従う |
 | Design Plan なしの実装 | architect 経由なしの run でも、最低限 scan/Issue 本文から Plan を再構築してから実装 |
 | scan モードでの「使いやすさ」指摘 | 使いやすさ・必須 state・a11y は ux-ui-audit-expert の責務、侵食しない |
 | scan モードでの主観・好み批評 | `expert-design/references/scan-finding-policy.md` 違反、観測事実のみ報告する |
@@ -137,51 +137,16 @@ designer-expert は `skills:` で `expert-design` skill を自動プリロード
 - WCAG 2.2 AA 以上を維持 (色コントラスト・ターゲットサイズ・色以外の伝達)
 - スコープ外のファイルは触らない (Design Plan の `Implementation Boundaries` 厳守)
 - 視覚的リグレッションが発生しないことを確認 (既存画面の他状態を目視)
-- **OP-managed Mode では司令官と対話しない**。自タスクは自己完結。
-  不足情報は質問で停止せず、`design_assumptions` / `needs_human_decision` / `blocked_actions` として完了報告に返す。
-  Issue コメント化が必要な場合は commander / OP skill が行う。Direct Mode では人間との対話可
+- **OP-managed / Direct Mode の対話可否**: 上記「Invocation Mode」節 (`~/.claude/skills/_shared/invocation-mode.md` 参照) に従う
 
 ---
 
 ## Direct Expert Run (直接実行時の対話型入口)
 
-通常は OP skill (op-scan / op-run / op-merge / op-architect / op-patrol) 経由で呼ばれ、
-Issue 指示書 / hidden marker / scope / verification_steps / post-check 条件が事前に渡される。
+挙動 (対話可否・確認質問・出力形式・禁止事項) は `~/.claude/skills/_shared/invocation-mode.md` の
+「Direct Mode Rules」節に従う。
 
-ユーザーが designer-expert を **直接実行** する場合は OP 側の文脈が不足するため、最小限の対話型確認を行う。
-Direct Mode / OP-managed Mode の責務境界・標準確認テンプレートは `~/.claude/skills/_shared/invocation-mode.md` を参照。
-
-### 初期モード
-
-designer-expert は visual / design system 方針確認を先に行う。実装変更は apply 許可が必要。
-
-### 指定がない場合の保守的扱い (default)
-
-| 項目 | default |
-|------|---------|
-| mode | scan-only (apply / commit / push しない) |
-| permission | no-write (Read / Grep / Glob のみ) |
-| output | report (finding を返すだけ、commit / PR 作成はしない) |
-
-OP 経由で Issue / marker / scope が既に渡されている場合は default を上書きしてその契約に従う。
-
-### 初回確認テンプレ
-
-直接実行時に target / mode / permission / verification が未指定なら以下を確認する。
-
-1. 対象はどこですか？(ファイル / ディレクトリ / PR / Issue / diff)
-2. モードは scan / Architect / Run のどれですか？
-3. 修正してよいですか？それとも指摘・計画のみですか？
-4. 実行してよい確認コマンドはありますか？
-
-指定がなければ、scan-only / no-write / report 出力として扱う。
-
-### 直接実行時の禁止事項
-
-- ユーザー許可なしに apply へ進む
-- OP 管理外で勝手に branch / PR / merge を作る
-- scope_out に踏み込む
-- verification 不明のまま成功扱いする
+designer-expert 固有の差分: visual / design system 方針確認を先に行う (実装変更である apply は明示許可後にのみ進める)。
 
 ---
 
@@ -192,7 +157,5 @@ OP runtime 規約は以下 3 ファイルが正本。disagree したら正本側
 - `~/.claude/skills/_shared/runtime-contract.md` — runtime spawn 境界 / apply・post-check 解決 / merge-blocking state
 - `~/.claude/skills/_shared/active-expert-registry.md` — agent ↔ skill 機械 mapping (`designer-expert` → `expert-design` の非規則的対応の正本)
 - `~/.claude/skills/_shared/markers/labels-and-markers.md` — 本 agent が出力する `op-domain: design` / `op-design-plan-by` 等 marker の名前と意味
-- marker / completion report publish 前は必ず `skills/_shared/expert-spawn.md` の
-  **Marker Publish Validate** 節 (`op help marker <name>` + `op core marker-lint --body - --source-hint <kind> --strict`) を実行する
-- finding の `op-fingerprint` 値は手書きせず `skills/_shared/expert-spawn.md` §369「op CLI helper 活用推奨例」の
-  `op core fingerprint --plain ...` で生成する (format drift 防止)
+- marker publish 前の検証手順は `skills/_shared/expert-spawn.md` の「Marker Publish Validate (全 expert 共通契約)」節に従う
+- `op-fingerprint` の生成手順は `skills/_shared/expert-spawn.md` の「prompt 規約 (共通)」内「op CLI helper 活用推奨例」節に従う

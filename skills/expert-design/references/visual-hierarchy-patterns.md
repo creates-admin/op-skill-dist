@@ -88,8 +88,8 @@ scan の検出カテゴリ (`design_principle_violated` の値域) は agent.md 
 ### 10. icon + text + color の多重符号化
 
 - 状態を **色だけで** 伝えない (色覚多様性に対応できない)
-- 必ず icon + text + color の 3 つを揃える
-- 色覚 simulator で検証する
+- 実装詳細 (3 重符号化の適用例 / 色覚 simulator 検証手順) は `data-viz-patterns.md` の
+  「Color & Accessibility」節を正本として参照する
 
 ---
 

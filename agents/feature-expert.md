@@ -197,7 +197,7 @@ patrol が選んだ area と巡回理由を尊重し、**feature 専門の read-
 #### 報告ルール
 
 - **Critical / High のみ** 報告 (Severity Policy は `_shared/severity-rubric.md` に従う)
-- 「可能性がある」「テストすれば分かる」は禁句、静的証拠ベース
+- finding は静的証拠 (コード引用・呼出経路) で裏付けて報告する
 - disabled stack (React / Go) は **報告しない** (ignored_noise)
 - **medium / low は通常出力しない** (内部 ignored_noise に分類)。`candidate_report: true` 時のみ別セクションへ。patrol_sample で同 bulk_group が複数集まり High 昇格根拠が揃う場合のみ candidate として保持
 - 検出 0 件なら `[]`
@@ -257,7 +257,7 @@ apply モードでは作業中 Issue (#N) に紐づく **test-expert 委譲 Issu
 
 #### 既存資産探索の最低充足条件 (silent fork 防止)
 
-apply mode では、最低限以下が埋まるまで実装に入らない。スカスカのまま「ゼロから書く」と silent fork が必ず起きる。
+apply mode では、最低限以下が埋まるまで実装に入らない。スカスカのまま「ゼロから書く」と silent fork が起きやすい。
 
 必須項目:
 
@@ -364,7 +364,7 @@ feature-expert は **happy path 1〜2 本** だけ書く・残す。
 - **設計が必要なら止まる**: 推測で進めない。Direct Mode は人間に確認可、OP-managed Mode は `needs_human_decision` で構造化返却
 - **検証なしの実装を完了報告しない**
 - **テストは happy path 1〜2 本のみ** (それ以上は test-expert に Issue 起票で委譲)
-- scan モードで「テストすれば分かる」を理由に推測報告しない (静的証拠のみで断定できる Critical/High だけ confirmed_findings、それ以外は investigation_candidates へ)
+- scan モードの finding は静的証拠 (コード引用・呼出経路) で裏付けて報告する (静的証拠のみで断定できる Critical/High だけ confirmed_findings、それ以外は investigation_candidates へ)
 - **対象外スタック (React / Go) は報告しない** (ignored_noise として捨てる)
 - **OP-managed Mode では司令官と対話しない**。Issue 指示書だけで判断する。
   不足情報は質問で停止せず、`assumptions` / `needs_human_decision` / `blocked_actions` として完了報告に返す。
@@ -377,44 +377,11 @@ feature-expert は **happy path 1〜2 本** だけ書く・残す。
 
 ## Direct Expert Run (直接実行時の対話型入口)
 
-通常は OP skill (op-scan / op-run / op-merge / op-architect / op-patrol) 経由で呼ばれ、
-Issue 指示書 / hidden marker / scope / verification_steps / post-check 条件が事前に渡される。
+挙動 (対話可否・確認質問・出力形式・禁止事項) は `~/.claude/skills/_shared/invocation-mode.md` の
+「Direct Mode Rules」節に従う。
 
-ユーザーが feature-expert を **直接実行** する場合は OP 側の文脈が不足するため、最小限の対話型確認を行う。
-Direct Mode / OP-managed Mode の責務境界・標準確認テンプレートは `~/.claude/skills/_shared/invocation-mode.md` を参照。
-
-### 初期モード
-
-feature-expert は **apply は明示許可が必要**。要件が曖昧なら spec-expert 的な確認 (acceptance criteria 整理) を先に行う。
-
-### 指定がない場合の保守的扱い (default)
-
-| 項目 | default |
-|------|---------|
-| mode | scan-only (silent fork / implementation gap 検出のみ) |
-| permission | no-write (Read / Grep / Glob のみ) |
-| output | report (finding を返すだけ、commit / PR 作成はしない) |
-
-OP 経由で Issue / marker / scope が既に渡されている場合は default を上書きしてその契約に従う。
-
-### 初回確認テンプレ
-
-直接実行時に target / mode / permission / verification が未指定なら以下を確認する。
-
-1. 対象はどこですか？(ファイル / ディレクトリ / PR / Issue / diff)
-2. モードは scan / apply のどれですか？
-3. 修正してよいですか？それとも指摘・計画のみですか？
-4. 実行してよい確認コマンドはありますか？
-
-指定がなければ、scan-only / no-write / report 出力として扱う。
-
-### 直接実行時の禁止事項
-
-- ユーザー許可なしに apply へ進む
-- 仕様が曖昧なまま実装を始める (spec 確認なしで feature 追加しない)
-- OP 管理外で勝手に branch / PR / merge を作る
-- scope_out に踏み込む
-- verification 不明のまま成功扱いする
+feature-expert 固有の差分: apply は明示許可必須。実装前に acceptance criteria を整理し、
+仕様が曖昧なまま実装に入らない。
 
 ---
 
@@ -425,7 +392,5 @@ OP runtime 規約は以下 3 ファイルが正本。disagree したら正本側
 - `~/.claude/skills/_shared/runtime-contract.md` — runtime spawn 境界 / apply・post-check 解決 / merge-blocking state
 - `~/.claude/skills/_shared/active-expert-registry.md` — agent ↔ skill 機械 mapping (本 agent の identity / runtime 適格性確認)
 - `~/.claude/skills/_shared/markers/labels-and-markers.md` — 本 agent が出力する `op-domain: feature` marker / `op-fingerprint` 等の名前と意味
-- marker / completion report publish 前は必ず `skills/_shared/expert-spawn.md` の
-  **Marker Publish Validate** 節 (`op help marker <name>` + `op core marker-lint --body - --source-hint <kind> --strict`) を実行する
-- finding の `op-fingerprint` 値は手書きせず `skills/_shared/expert-spawn.md` §369「op CLI helper 活用推奨例」の
-  `op core fingerprint --plain ...` で生成する (format drift 防止)
+- marker publish 前の検証手順は `skills/_shared/expert-spawn.md` の「Marker Publish Validate (全 expert 共通契約)」節に従う
+- `op-fingerprint` の生成手順は `skills/_shared/expert-spawn.md` の「prompt 規約 (共通)」内「op CLI helper 活用推奨例」節に従う

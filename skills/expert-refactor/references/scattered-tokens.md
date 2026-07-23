@@ -245,19 +245,10 @@ shared/design/spacing.ts
 
 ## apply 後の必須宣言
 
-scattered token の apply 完了報告には、必ず以下を含める:
-
-```yaml
-contract_preservation:
-  path_values_changed: false
-  status_values_changed: false
-  error_codes_changed: false
-  ipc_contract_changed: false
-  tauri_command_names_changed: false
-  event_names_changed: false
-  permission_names_changed: false
-  env_vars_changed: false
-```
+scattered token の apply 完了報告には、`contract_preservation` の全 boolean を埋める
+(正本 = SKILL.md「Apply Report」の `contract_preservation` リスト)。scattered token では特に
+`path_values_changed` / `key_values_changed` / `status_values_changed` / `error_codes_changed` /
+`env_vars_changed` が false であることが本質的な確認点になる。
 
 **実際の値が変更前後で変わっていないこと** を boolean で明示する。
 true になる場合は仕様変更であり、refactor-expert の範囲外 (feature-expert / debug-expert に escalation)。

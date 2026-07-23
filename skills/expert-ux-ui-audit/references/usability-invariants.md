@@ -101,15 +101,10 @@ ux-ui:contrast-fail            # 本文 4.5:1 / 非テキスト 3:1 を割る co
 `~/.claude/skills/_shared/expert-spawn.md` の canonical schema に従う JSON 配列。
 `domain` フィールドには **`ux-ui`** を入れる (旧 `ux` / `ui` は廃止)。
 
-各検出に以下を含める。
+canonical 必須フィールドの一覧・詳細は `references/agent-instructions.md` の「出力契約」節を正本とする
+(本ファイルでは重複保持しない)。本ファイル固有のもののみ以下に挙げる。
 
-- `user_goal` — このコンポーネント / 画面で達成すべき目的
-- `affected_user_flow` — 影響する業務フロー
 - `broken_invariant` — 上記不変条件 1〜10 のどれに違反しているか
 - `ux_ui_failure_type` — `missing_state | unclear_action | recovery_blocked | a11y_break | visual_ambiguity | workflow_mismatch` のいずれか
-- `evidence` — 該当コード 5〜10 行 (静的に観測したもの)
-- `evidence_grade` — `direct | inferred | requires_runtime` (`direct` 以外で Critical 不可)
 - `reproduction_hint` — `requires_runtime` のとき必須
-- `severity_reason` — Critical / High と判定した根拠
-- `recommended_runner` — `designer-expert`
 - `gotchas` — designer-expert 単独で完結しない場合は **co-run が必要な expert を明記** する (`scan-finding-policy.md` の co-run 判定節参照)

@@ -4,8 +4,11 @@
 機能概要: usable_security.affected_user_capability / legitimate_workflow_preserved / ux_impact の判定基準。
 作成意図: 「security finding の修正で何の capability が影響を受けるか」「正当な workflow が維持されるか」を
          構造化して、scan / apply / post-check が同じ判定をできるようにする。
-注意点: 本ファイルは「capability 一覧と判定基準」のみ。mitigation の優先順位 / 禁止される deny は
-       usable-security.md。OS file picker 経由 path の扱いは file-picker-and-user-selected-path.md。
+注意点: 本ファイルは「capability 一覧と判定基準」に加えて、apply mode の
+       `apply_allowed` / `requires_aux_post_check` 判定マトリクスの正本を兼ねる (apply-policy.md は pointer)。
+       mitigation の優先順位 / 禁止される deny は usable-security.md。
+       apply の標準フロー / 失敗時の扱い / 許可される修正リストは apply-policy.md。
+       OS file picker 経由 path の扱いは file-picker-and-user-selected-path.md。
 -->
 
 ## affected_user_capability enum
@@ -177,54 +180,21 @@ usable_security:
 
 ## 例: capability 別の典型 finding と mitigation
 
-### save_as に関する finding
+**共通原則 (全 capability に共通する NG mitigation)**: capability の UI / 導線を削除する、
+出力先・読込元を固定する、受け入れ形式を 1 つに縮退させる、といった「capability 自体を犠牲にする」
+修正は禁止 (`legitimate_workflow_preserved` の判定基準を参照)。正しい mitigation は常に
+validate / canonicalize / scope / confirm / audit の組合せで攻撃経路だけを閉じる。
 
-```text
-典型 finding:
-  save_as 経由の path が canonicalize されていない / reparse point を resolve しない /
-  ADS / device path / reserved name を reject しない / overwrite 確認がない
+### 早見表 (残り 4 capability)
 
-正しい mitigation:
-  validate (extension / reserved / ADS / device path) +
-  canonicalize (symlink resolve) +
-  confirm (overwrite 時) +
-  audit (error 出力 sanitize)
+| capability | 典型 finding | 正しい mitigation |
+|---|---|---|
+| `save_as` | path が canonicalize されない / ADS・device path・reserved name (CON/PRN/AUX 等) を reject しない / overwrite 確認がない | validate (extension/reserved/ADS/device path) + canonicalize + confirm (overwrite) + audit |
+| `open_file` | project file 内 path を再検証しない (boundary D) | validate (entry name/size/depth/count) + canonicalize + scope |
+| `export` | 出力 path に user input をそのまま使う / artifact に secret・production path 混入 | validate + canonicalize + confirm (overwrite) + audit (artifact sanitize) |
+| `batch_processing` | 途中エラー時の rollback・部分成功の扱いが曖昧で artifact が不整合状態に | validate + canonicalize + scope + audit (途中失敗時の状態を log) + confirm (大量処理開始前) |
 
-NG mitigation:
-  save_as UI を削除する / 出力先を workspace に固定する / save 自体を許可制にする
-```
-
-### open_file に関する finding
-
-```text
-典型 finding:
-  open_file で取り込んだ project file 内の path を再検証しない (boundary D, stale trusted) /
-  imported file の archive entry が zip-slip / parser に size limit がない
-
-正しい mitigation:
-  validate (entry name / size / depth / count) +
-  canonicalize (解凍先 path) +
-  scope (解凍先が指定 directory 内)
-
-NG mitigation:
-  open_file UI を削除する / 読込元を固定する / import を全部禁止する
-```
-
-### export に関する finding
-
-```text
-典型 finding:
-  export 先 path に user input をそのまま使い canonicalize / scope / confirm がない /
-  生成 artifact に secret / production path が混入する
-
-正しい mitigation:
-  validate + canonicalize + confirm (overwrite) + audit (artifact sanitize)
-
-NG mitigation:
-  export 機能を削除する / export 先を workspace 固定にする
-```
-
-### import に関する finding
+### import に関する finding (代表例)
 
 ```text
 典型 finding:
@@ -238,7 +208,7 @@ NG mitigation:
   import 機能を削除する / 受け入れ format を 1 つに固定する (UX 退化)
 ```
 
-### external_app_launch に関する finding
+### external_app_launch に関する finding (代表例)
 
 ```text
 典型 finding:
@@ -254,21 +224,6 @@ NG mitigation:
 
 NG mitigation:
   外部アプリ連携を全部削除する / InDesign 連携を全部禁止する
-```
-
-### batch_processing に関する finding
-
-```text
-典型 finding:
-  batch で複数 file を処理する経路が path canonicalize されていない /
-  途中エラー時の rollback / 部分成功の扱いが曖昧で artifact が不整合状態に
-
-正しい mitigation:
-  validate + canonicalize + scope + audit (途中失敗時の状態を log) +
-  confirm (大量処理開始前の確認 - 既存導線維持)
-
-NG mitigation:
-  batch processing 機能を削除する / 1 件ずつしか処理できないようにする
 ```
 
 ---

@@ -20,12 +20,8 @@ description: ux-ui-audit-expert agent の方法論教科書。使いやすさ・
 
 ## このドキュメントの位置づけ
 
-ux-ui-audit-expert は「画面をおしゃれにする」担当ではない。
-**ユーザーが迷わず、安全に、目的を達成できるか** を監視する **警備員** である。
-
-見た目の好みではなく、業務フロー上で破綻が起きていないかだけを見る。
-報告は Critical / High に限定し、Medium 以下のノイズは出さない。
-「指摘しない判断」を恐れない — 警備員は「異常なし」を報告できる。
+ux-ui-audit-expert は使いやすさ・安全性・状態網羅を監視する **警備員** である
+(思想・原則の正本は `references/philosophy.md`)。
 
 本 skill は ux-ui-audit-expert が判断 / 起票 / 判定の各段階で参照する **方法論の本体** を集約する。
 agent.md は契約に集中し、HOW の詳細は references/ 配下に分割して置く。

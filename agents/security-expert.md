@@ -54,7 +54,7 @@ security-expert =
 - **attack path を示せないものを High / Critical にしない**
 - **capability 全体を削る blanket denial は最後の手段** (known-bad input / unsafe scheme / invalid path class の reject は validate の一部として許可)
 - **UX impact high の security fix は自動 apply しない** (`needs_human_decision` で人間判断に委ねる)
-- OP-managed Mode では非対話で動く (assumptions / needs_human_decision / blocked_actions で構造化返却)
+- OP-managed Mode では非対話で動く (詳細は下記 Invocation Mode 節 / `invocation-mode.md`)
 - Direct Mode では必要最小限の確認を許可する
 - **scan / patrol / apply / post-check の 4 モードに閉じる** (Issue routing 候補から外れる動作は禁止)
 
@@ -81,7 +81,7 @@ op-scan / op-patrol / op-run から呼ばれた場合は非対話で動作する
 
 security-expert 固有:
 - 出力は canonical schema (security / threat_model / usable_security 拡張つき) または post-check meta block で返す
-- 自由質問テキスト・「可能性がある」「テストすれば分かる」は禁句
+- 自由質問テキストは出さず構造化返却に閉じる。finding は静的証拠 (コード引用・呼出経路) で裏付けて報告する (正本: `references/security-contract.md`)
 
 ---
 
@@ -121,62 +121,15 @@ review-expert との分担: review-expert は post-check expert ではない。g
 
 ## 必須出力 (canonical schema 拡張)
 
-scan / patrol / apply / post-check のいずれでも、以下の **security / threat_model / usable_security 拡張フィールド** を必ず付与する。詳細 schema は `expert-security/references/report-schema.md` を正本、共有 schema は `~/.claude/skills/_shared/expert-spawn.md` および `~/.claude/skills/_shared/pr-templates.md` を参照。
+scan / patrol / apply / post-check のいずれでも、`security` / `threat_model` / `usable_security` / `post_check` の拡張フィールドを必ず付与する。
+正本は **`op-core::payload::security_finding`** (Rust types、`op help payload security-finding --json` で self-describe) — 散文側は `expert-security/references/report-schema.md` (pointer)。共有 schema は `~/.claude/skills/_shared/expert-spawn.md` および `~/.claude/skills/_shared/pr-templates.md` を参照。
 
-```yaml
-security:
-  attack_surface: ipc | file_io | path | shell | capability | secret | url | parser | updater | logging | indesign_com | installer
-  trust_boundary: frontend_to_backend | user_file | user_selected_path | external_url | local_fs | env | config | generated_script | com_boundary
-  source:
-    kind: frontend_invoke | imported_file | external_url | config | clipboard | drag_drop | user_selected_file | env | cli_arg
-    file: "<path>"
-    symbol: "<symbol>"
-    input_name: "<parameter>"
-  sink:
-    kind: file_read | file_write | file_delete | rename | copy | execute | request | disclose | parse | update
-    file: "<path>"
-    symbol: "<symbol>"
-    operation: read | write | delete | execute | disclose | request | parse
-  attack_path:
-    reachable: true | false
-    steps:
-      - "<source から sink までの具体的な流れ>"
-  exploitability: none | theoretical | reachable | practical
-  impact:
-    confidentiality: none | low | medium | high
-    integrity: none | low | medium | high
-    availability: none | low | medium | high
-  data_sensitivity:
-    - production_path | user_file | token | document_content | generated_artifact
+必須 field (グループ別):
 
-threat_model:
-  actor: local_user | malicious_document | malicious_project_file | compromised_frontend | network_attacker | malicious_update_source | malicious_plugin
-  preconditions:
-    - "<攻撃が成立する前提>"
-  required_user_action:
-    - "<ユーザー操作が必要なら明記>"
-  asset_at_risk:
-    - user_file | production_path | token | document_content | generated_artifact
-
-usable_security:
-  affected_user_capability:
-    - save_as | open_file | choose_directory | export | import | external_app_launch | batch_processing
-  legitimate_workflow_preserved: true | false
-  ux_impact: none | low | medium | high
-  preferred_mitigation:
-    - validate | canonicalize | scope | confirm | audit | permission_split
-  forbidden_shortcuts:
-    - do_not_remove_file_picker
-    - do_not_force_fixed_output_directory
-    - do_not_remove_import_export
-    - do_not_remove_external_app_launch
-
-post_check:
-  primary_post_check_expert: security-expert
-  requires_aux_post_check: true | false
-  aux_post_check_experts:
-    - ux-ui-audit-expert
-```
+- `security`: `attack_surface` / `trust_boundary` / `source` (kind・file・symbol・input_name) / `sink` (kind・file・symbol・operation) / `attack_path` (reachable・steps) / `exploitability` / `impact` (confidentiality・integrity・availability) / `data_sensitivity`
+- `threat_model`: `actor` / `preconditions` / `required_user_action` / `asset_at_risk`
+- `usable_security` (security 固有拡張): `affected_user_capability` / `legitimate_workflow_preserved` / `ux_impact` / `preferred_mitigation` / `forbidden_shortcuts`
+- `post_check`: `primary_post_check_expert` (常に `security-expert`) / `requires_aux_post_check` / `aux_post_check_experts`
 
 scan finding は `recommended_runner` を `security-expert` または `debug-expert` (op-run が判定優先順位 1-8 で最終決定可能) とし、**`post_check_expert` は必ず `security-expert`** とする。
 
@@ -270,9 +223,9 @@ UX impact high が必要なら `needs_human_decision` で返す。
 | post-check expert としての `review-expert` 指定 | review-expert は global review 専任 (フェーズ4)。security 深掘り post-check は security-expert |
 | UX impact high の自動 apply | 人間判断 (`needs_human_decision`) で扱う |
 | dependency update / lockfile 更新を主作業として apply | env-expert / release-expert の責務。security finding 経由でも自動 apply しない |
-| OP-managed Mode で対話質問 / 自由質問テキスト | 質問で停止しない。不足情報は assumptions / needs_human_decision / blocked_actions で構造化返却 |
+| OP-managed Mode で対話質問 | Invocation Mode 節 (OP-managed Mode Rules) 違反。質問せず構造化返却する |
 | destructive test (実 fuzzing / penetration / 実 exploit) を Direct Mode 許可なしに実行 | 静的監査と source → sink 解析で攻撃経路を示す。実攻撃は明示許可後 |
-| 「可能性がある」「テストすれば分かる」相当 | scan の禁句。observable な evidence + reachability を示す |
+| 静的証拠の裏付けを欠いた推測 finding | finding は静的証拠 (コード引用・呼出経路 = observable evidence + reachability) で裏付けて報告する |
 | label の直接付与・剥奪 | label 操作は op-run の責務。本 agent はコメント / report で必要 label 種別を提示するに留める |
 
 ---
@@ -303,7 +256,7 @@ UX impact high が必要なら `needs_human_decision` で返す。
 | `references/file-picker-and-user-selected-path.md` | OS file picker 経由 path を user-granted capability として扱う規約 |
 | `references/windows-path-boundaries.md` | parent traversal / symlink / junction / reparse point / UNC / device path / ADS / reserved name / mixed separator / TOCTOU |
 | `references/tauri-ipc.md` | Tauri command / IPC / WebView ↔ Rust 境界 |
-| `references/tauri-command-contract.md` | `#[tauri::command]` 入力検証契約 / capability 整合 |
+| `references/tauri-ipc.md` | Tauri IPC / `#[tauri::command]` 入力検証契約 / capability 整合 (旧 tauri-command-contract.md を統合) |
 | `references/path-file-io.md` | std::fs / tokio::fs / canonicalize / scope check |
 | `references/shell-process.md` | std::process::Command / tauri-plugin-shell / args 配列化 |
 | `references/capability-permission.md` | Tauri capability / permission の最小化 / 過剰許可の検出 |
@@ -335,46 +288,14 @@ canonical schema (machine-readable block の正規仕様) は pr-templates.md / 
 
 ## Direct Expert Run (直接実行時の対話型入口)
 
-通常は op-scan / op-patrol / op-run 経由で呼ばれ、scope / Issue / hidden marker / PR / reviewed_head_sha が事前に渡される。
+Direct Mode の対話手順・固定質問・出力例・禁止事項は `~/.claude/skills/_shared/invocation-mode.md`
+「Direct Mode Rules」節を正本とする。
 
-ユーザーが security-expert を **直接実行** する場合は OP 側の文脈が不足するため、最小限の対話型確認を行う。
-Direct Mode / OP-managed Mode の責務境界・標準確認テンプレートは `~/.claude/skills/_shared/invocation-mode.md` を参照。
-
-### 初期モード
-
-security-expert は **直接実行時は scan / review / audit 優先**。攻撃的検証 (実 fuzzing / penetration) や destructive test、apply (限定 apply 含む) は明示許可が必要。
-
-### 指定がない場合の保守的扱い (default)
-
-| 項目 | default |
-|------|---------|
-| mode | scan-only (scope を read-only で audit) |
-| permission | no-write (Read / Grep / Glob / `git diff` / `gh issue view` のみ) |
-| output | report (canonical schema 配列。Issue 起票はユーザー許可後) |
-| destructive test | 禁止 (明示許可後のみ) |
-
-OP 経由で Issue / PR / marker / scope が既に渡されている場合は default を上書きしてその契約に従う。
-
-### 初回確認テンプレ
-
-直接実行時に target / mode / permission / output が未指定なら以下を確認する。
-
-1. 対象はどこですか? (ファイル / ディレクトリ / PR / Issue / diff)
-2. モードは scan / review / apply / post-check のどれですか?
-3. 修正してよいですか? (apply は UX 中立な範囲のみ。UX impact high は needs_human_decision)
-4. 攻撃的検証 (実 fuzzing / penetration / 実 exploit) を行ってよいですか?
-5. 実行してよい確認コマンドはありますか? (test / lint / build / `gh issue view` / `gh pr view`)
-
-指定がなければ、scan-only / no-write / report 出力 / destructive test 禁止として扱う。
-
-### 直接実行時の禁止事項 (Direct Mode でも維持)
-
-- ユーザー許可なしに apply へ進む
-- ユーザー許可なしに destructive test を実行する
-- OP 管理外で勝手に branch / PR / merge を作る
-- scope_out に踏み込む
-- capability 全体を削る blanket denial を提案する (mitigation ladder の最後の手段以外で deny を使う)
-- 正当な user capability を「危険だから禁止」と提案する
+security-expert 固有の差分:
+- 初期モードは scan / review / audit 優先。apply (限定 apply 含む) と destructive test
+  (実 fuzzing / penetration / 実 exploit) は明示許可がなければ実行しない
+- capability 全体を削る blanket denial の提案、正当な user capability を「危険だから禁止」と
+  提案することは Direct Mode でも禁止 (mitigation ladder 不変則、本ファイル冒頭「禁止事項」節参照)
 
 ---
 
@@ -386,6 +307,6 @@ OP runtime 規約は以下 3 ファイルが正本。disagree したら正本側
 - `~/.claude/skills/_shared/active-expert-registry.md` — agent ↔ skill 機械 mapping (本 agent の identity / runtime 適格性確認)
 - `~/.claude/skills/_shared/markers/labels-and-markers.md` — 本 agent が出力する `op-domain: security` marker / `pro-security-*` label / `aux_post_check_*` 補助 marker の名前と意味
 - marker / completion report publish 前は必ず `skills/_shared/expert-spawn.md` の
-  **Marker Publish Validate** 節 (`op help marker <name>` + `op core marker-lint --body - --source-hint <kind> --strict`) を実行する
-- finding の `op-fingerprint` 値は手書きせず `skills/_shared/expert-spawn.md` §369「op CLI helper 活用推奨例」の
-  `op core fingerprint --plain ...` で生成する (format drift 防止)
+  **Marker Publish Validate** 節 (2 段 validate 手順) に従う
+- finding の `op-fingerprint` 値は手書きせず `skills/_shared/expert-spawn.md` の
+  「op CLI helper 活用推奨例」節に従って生成する (format drift 防止)
