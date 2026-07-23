@@ -1,7 +1,12 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-06-14
-notes: v1.1 相当 (2026-06-30): ClusterSummary に pending_label / unfiled_followup を additive 追加
+notes: v1.2 相当 (2026-07-23, ADR-0024 Phase 3 第五波 5a): 生 gh 直叩き (`gh pr create` ×2 / `gh pr close` /
+       `gh issue create`) を既存 op primitive (`op pr create` / `op pr close` / `op issue create`) への配線に
+       置換 (drift 解消)。mcp channel では各コマンドが call-spec を emit しうるため、CO 自身が実行者として
+       github-channel.md §3-§4 の protocol (verbatim MCP 実行 → read-back → ingest) を完遂する旨を注記。
+       gh channel の挙動 (fence 構造・返却 envelope の扱い) は無変更。非破壊 additive のため schema_version 据置。
+       v1.1 相当 (2026-06-30): ClusterSummary に pending_label / unfiled_followup を additive 追加
        (非破壊変更: optional フィールド追加のみ。既存 schema_version=1 pin との互換を維持するため
        schema_version は据置。controller 側 (>=1) 参照 pin も変更不要)。
        v1 (2026-06-14): ADR-0016 ClusterOrchestrator アーキテクチャ採択に伴い新規作成。
@@ -277,14 +282,18 @@ PR_BODY="<本文を _shared/pr-templates.md の PR open テンプレに従い組
 export PR_TITLE
 export PR_BODY
 
-PR_URL=$(gh pr create \
+PR_CREATE_JSON=$(printf '%s' "$PR_BODY" | op pr create \
   --base "${BASE_REF}" \
   --head "${BRANCH_NAME}" \
   --title "${PR_TITLE}" \
-  --body "${PR_BODY}")
+  --body-file -)
 
-export PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
-export PR_URL
+# mcp channel: op pr create は call-spec を emit する。ClusterOrchestrator 自身が実行者として
+# github-channel.md §3-§4 の protocol (verbatim MCP 実行 → read-back → `op pr ingest-result`) を
+# 隔離 context 内で完遂してから envelope を得る (実行者定義・往復手順の正本は github-channel.md §4)。
+# gh channel ではそのまま envelope が返る (fence 構造は無改変)。
+export PR_URL=$(printf '%s' "$PR_CREATE_JSON" | jq -r '.details.url // empty')
+export PR_NUMBER=$(printf '%s' "$PR_CREATE_JSON" | jq -r '.details.pr_number // empty')
 ```
 
 PR body は `_shared/pr-templates.md` の「op-run: PR open テンプレ」に準拠する。
@@ -582,12 +591,15 @@ ${MEDIUM_LOW_FINDINGS_SUMMARY}
 EOF
 )"
 
-FOLLOWUP_URL=$(gh issue create \
+FOLLOWUP_CREATE_JSON=$(printf '%s' "$FOLLOWUP_BODY" | op issue create \
   --title "follow-up: ${CLUSTER_ID} review Medium/Low finding 対応" \
-  --body "$FOLLOWUP_BODY" \
-  --label "auto-report")
+  --body-file - \
+  --label "auto-report" \
+  --ensure-labels)
 
-export FOLLOWUP_ISSUE_URL="$FOLLOWUP_URL"
+# mcp channel: op issue create が call-spec を emit する場合も同じ protocol (github-channel.md §3-§4) を
+# ClusterOrchestrator 自身が完遂する (verbatim MCP 実行 → read-back → `op issue ingest-result`)。
+export FOLLOWUP_ISSUE_URL=$(printf '%s' "$FOLLOWUP_CREATE_JSON" | jq -r '.details.url // empty')
 ```
 
 #### terminal 処理 (round >= 3 / REVIEW_TERMINAL = 1)
@@ -615,16 +627,21 @@ controller: cluster-orchestrator
 NOTE
 )"
 
-# step 2: 既存 PR を close
-gh pr close "$PR_NUMBER" --comment "terminal: review_round 上限。新規 PR に移行します。"
+# step 2: 既存 PR を close (close 通知コメント → close の 2 step。op pr close は --comment を
+# 持たない — mcp channel で comment+close を単一 call-spec にできないため意図的に分離)
+op pr comment "$PR_NUMBER" --body "terminal: review_round 上限。新規 PR に移行します。"
+op pr close --pr "$PR_NUMBER"
 
 # step 3: 同一 branch で新規 PR を作成 (branch 削除なし、commit history 保持)
-NEW_PR_URL=$(gh pr create \
+# mcp channel: op pr close / op pr create とも call-spec を emit しうる。フェーズ4 と同じ
+# github-channel.md §3-§4 protocol (verbatim MCP 実行 → read-back → ingest) を CO が完遂する。
+NEW_PR_CREATE_JSON=$(printf '%s' "$PR_BODY" | op pr create \
   --base "${BASE_REF}" \
   --head "${BRANCH_NAME}" \
   --title "${PR_TITLE}" \
-  --body "${PR_BODY}")
-NEW_PR_NUMBER=$(echo "$NEW_PR_URL" | grep -oE '[0-9]+$')
+  --body-file -)
+NEW_PR_URL=$(printf '%s' "$NEW_PR_CREATE_JSON" | jq -r '.details.url // empty')
+NEW_PR_NUMBER=$(printf '%s' "$NEW_PR_CREATE_JSON" | jq -r '.details.pr_number // empty')
 
 export VERDICT="terminal_new_pr"
 export NEW_PR_URL

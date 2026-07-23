@@ -10,7 +10,11 @@ effort: max
 <!--
 schema_version: 3
 last_breaking_change: 2026-06-15
-notes: v3 (2026-06-15): ADR-0016 ClusterOrchestrator 移行。controller を薄型 dispatcher に変え、各クラスター
+notes: v3.1 相当 (2026-07-23, ADR-0024 Phase 3 第五波 5a): mcp channel (Cloud) 対応の prose 配線。
+       フェーズ0 gh auth guard に channel 分岐 / フェーズ1-2-e に claim skip 分岐 (単一 instance 前提) を追加、
+       フェーズ3.5・4・4.5 入口に mcp channel 未対応の段階degrade宣言を追加 (詳細正本は github-channel.md)。
+       非破壊 additive のため schema_version は据置。
+       v3 (2026-06-15): ADR-0016 ClusterOrchestrator 移行。controller を薄型 dispatcher に変え、各クラスター
        の apply→PR→post-check→review→round 管理→verdict ライフサイクルを ClusterOrchestrator (Agent tool spawn) に委譲。
        op-run-fanout.js / op-run-review.js / op-run-postcheck.js を削除。op-run-discover.js は維持。
        v2 (2026-05-16): クラスタリング後の plan mode gate 追加。op-plan v2 同パターン。
@@ -169,6 +173,7 @@ controller 人為 cap (chunk 起動 / `CONTROLLER_CHUNK_BUDGET`) は撤廃した
 - ADR-0016 (ClusterOrchestrator アーキテクチャ) — 修正・レビュー・Review Fix Loop を ClusterOrchestrator (Agent tool) に委譲する設計判断の正本。controller を薄型 dispatcher に変え、各クラスターのライフサイクルを独立コンテキストで完結させる
 - `~/.claude/workflows/op-run-discover.js` — フェーズ2-A 探知 workflow の entry。controller が provision 済 worktree で investigation reader を並列 spawn し investigation report を返す (Stage2 barrier 供給)。args/戻り値 schema は本ファイル冒頭コメント参照
 - `~/.claude/skills/_shared/read-economy.md` (>=1) — Read Economy 原則 (R1〜R5) + 「Controller への適用」節。controller は既読 Issue/PR/file の再 Read を避け、Issue/PR body は meta/list で取得し、subagent の completion_report 取り込みを圧縮する (読まなさすぎへの退行は避ける)
+- `~/.claude/skills/_shared/github-channel.md` (>=2) — GitHub I/O channel / call-spec protocol。mcp channel (Cloud) での司令官 / ClusterOrchestrator の call-spec 実行義務 (§3-§4) と hidden marker sanitize 制約 (§6) の正本。フェーズ0 gh auth guard・フェーズ1-2-e claim skip・ClusterOrchestrator の `op pr create` / `op pr close` / `op issue create` 呼び出しが依拠する (Phase 3 第五波 5a)
 
 ---
 
@@ -232,7 +237,13 @@ fi
 
 ```bash
 git rev-parse --is-inside-work-tree || exit 1
-gh auth status || exit 1
+
+# gh 認証 (mcp channel = call-spec 経路では gh 不要 — github-channel.md)
+if [ "${OP_GITHUB_CHANNEL:-gh}" = "mcp" ]; then
+  echo "[channel] mcp — GitHub write は call-spec 経路 (gh 認証不要)"
+else
+  gh auth status || exit 1
+fi
 ```
 
 ### 0-base. BASE_REF 決定 (OP_RUN_BASE_REF / OP_RUN_BASE_SHA)
@@ -566,16 +577,24 @@ exit 2 (API error) は op-run 全体を abort。`OP_RUN_REPO` が未設定の場
 # 未設定 (export 漏れ / subshell drift) の場合は fail-fast で即停止し、silent exit 0 を防ぐ。
 : "${CLUSTERED_ISSUES:?CLUSTERED_ISSUES が未設定: 1-2 clustering 結果が伝わっていない}"
 : "${OP_RUN_REPO:=$(git remote get-url origin | sed 's|https://github.com/||;s|\.git$||')}"
-declare -a CLAIMED_ISSUES=()
-for ISSUE in "${CLUSTERED_ISSUES[@]}"; do
-  op claim acquire --repo "$OP_RUN_REPO" --issue "$ISSUE" --task-id "$OP_RUN_TASK_BUNDLE_ID"
-  RC=$?
-  [ $RC -eq 0 ] && CLAIMED_ISSUES+=("$ISSUE")
-  [ $RC -eq 2 ] && { echo "❌ op claim acquire 致命的エラー: #$ISSUE" >&2; exit 2; }
-done
-[ ${#CLAIMED_ISSUES[@]} -eq 0 ] && { echo "ℹ️ 全 Issue が他 instance に claim 済。終了。"; exit 0; }
-# claim 後の survivor に更新 (CLAUDE.md 不変則1: producer fence で export 必須)
-export CLUSTERED_ISSUES=("${CLAIMED_ISSUES[@]}")
+
+if [ "${OP_GITHUB_CHANNEL:-gh}" = "mcp" ]; then
+  # mcp channel: op claim は恒久 refuse (ADR-0024 non-goals、push-race の atomic CAS が MCP 経路では
+  # 保証できないため)。CLI 側の refuse は意図的な不変であり、SKILL 側で claim acquire 自体を skip する。
+  echo "⚠️ [channel] mcp — claim acquire を skip します。単一 instance 前提で運用してください。"
+  echo "   Cloud セッションで並行 op-run を走らせないこと (claim による排他が効かないため)。"
+else
+  declare -a CLAIMED_ISSUES=()
+  for ISSUE in "${CLUSTERED_ISSUES[@]}"; do
+    op claim acquire --repo "$OP_RUN_REPO" --issue "$ISSUE" --task-id "$OP_RUN_TASK_BUNDLE_ID"
+    RC=$?
+    [ $RC -eq 0 ] && CLAIMED_ISSUES+=("$ISSUE")
+    [ $RC -eq 2 ] && { echo "❌ op claim acquire 致命的エラー: #$ISSUE" >&2; exit 2; }
+  done
+  [ ${#CLAIMED_ISSUES[@]} -eq 0 ] && { echo "ℹ️ 全 Issue が他 instance に claim 済。終了。"; exit 0; }
+  # claim 後の survivor に更新 (CLAUDE.md 不変則1: producer fence で export 必須)
+  export CLUSTERED_ISSUES=("${CLAIMED_ISSUES[@]}")
+fi
 ```
 
 ### 1-2-f. EFFECTIVE_MAX_PARALLEL 動的算出 (Phase 1 末、ADR-0007 v3 §4.2-v3)
@@ -1230,7 +1249,24 @@ controller はフェーズ2-E の ClusterSummary から `followup_issue_url` を
 
 ---
 
+## mcp channel (Cloud) における段階degrade宣言 (フェーズ3.5以降)
+
+> ⚠️ **mcp channel (`OP_GITHUB_CHANNEL=mcp`) では、フェーズ3.5 (post-check) / フェーズ4 (global review) /
+> フェーズ4.5 (Review Fix Loop) は未対応**。review_round 導出・fix-loop 判定・post-check 結果判定は
+> いずれも PR コメント本文の hidden marker 読解に依存するが、MCP の read 系 tool はコメント本文の
+> hidden marker を sanitize して返す (`github-channel.md` §6) ため成立しない (read 系 mcp 化自体が
+> ADR-0024 の non-goal であるため `op pr view` 等の read primitive も mcp channel では fail-closed する)。
+> **ClusterOrchestrator は `cluster-orchestrator-directives.md` フェーズ4 (PR 作成、本節 SKILL.md
+> フェーズ4 = Global Review とは番号体系が異なる) を完了した時点で mcp channel の対応範囲を終える**。
+> PR open + ClusterSummary 報告までで止め、post-check / global review / Review Fix Loop は
+> ローカル (gh channel) セッションで実施すること。対応は第六波 (review-state 再設計、ADR-0027 予定) の
+> 課題とする。silent skip はしない — 以下各フェーズの入口で本節を必ず参照する。
+
+---
+
 ## フェーズ3.5: Post-check Dispatch (ClusterOrchestrator に移管済み)
+
+> mcp channel では本フェーズは未対応。上記「mcp channel における段階degrade宣言」節を参照。
 
 /**
  * 作成意図: ADR-0016 により post-check dispatch 判定は ClusterOrchestrator 内部
@@ -1246,6 +1282,8 @@ controller は post-check 結果を ClusterSummary の `verdict` フィールド
 ---
 
 ## フェーズ4: Global Review (ClusterOrchestrator に移管済み)
+
+> mcp channel では本フェーズは未対応。「mcp channel における段階degrade宣言」節 (フェーズ3.5 手前) を参照。
 
 /**
  * 作成意図: ADR-0016 により review-expert spawn / marker 組立 / review_round 管理 /
@@ -1264,6 +1302,8 @@ OP_RUN_SESSION_ID は controller がフェーズ2-Orchestrate-pre で bundle-lev
 ---
 
 ## フェーズ4.5: Review Fix / Specialist Decision Loop (ClusterOrchestrator に移管済み)
+
+> mcp channel では本フェーズは未対応。「mcp channel における段階degrade宣言」節 (フェーズ3.5 手前) を参照。
 
 /**
  * 作成意図: ADR-0016 により Review Fix Loop は ClusterOrchestrator 内部

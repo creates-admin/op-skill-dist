@@ -1,7 +1,10 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-05-23
-notes: v1 (2026-05-23): op-run フェーズ1.5 (Issue 健全性チェックと正規化委譲) の詳細仕様。
+notes: v1.1 相当 (2026-07-23, ADR-0024 Phase 3 第五波 5a): 1.5-3 の `op issue edit-labels` に
+       mcp channel (Cloud) 向け注記 (--input-json 素材注入、github-channel.md §3-§4 protocol) を追加。
+       非破壊 additive のため schema_version 据置。
+       v1 (2026-05-23): op-run フェーズ1.5 (Issue 健全性チェックと正規化委譲) の詳細仕様。
        SKILL.md god file (~2785 行) 抑制のため本ファイルへ物理切り出し (Issue #425 Stage 2)。
        切り出し前後で bash 実装 / 判定基準 / モード分岐 / ユーザー提示フォーマットを byte-identical 維持。
 -->
@@ -176,6 +179,10 @@ EOF
 
 op issue edit-labels "$ISSUE_NUM" --remove "auto-report" --add "needs-clarification"
 ```
+
+mcp channel では `op issue edit-labels` の直前に fresh な `mcp__github__issue_read` (method: get) を
+取り直して `--input-json` で渡す (labels 全置換 semantics のため、古い素材だと差分が壊れる)。
+emit された call-spec は `github-channel.md` §3-§4 の protocol (verbatim 実行 → read-back → ingest) で完遂する。
 
 ### 1.5-4. 派生 Issue の取り込みと再クラスタリング
 

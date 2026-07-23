@@ -229,10 +229,17 @@ PR ごとに別 worktree を作る必要はない (read-only 監査のため、a
 
 ```bash
 # security-expert agent の installed 判定 (Phase 2 以降は true が期待値)
+# path flag は省略し CLI の plugin-aware 解決チェーンに委譲する
+# (cwd → $CLAUDE_PLUGIN_ROOT → binary 相対 plugin root → $HOME/.claude legacy)。
+# Cloud は $HOME/.claude/agents 等が存在しないため、この自動解決が必須 (op-scan 第二波と同じ解決チェーン)。
 SECURITY_EXPERT_INSTALLED=false
-if [ -f "$HOME/.claude/agents/security-expert.md" ]; then
-  SECURITY_EXPERT_INSTALLED=true
-fi
+REGISTRY_VERIFY_JSON=$(op core registry-verify --lens registry-agent 2>/dev/null) || true
+SECURITY_EXPERT_ERROR=$(printf '%s' "$REGISTRY_VERIFY_JSON" \
+  | jq -r '.. | objects | select(.rule_id? and (.effective_severity? == "error") and (.target? == "security-expert")) | .target' \
+  2>/dev/null | head -1)
+# registry-verify 自体の失敗 (JSON 空) は installed=false 側に倒す (fail-safe。
+# 旧 file 存在チェックと同じ安全側デフォルトを保つ — 空 JSON を「error なし」と読まない)
+[ -n "$REGISTRY_VERIFY_JSON" ] && [ -z "$SECURITY_EXPERT_ERROR" ] && SECURITY_EXPERT_INSTALLED=true
 ```
 
 判定結果に応じた動作:
