@@ -1,7 +1,12 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-05-06
-notes: v1 (2026-05-06) — Marker schema 分割 (followup #20) で `pr-templates.md` から
+notes: v1 追記 (2026-07-23, ADR-0024/0027 第六波 6a) — PR body 上の `<!-- op-review-state -->`
+       block を additive に予告する節を新設した (ADR-0027「review-state — PR body 型 state 文書への
+       再設計」の 6a 基盤 wave)。本節は現行 comment marker 群 (op-review-meta 等) を置き換えない
+       (6b で breaking bump するまでは comment marker 群が引き続き正本)。非破壊 additive のため
+       schema_version は 1 に据置。
+       v1 (2026-05-06) — Marker schema 分割 (followup #20) で `pr-templates.md` から
        review-expert 系 marker の detailed schema (review meta block / review finding block /
        review-finding-direct / review-report / specialist-review-meta) を切り出した正本ファイル。
        marker 名 / owner / consumer / core meaning は引き続き `labels-and-markers.md` が正本。
@@ -338,10 +343,44 @@ reason: <短い理由 (1〜2 文)>
 
 ---
 
+## `<!-- op-review-state -->` body block (additive 予告、ADR-0027 6a)
+
+> **本節は予告節**。ADR-0027 (「review-state — PR body 型 state 文書への再設計」) の 6a 基盤 wave
+> (op-core::review_state module + `op pr edit-body` / `op review state pull|push` primitive の新設) に
+> 対応する additive な記述であり、**現行 comment marker 群 (`op-review-meta` 等、上記各節) を
+> 置き換えない**。6a 時点では comment marker 群が引き続き review lifecycle の正本である。
+
+### 正本宣言
+
+state 文書の shape (JSON schema) の正本は **ADR-0027 の「state shape (確定)」節** および
+**`op-core::review_state`** (Rust 型)。本節は「PR body 上のどこに置かれるか」という位置規約のみを
+予告し、field 単位の detailed schema はここに複製しない (Single Canonical Source Rule)。
+
+### 位置
+
+PR body の末尾 (`_shared/pr-templates.md` の「op-run: PR open テンプレ」footer の後) に、
+`<!-- op-review-state -->` marker + ` ```json ` fence の形で置かれる。ADR-0026 の
+`<!-- op-patrol-ledger-state -->` (Issue body) と同型の「marker + json fence」機構を PR body に
+適用したものであり、body 全体の一部分 (末尾ブロック) として存在する点が Patrol Ledger
+(body 全体が state) と異なる。位置規約の詳細は `_shared/pr-templates.md` を参照。
+
+### 6b で予定される破壊的変更 (予告)
+
+6b (全面移行、別 wave) で、既存 comment marker 群 (`op-review-meta` / `op-review-finding` /
+`op-review-finding-direct` / `op-review-controller-meta` / `op-specialist-review-meta`) は
+**人間向け監査ログ専用へ降格**される (breaking、本ファイルの schema_version を 1→2 へ bump 予定)。
+降格後は「機械が読む」ロジック (review_round 導出 / 8 条件判定 / post-check 結果判定等) がすべて
+`<!-- op-review-state -->` body 文書側へ移り、comment marker 群は ADR-0026 の
+`<!-- op-patrol-run -->` 降格と同じ扱い (parse fallback 削除、schema は記録専用として維持) になる。
+6a の間はこの降格を行わない。
+
+---
+
 ## 互換性 / Deprecated
 
 現状なし。本ファイルは v1 として新設。既存 review marker (`op-review-meta` / `op-review-finding` /
 `op-review-finding-direct` / `op-review-report` / `op-specialist-review-meta`) はいずれも canonical 状態。
+`<!-- op-review-state -->` body block は ADR-0027 6a 時点では **予告のみ** (canonical 実装は 6b)。
 
 ---
 

@@ -587,6 +587,18 @@ EOF
 )"
 ```
 
+### body 末尾の op-review-state block (位置規約、ADR-0027 6a additive 予告)
+
+上記テンプレの footer (`🤖 op-run による自動 PR (draft)...`) の **後** に、
+`<!-- op-review-state -->` marker + JSON fence の state block が置かれうる (ADR-0027、6a 基盤 wave)。
+本 block は **機械管理領域**であり、人間 / agent とも手編集しない (state 文書の全置換は
+`op pr edit-body` / `op review state push` 経由でのみ行う)。`<!-- op-review-state -->` marker
+行そのものも**機械専有**であり、人間 / agent が PR 本文 (説明・コード例・引用) に独立行として
+書いてはならない — parse / splice は body 内で最初に出現する marker 行を state block と
+みなすため、本文中の偽 marker は state の誤読・誤置換を招く。field 単位の schema の正本は
+`skills/_shared/markers/review-markers.md` の「`<!-- op-review-state -->` body block」節
+(予告節) および ADR-0027。本節が定めるのは「PR body 上のどこに現れうるか」という位置規約のみ。
+
 ラベル使用例 (label 名・所有者・semantics の正本は `skills/_shared/markers/labels-and-markers.md`、
 merge blocking 効果は `skills/_shared/runtime-contract.md`):
 
