@@ -10,7 +10,15 @@ effort: max
 <!--
 schema_version: 3
 last_breaking_change: 2026-06-15
-notes: v3.1 相当 (2026-07-23, ADR-0024 Phase 3 第五波 5a): mcp channel (Cloud) 対応の prose 配線。
+notes: v3.2 相当 (2026-07-23, ADR-0027 第六波 6b): mcp channel の段階degrade宣言 (フェーズ3.5/4/4.5) を
+       解消済みの履歴注記に縮退し、各フェーズ入口の degrade pointer 3 行を削除。post-check / global
+       review / Review Fix Loop は `<!-- op-review-state -->` 文書 (`op review state pull/push`) 経由で
+       mcp channel でも成立するようになった (詳細は `cluster-orchestrator-directives.md` /
+       `references/global-review-spawn.md` / `references/review-fix-loop.md` /
+       `references/post-check-dispatcher.md`)。comment marker (`op-review-meta` 等) は人間向け監査ログへ
+       降格 (review-markers.md v1→v2 breaking bump と対)。ClusterOrchestrator の公開契約 (ClusterSummary
+       schema) は不変のため非破壊 additive、schema_version 据置。
+       v3.1 相当 (2026-07-23, ADR-0024 Phase 3 第五波 5a): mcp channel (Cloud) 対応の prose 配線。
        フェーズ0 gh auth guard に channel 分岐 / フェーズ1-2-e に claim skip 分岐 (単一 instance 前提) を追加、
        フェーズ3.5・4・4.5 入口に mcp channel 未対応の段階degrade宣言を追加 (詳細正本は github-channel.md)。
        非破壊 additive のため schema_version は据置。
@@ -1249,24 +1257,25 @@ controller はフェーズ2-E の ClusterSummary から `followup_issue_url` を
 
 ---
 
-## mcp channel (Cloud) における段階degrade宣言 (フェーズ3.5以降)
+## mcp channel (Cloud) 段階degrade宣言 — 6b (ADR-0027) で解消済み (履歴)
 
-> ⚠️ **mcp channel (`OP_GITHUB_CHANNEL=mcp`) では、フェーズ3.5 (post-check) / フェーズ4 (global review) /
-> フェーズ4.5 (Review Fix Loop) は未対応**。review_round 導出・fix-loop 判定・post-check 結果判定は
-> いずれも PR コメント本文の hidden marker 読解に依存するが、MCP の read 系 tool はコメント本文の
-> hidden marker を sanitize して返す (`github-channel.md` §6) ため成立しない (read 系 mcp 化自体が
-> ADR-0024 の non-goal であるため `op pr view` 等の read primitive も mcp channel では fail-closed する)。
-> **ClusterOrchestrator は `cluster-orchestrator-directives.md` フェーズ4 (PR 作成、本節 SKILL.md
-> フェーズ4 = Global Review とは番号体系が異なる) を完了した時点で mcp channel の対応範囲を終える**。
-> PR open + ClusterSummary 報告までで止め、post-check / global review / Review Fix Loop は
-> ローカル (gh channel) セッションで実施すること。対応は第六波 (review-state 再設計、ADR-0027 予定) の
-> 課題とする。silent skip はしない — 以下各フェーズの入口で本節を必ず参照する。
+> **6a までの経緯 (2026-07-23 解消)**: 第五波 5a 時点では、フェーズ3.5 (post-check) / フェーズ4
+> (global review) / フェーズ4.5 (Review Fix Loop) は mcp channel 未対応だった。review_round 導出・
+> fix-loop 判定・post-check 結果判定がいずれも PR コメント本文の hidden marker 読解に依存し、MCP の
+> read 系 tool がコメント本文の hidden marker を sanitize して返す (`github-channel.md` §6) ため
+> 成立しなかった。**ADR-0027 (review-state — PR body 型 state 文書への再設計) 6b でこの壁を解消した**:
+> state の運搬先を「PR コメント」から「PR body の `<!-- op-review-state -->` 単一 JSON 文書」に
+> 再設計し、`op review state pull/push` primitive を介して post-check / global review / Review Fix Loop
+> のすべてが mcp channel でも成立するようになった (search_pull_requests が body を raw で返す実測に
+>基づく)。comment 投稿 (`op-review-meta` 等) は人間向け監査ログとして維持するが、機械判定はしない。
+> 詳細・実装箇所は `cluster-orchestrator-directives.md` フェーズ5/5.5/6/7、
+> `references/global-review-spawn.md` §4-2-pre/§4-2-b、`references/review-fix-loop.md` §4.5-2-pre、
+> `references/post-check-dispatcher.md`、および ADR-0027 本文を参照。Cloud dogfood (実機 E2E) は
+> 未実施の残課題 (別 wave)。
 
 ---
 
 ## フェーズ3.5: Post-check Dispatch (ClusterOrchestrator に移管済み)
-
-> mcp channel では本フェーズは未対応。上記「mcp channel における段階degrade宣言」節を参照。
 
 /**
  * 作成意図: ADR-0016 により post-check dispatch 判定は ClusterOrchestrator 内部
@@ -1282,8 +1291,6 @@ controller は post-check 結果を ClusterSummary の `verdict` フィールド
 ---
 
 ## フェーズ4: Global Review (ClusterOrchestrator に移管済み)
-
-> mcp channel では本フェーズは未対応。「mcp channel における段階degrade宣言」節 (フェーズ3.5 手前) を参照。
 
 /**
  * 作成意図: ADR-0016 により review-expert spawn / marker 組立 / review_round 管理 /
@@ -1302,8 +1309,6 @@ OP_RUN_SESSION_ID は controller がフェーズ2-Orchestrate-pre で bundle-lev
 ---
 
 ## フェーズ4.5: Review Fix / Specialist Decision Loop (ClusterOrchestrator に移管済み)
-
-> mcp channel では本フェーズは未対応。「mcp channel における段階degrade宣言」節 (フェーズ3.5 手前) を参照。
 
 /**
  * 作成意図: ADR-0016 により Review Fix Loop は ClusterOrchestrator 内部

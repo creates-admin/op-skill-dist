@@ -1,7 +1,17 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-06-14
-notes: v1.3 相当 (2026-07-23, ADR-0024/0027 第六波 6a): ①ClusterSummary.verdict union に
+notes: v1.4 相当 (2026-07-23, ADR-0027 第六波 6b): review_round 導出 (フェーズ5) / review_mode 判定
+       (フェーズ5.5) の入力元をコメント走査 (grep / trusted-author 照合) から `<!-- op-review-state -->`
+       文書 (`op review state pull`) の読みへ全面置換。フェーズ6 の marker 投稿後に `op review state push`
+       (approve は `op review publish-approval` が内包 / non-approve は明示呼び出し) を配線。フェーズ7
+       terminal 処理に controller state push を追加。`pr_open_degraded_mcp_channel` verdict の適用条件を
+       「mcp channel だから」から「state 経路自体が例外的に成立しない場合のみ」に縮退 (ADR-0027 6b で
+       post-check / global review / Review Fix Loop が mcp channel でも state 文書経由で成立するため)。
+       comment 投稿 (`op-review-meta` 等) は人間向け監査ログとして維持し、機械判定は行わない
+       (review-markers.md v1→v2 breaking bump と対を成す)。ClusterSummary の公開 field schema・
+       verdict union の値集合は不変のため非破壊 additive、schema_version 据置。
+       v1.3 相当 (2026-07-23, ADR-0024/0027 第六波 6a): ①ClusterSummary.verdict union に
        `pr_open_degraded_mcp_channel` (optional `degrade_note?: string` 併設) を additive 追加し、
        第五波 5a dogfood で観測された「approved を捏造せず非 schema 値で表現していた」実態を
        正式な schema 値に昇格する (ADR-0024 検証実績節)。②フェーズ7 verdict 集約表に degrade 行を追加。
@@ -338,8 +348,9 @@ controller 側 2-E-3 の補完回収に委ねる (silent skip しない)。
 ## フェーズ5: review_round 取得
 
 > 決定7: review round の検出・管理を controller から ClusterOrchestrator に移管する。
-> ClusterOrchestrator は起動時ではなく PR 作成後に既存 PR の op-review-meta marker を読み、
-> review_round を取得する。新規 PR (round 0 = marker なし) は round 1 から開始する。
+> ClusterOrchestrator は起動時ではなく PR 作成後に `<!-- op-review-state -->` 文書 (`op review state pull`)
+> の `attempts[]` を読み、review_round を取得する (ADR-0027 6b、旧 `op-review-meta` コメント走査は廃止)。
+> 新規 PR (round 0 = attempt なし) は round 1 から開始する。
 
 ### 入力
 
@@ -348,9 +359,9 @@ controller 側 2-E-3 の補完回収に委ねる (silent skip しない)。
 ### 実行
 
 `global-review-spawn.md §4-2-pre` のロジックに従い `review_round` を取得する。
-具体的には、trusted author の valid `op-review-meta` コメントのうち
-`reviewer == "review-expert"` かつ `global_review_expert == "review-expert"` な最大 `review_round` を
-`PREV_ROUND` として取得し、`REVIEW_ROUND=$((PREV_ROUND + 1))` とする。
+具体的には `op review state pull --pr $PR_NUMBER` の `attempts[].review_round` の最大値を
+`PREV_ROUND` として取得し、`REVIEW_ROUND=$((PREV_ROUND + 1))` とする (同一 round の重複 entry の
+tie-break = `reviewed_at` 最新採用は CLI / op-core 側に内蔵)。
 
 round 上限管理も同節に従う。
 
@@ -396,14 +407,14 @@ export REVIEW_ROUND
 
 # security post-check が PASS / PASS_WITH_NOTES なら light モードに切り替える
 # legacy skip (audit_result: SKIPPED) の場合は full に倒す
-POST_CHECK_SECURITY_RESULT=$(op pr view "$PR_NUMBER" \
-  --include body-comments-commits \
-  | jq -r '
-      (.comment_details // [])[]
-      | select(.body | contains("<!-- op-security-post-check -->"))
-      | .body
-    ' | grep -oE 'audit_result:[[:space:]]*\S+' | head -1 \
-      | sed -E 's/audit_result:[[:space:]]*//')
+#
+# ADR-0027 6b: 判定元を PR コメント走査 (grep) から state 文書 (`op review state pull`) の
+# post_checks map 読みへ置換。gh channel は fetch 内蔵、mcp channel は fresh search_pull_requests
+# 素材を REVIEW_STATE_INPUT_JSON に用意して --input-json で渡す。
+REVIEW_STATE_JSON=$(op review state pull --pr "$PR_NUMBER" \
+  ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"})
+POST_CHECK_SECURITY_RESULT=$(printf '%s' "$REVIEW_STATE_JSON" \
+  | jq -r '.details.state.post_checks["security-expert"].audit_result // "SKIPPED"')
 
 if [ "$POST_CHECK_SECURITY_RESULT" = "PASS" ] \
    || [ "$POST_CHECK_SECURITY_RESULT" = "PASS_WITH_NOTES" ]; then
@@ -511,15 +522,26 @@ fi
       op-review-meta / op-review-finding を PR コメントに投稿する。
 ```
 
-#### marker 投稿 (controller 役割として ClusterOrchestrator が担う)
+#### marker 投稿 + state push (controller 役割として ClusterOrchestrator が担う、ADR-0027 6b)
 
 `global-review-spawn.md §4-2-b` のロジックに従い、review-expert が返す構造化 `reviews[]` から
 単一の `<!-- op-review-meta -->` + 連番 `<!-- op-review-finding -->` を組み立て、
-Marker Publish Validate を実施してから PR に 1 回投稿する。
+Marker Publish Validate を実施してから PR に 1 回投稿する (人間向け監査ログ)。
 
 `<!-- op-review-meta -->` の schema は `_shared/markers/review-markers.md` が正本。
 ClusterOrchestrator は schema から逸脱しない。`op-review-meta` は review-expert の値のみ反映し、
 ClusterOrchestrator が偽造しない (terminal 時は `<!-- op-review-controller-meta -->` を使う)。
+
+**machine 正本は state 文書 (ADR-0027 6b)**:
+
+- **approve path**: `op review publish-approval` が marker 組立 / marker-lint 自己検証 / コメント投稿 /
+  `pro-reviewed` 付与に加え、**state push (attempt payload) を atomic に内包する**。ClusterOrchestrator が
+  別途 `op review state push` を呼ぶ必要はない (1 コマンドで完結)。
+- **non-approve path** (needs-fix / needs-specialist-review / blocked): comment 投稿 (`op pr comment`) の後、
+  ClusterOrchestrator が明示的に `op review state push --pr <N> --apply-json <attempt payload>
+  --write-id "${OP_RUN_SESSION_ID}-r${REVIEW_ROUND}-attempt" --session "$OP_RUN_SESSION_ID"` を呼ぶ
+  (attempt payload の findings[] は review-expert の `reviews[].findings[]` から summary/file/evidence を
+  含めて転写する。詳細実装は `global-review-spawn.md §4-2-b` を参照、丸コピー禁止)。
 
 ### 返却
 
@@ -585,7 +607,7 @@ export BLOCKER_REASON
 | `review_result = needs-specialist-review` | verdict = `needs_human_decision`。specialist 判断が必要な旨を `blocker_reason` に記録し controller にエスカレーション |
 | `REVIEW_TERMINAL = 1` | terminal 処理 (下記) |
 | `review_result = blocked` | verdict = `needs_human_decision`。自動継続しない |
-| mcp channel で「mcp channel における段階degrade宣言」節の壁 (post-check / global review / Review Fix Loop 未対応) に到達 | verdict = `pr_open_degraded_mcp_channel`。`degrade_note` にどのフェーズで止めたかを 1 文記録しフェーズ8 へ (ADR-0027) |
+| **(6b 移行後、縮退)** state 経路 (`op review state pull/push`) 自体が例外的に成立しない (primitive 不在 / mcp 素材注入不能等) | verdict = `pr_open_degraded_mcp_channel`。`degrade_note` にどのフェーズで止めたかを 1 文記録しフェーズ8 へ (ADR-0027 6b で post-check / global review / Review Fix Loop は mcp channel でも state 文書経由で成立するようになったため、本 verdict は「state 経路も成立しない例外時」のみに縮退した。op-run/SKILL.md の段階degrade宣言節を参照) |
 
 #### Re-apply ループ (needs-fix 時)
 
@@ -640,7 +662,8 @@ export FOLLOWUP_ISSUE_URL=$(printf '%s' "$FOLLOWUP_CREATE_JSON" | jq -r '.detail
 # terminal 処理: 既存 PR close → 同 branch で新規 PR 作成
 CONTROLLED_AT="$(date -Iseconds)"
 
-# step 1: 既存 PR にコメントを投稿 (op-review-controller-meta で記録。op-review-meta は偽造しない)
+# step 1: 既存 PR にコメントを投稿 (op-review-controller-meta で記録、人間向け監査ログ。
+# op-review-meta は偽造しない)
 op pr comment "$PR_NUMBER" --body "$(cat <<NOTE
 <!-- op-review-controller-meta -->
 controller_result: blocked
@@ -656,6 +679,16 @@ controller: cluster-orchestrator
 同一 branch で新規 PR を作成して review_round counter をリセットします。
 NOTE
 )"
+
+# step 1.5: state 文書側 (機械正本) にも controller terminal state を記録する (ADR-0027 6b)。
+# write_id は決定的キーのため再送は NO_OP で安全に冪等吸収される。
+CONTROLLER_PAYLOAD=$(jq -n --arg reason "review_round_over_limit" \
+  --argjson round "$REVIEW_ROUND" --arg at "$CONTROLLED_AT" \
+  '{kind:"controller", value:{controller_result:"blocked", reason:$reason, review_round:$round, controlled_at:$at}}')
+printf '%s' "$CONTROLLER_PAYLOAD" | op review state push --pr "$PR_NUMBER" \
+  --apply-json - --write-id "${OP_RUN_SESSION_ID}-terminal" --session "$OP_RUN_SESSION_ID" \
+  ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"} \
+  || echo "⚠️ PR #${PR_NUMBER} への state push (controller terminal) が失敗しました (コメント監査ログは完了済み)" >&2
 
 # step 2: 既存 PR を close (close 通知コメント → close の 2 step。op pr close は --comment を
 # 持たない — mcp channel で comment+close を単一 call-spec にできないため意図的に分離)
@@ -724,11 +757,13 @@ interface ClusterSummary {
 `pending_label` / `unfiled_followup` は CO が write 操作 (label 付与 / Issue 起票) に失敗した場合のみ
 非 null 値を埋める。成功時は null を出力すること (controller 側 2-E-3 で補完回収される)。
 
-`verdict = "pr_open_degraded_mcp_channel"` は mcp channel (Cloud) で PR open までを完了し、
-post-check / global review / Review Fix Loop 以降 (SKILL.md「mcp channel における段階degrade宣言」節)
-へ進めなかった場合の verdict (ADR-0024 第五波 5a dogfood で実測された非 schema 値
-`pr_open_degraded_mcp_channel` を正式 schema 値へ昇格、ADR-0027)。`degrade_note` にどのフェーズで
-止めたかを 1 文で記録する (例: `"op pr view (mcp) fail-closed のため post-check 以降は未実施"`)。
+`verdict = "pr_open_degraded_mcp_channel"` は ADR-0024 第五波 5a dogfood で実測された非 schema 値を
+正式 schema 値へ昇格したもの (ADR-0027 6a)。**6b (本 wave) で post-check / global review /
+Review Fix Loop が state 文書経由で mcp channel でも成立するようになったため、本 verdict の
+適用条件は縮退した**: 「mcp channel だから」という理由だけでは到達せず、**state 経路自体が
+例外的に成立しない場合** (`op review state pull/push` primitive 不在、mcp 素材注入が構造的に
+不能等) にのみ到達する。`degrade_note` にどのフェーズで・なぜ止めたかを 1 文で記録する
+(例: `"op review state push (mcp) 素材注入不能のため controller terminal push 未実施"`)。
 approve を捏造しないための明示 verdict であり、controller はこれを `needs_human_decision` と
 同様に人間へ提示し、ローカル (gh channel) セッションでの後続実施を案内する。
 
