@@ -10,7 +10,15 @@ effort: max
 <!--
 schema_version: 2
 last_breaking_change: 2026-05-13
-notes: v2 (2026-05-13): bundled /batch と同パターンの「プランモード自動遷移」を導入。
+notes: 2026-07-23 追記 (ADR-0024 Phase 3 第三波) — Cloud (mcp channel) 対応。
+       `github-channel.md (>=2)` を pin 追加、フェーズ0-2 の `gh auth status` に channel guard、
+       既存 Issue 件数取得 (`op issue list`) の mcp fail-closed 注記、フェーズ4-4 dedup 素材の
+       `--input-json` 併用注記 (#27 の auto-report label filter 同梱)、フェーズ7-1 ラベル承認
+       プレビューの mcp skip 注記、フェーズ7 冒頭の call-spec protocol pointer、フェーズ8 の
+       op-run 起動不可 (Cloud) 注記を追加。`op issue edit-body` は元々全置換 semantics のため
+       素材注入不要で verbatim call-spec 化 (fence 自体は無改変)。非破壊 additive のため
+       schema_version 据え置き。
+       v2 (2026-05-13): bundled /batch と同パターンの「プランモード自動遷移」を導入。
        フェーズ -1 で司令官が EnterPlanMode tool を呼び、フェーズ 0-6 を plan mode 下で
        read-only 進行させる。フェーズ 6 の人間承認 gate を ExitPlanMode 呼び出しに置換し、
        「Approve and accept edits」を選べばフェーズ 7-8 が prompt なしで自動進行する。
@@ -157,6 +165,7 @@ plan mode で開始したい場合は以下のいずれかで起動できる (`/
 - `~/.claude/skills/_shared/dedup-policy.md` (>=3) — fingerprint 生成仕様 + 既存 Issue 重複除外手順 (フェーズ 4 で参照)
 - `~/.claude/skills/_shared/model-selection.md` (>=1) — expert spawn 時の model (Opus / Sonnet / Haiku、具体 version は §1) 選択 / task_complexity / 区画 complexity の canonical 正本。op-plan は対話計画フェーズで Opus、enrichment 経由で Issue の task_complexity を推論
 - `~/.claude/skills/_shared/read-economy.md` (>=1) — Read Economy 原則 (R1〜R5) + 「Controller への適用」節。controller は既読 Issue/PR/file の再 Read を避け、Issue/PR body は meta/list で取得し、subagent の completion_report 取り込みを圧縮する (読まなさすぎへの退行は避ける)
+- `~/.claude/skills/_shared/github-channel.md` (>=2) — GitHub I/O channel / call-spec protocol。mcp channel (Cloud) での素材注入手順 (§6) と司令官の call-spec 実行義務 (§3-§4) の正本
 - Claude Code 公式 [Choose a permission mode](https://code.claude.com/docs/en/permission-modes) — フェーズ -1 / フェーズ 6 の EnterPlanMode / ExitPlanMode 仕様、承認オプションと acceptEdits / auto 自動遷移の挙動 (v2 で参照)
 - `workflows/op-survey.js` — 汎用 investigation fan-out workflow (Issue #645)。op-plan フェーズ2.5 の discovery ステップが呼び出す。`--survey` / `--no-survey` フラグで override 可。戻り値 `{ findings[], coverage_notes[] }` を `aggregateSurveyFindings()` で `asset_audit` に射影する。`op_survey.enabled: false` で無効化 (`op-config.yaml` §13)
 
@@ -251,16 +260,24 @@ spawn prompt に `invocation_mode: op_managed` が混入していた場合、
 git rev-parse --is-inside-work-tree 2>/dev/null \
   || { echo "not a git repo — op-plan は既存リポジトリ上で動作します"; exit 1; }
 
-# gh 認証 (Issue 起票に必要)。op CLI は内部で gh CLI を使うため、env precheck として
-# gh auth status は残す (primitive 不在の discovery preflight、不変則9 例外)。
-gh auth status 2>/dev/null \
-  || { echo "gh login が必要。--dry-run で起票なしで進めるか、認証してください"; }
+# gh 認証 (Issue 起票に必要)。mcp channel = call-spec 経路では gh 不要 (github-channel.md)。
+# op CLI は内部で gh CLI を使うため、env precheck として gh auth status は残す
+# (primitive 不在の discovery preflight、不変則9 例外)。
+if [ "${OP_GITHUB_CHANNEL:-gh}" = "mcp" ]; then
+  echo "[channel] mcp — GitHub write は call-spec 経路 (gh 認証不要)"
+else
+  gh auth status 2>/dev/null \
+    || { echo "gh login が必要。--dry-run で起票なしで進めるか、認証してください"; }
+fi
 
 # 既存 open Issue 件数 (fingerprint 重複チェックの参考)。op issue list は --plain で
 # 1 行 1 Issue 出力するため行数で件数を数える (#430、op-run と同 primitive)。
 op issue list --state open --limit 200 --plain \
   | wc -l
 ```
+
+mcp channel では本 fence の `op issue list` が fail-closed するため、件数は司令官が
+`mcp__github__list_issues` で直接取得する (件数用途で marker 非依存のため sanitize 非干渉)。
 
 判定:
 - git リポジトリ未初期化 → op-plan は既存プロジェクトの機能追加・改修が主用途のため、
@@ -726,6 +743,9 @@ case "$DEDUP_DECISION" in
 esac
 ```
 
+mcp channel では素材を `github-channel.md` §6 の手順 (`mcp__github__search_issues`) で取得し
+`--input-json` を併用する (#27 対応により auto-report label を持たない素材 entry は自動 drop される)。
+
 重複判定結果の分岐:
 - `pass` → フェーズ 4-5 へ進む
 - `block` → ユーザーに「既存 Issue #N と重複しています。続行 / 既存 Issue にコメント追加 / キャンセル」を確認させる
@@ -948,6 +968,10 @@ tool 自体は存在するが フェーズ -1 で **ユーザーが承認 prompt
 
 ## フェーズ7: Issue 起票
 
+> mcp channel では本フェーズの `op issue create` / `op issue comment` / `op issue edit-body` は
+> call-spec を emit する — `github-channel.md` §3-§4 の protocol で完遂し、`details.issue_number`
+> 等の後続値は ingest envelope から取る (fence 自体は無改変)。
+
 v2 では本フェーズ以降は **plan mode を抜けた状態** で実行する。フェーズ 6 の ExitPlanMode で
 ユーザーが選んだ承認オプションに応じて permission の挙動が変わる:
 
@@ -992,6 +1016,9 @@ export LABEL_CSV=$(IFS=,; echo "${NEEDED_LABELS[*]}")
 op issue create --title "<title>" --label "$LABEL_CSV" --body-file "$BODY_FILE" \
   --ensure-labels --dry-run
 ```
+
+mcp channel では `op issue create --dry-run` は明示 bail するため本プレビューは skip する
+(ensure-labels の事前確認は gh channel のみの機構。label の実検証は ingest read-back が担う)。
 
 `labels_would_create` をユーザーに提示し、**承認後**に本起票へ進む
 (承認なしに新規ラベルを勝手に増やさない)。
@@ -1229,6 +1256,10 @@ op-run を起動して実装に進みますか?
 > **depends_on を持つ工程群を起票した場合 (Pass 2 で `op-depends-on` marker 配線済み)**:
 > `/op-loop --label <L>` で依存順 (DAG 層順) に監督付きで直列駆動できます (op-run はファイル競合のみで直列化するため
 > 論理工程依存を組めない / ADR-0019)。疎結合のため自動 handoff はせず、人間が `/op-loop` を起動します (ADR-0013 流儀)。
+
+> **mcp channel (Cloud) では op-run は起動不可** (`op claim` が mcp で恒久 refuse、ADR-0024 non-goals)。
+> 選択肢 2 (コマンド表示) または 3 (起票のみで終了) を選び、実装はローカル実行または op-run の
+> Cloud 対応 wave を待つ。
 
 ### 8-2. 起動する場合
 
