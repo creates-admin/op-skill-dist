@@ -96,21 +96,13 @@ for item in items {
 
 ### Vec::contains 多重利用 → HashSet
 
-**Before** (O(n*m)):
+ループ内の `Vec::contains` は毎回線形探索 = O(n*m)。`HashSet` に置き換えて O(n) にする。
+**判断基準は上記 nested loop → HashMap と同じ閾値**を流用する (対象が 100 件以上、
+または総組み合わせ > 10,000。数個なら Vec のままの方が速い)。
 
 ```rust
-let mut seen: Vec<JobId> = Vec::new();
-for job in jobs {
-    if !seen.contains(&job.id) {
-        seen.push(job.id);
-        // 処理
-    }
-}
-```
-
-**After** (O(n)):
-
-```rust
+// Before: seen: Vec<JobId> に対し seen.contains(&job.id) を毎回呼ぶ → O(n²)
+// After:
 let mut seen: HashSet<JobId> = HashSet::new();
 for job in jobs {
     if seen.insert(job.id) {
@@ -145,49 +137,26 @@ for query in queries {
 
 ### repeated regex compile → static LazyLock
 
-**Before**:
+関数 / loop ごとに `Regex::new` を呼ぶと毎回 compile される。`static` + `LazyLock` で 1 回化する。
 
 ```rust
-fn validate(s: &str) -> bool {
-    let re = regex::Regex::new(r"^[A-Z]{3}-\d{6}$").unwrap();
-    re.is_match(s)
-}
-```
-
-**After**:
-
-```rust
+// Before: fn validate(s) { let re = Regex::new(r"...").unwrap(); re.is_match(s) }
+// After:
 use std::sync::LazyLock;
 
 static JOB_ID_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"^[A-Z]{3}-\d{6}$").unwrap());
 
-fn validate(s: &str) -> bool {
-    JOB_ID_RE.is_match(s)
-}
+fn validate(s: &str) -> bool { JOB_ID_RE.is_match(s) }
 ```
 
 > Rust 1.80+ で `std::sync::LazyLock` が安定。それ以前は `once_cell::sync::Lazy` を使う。
 
 ### repeated parse → parse once + typed intermediate
 
-**Before**:
-
-```rust
-for op in operations {
-    let manifest: Manifest = serde_json::from_str(&manifest_json)?;
-    apply(op, &manifest);
-}
-```
-
-**After**:
-
-```rust
-let manifest: Manifest = serde_json::from_str(&manifest_json)?;
-for op in operations {
-    apply(op, &manifest);
-}
-```
+loop 内の `serde_json::from_str` / XML parse は、入力が同じなら結果も同じ。loop 外に括り出す。
+parse 結果を typed のまま持ち回れば serialize → 再 parse の往復も同時に消える
+(詳細は `memory-and-allocation.md` の「9. typed intermediate で serde roundtrip 排除」)。
 
 ### duplicate detection → canonical key + hash
 
@@ -217,21 +186,12 @@ let duplicates: Vec<_> = by_hash.values().filter(|v| v.len() > 1).collect();
 
 ### interval overlap → sweep line
 
-**Before** (O(n²) — 全組み合わせ):
+区間衝突判定を全組み合わせで突き合わせると O(n²)。**端点を event 化して sort し 1 回走査する
+(sweep line) と O(n log n)** になる。面付の配置衝突・スケジュール重なり・bbox 判定で使う。
 
 ```rust
-for a in intervals {
-    for b in intervals {
-        if a != b && a.overlaps(b) {
-            // 衝突
-        }
-    }
-}
-```
-
-**After** (O(n log n) — 端点をソートして sweep):
-
-```rust
+// Before: for a in intervals { for b in intervals { if a.overlaps(b) { ... } } }  // O(n²)
+// After: 端点 sort + active set の走査
 #[derive(Clone, Copy)]
 enum Event { Start(usize), End(usize) }
 
@@ -245,51 +205,28 @@ events.sort_by_key(|(t, _)| *t);
 let mut active: HashSet<usize> = HashSet::new();
 for (_, ev) in events {
     match ev {
-        Event::Start(i) => {
-            for &j in &active {
-                // i と j は overlap
-            }
-            active.insert(i);
-        }
-        Event::End(i) => { active.remove(&i); }
+        // active に残っている全要素が i と overlap している
+        Event::Start(i) => { active.insert(i); }
+        Event::End(i)   => { active.remove(&i); }
     }
 }
 ```
 
 ### graph dependency → topological sort
 
-job 依存関係や IDML story 連結のような DAG は Kahn's algorithm / DFS で線形時間で処理。
+job 依存関係や IDML story 連結のような DAG は **Kahn's algorithm** (in_degree 0 のノードから
+剥がす) で O(n + e)。自前実装せず `petgraph::algo::toposort` を使う選択肢もある。
+`order.len()` が全ノード数に満たなければ **循環あり** — 循環検出を兼ねられる。
 
 ```rust
-// in_degree でレベルごとに処理 (Kahn's)
-let mut in_degree: HashMap<NodeId, usize> = HashMap::new();
-for (_, deps) in &graph {
-    for &d in deps {
-        *in_degree.entry(d).or_insert(0);
-    }
-}
-for (n, _) in &graph {
-    in_degree.entry(*n).or_insert(0);
-}
-for (_, deps) in &graph {
-    for &d in deps {
-        // d は依存先
-        in_degree.entry(d).and_modify(|c| *c += 1);
-    }
-}
-
-let mut ready: VecDeque<NodeId> = in_degree.iter()
-    .filter(|(_, &c)| c == 0)
-    .map(|(n, _)| *n)
-    .collect();
+// in_degree == 0 のノードを ready queue に入れ、剥がしながら order を作る (Kahn's)
+let mut ready: VecDeque<NodeId> = /* in_degree == 0 のノード */;
 let mut order = Vec::new();
 while let Some(n) = ready.pop_front() {
     order.push(n);
-    if let Some(deps) = graph.get(&n) {
-        for &d in deps {
-            let c = in_degree.entry(d).and_modify(|c| *c -= 1).or_insert(0);
-            if *c == 0 { ready.push_back(d); }
-        }
+    for &d in graph.get(&n).into_iter().flatten() {
+        let c = in_degree.entry(d).and_modify(|c| *c -= 1).or_insert(0);
+        if *c == 0 { ready.push_back(d); }
     }
 }
 ```
@@ -377,11 +314,8 @@ After: JOIN 1 回 + group by → O(orders + items)
 
 ### Tauri command で「全件取って frontend で filter」
 
-```text
-Before: backend が全件返す → frontend が全件 filter
-After: filter 条件を invoke 引数で渡し、backend が絞る
-       payload 削減 + frontend computed 削減
-```
+filter 条件を invoke 引数で渡して backend で絞る (payload 削減 + frontend computed 削減)。
+Before/After は `tauri-performance.md` のアンチパターン「全件取って frontend で filter」が正本。
 
 ---
 

@@ -154,14 +154,14 @@ apply_decision:
 
 apply 中も以下を守る:
 
-- ネスト 2 (if / loop / callback)
+- ネスト深さは対象 repo 既定 2 階層以内 (repo の CLAUDE.md 定義があればそれ)
 - 日本語コメント (関数 / クラス / 主要処理に作成意図 / 注意点)
 - 自明なコードに過剰なコメント禁止
 - 検証なしの実装禁止
 - 過剰な抽象レイヤー禁止
-- フラット構造優先 (3 階層以内)
+- フラット構造優先
 
-詳細は `~/.claude/CLAUDE.md`。
+詳細は `skills/_shared/project-profile.md`「対象 repo 規約への準拠 (worker 共通)」節 (正本) および `~/.claude/CLAUDE.md`。
 
 ---
 

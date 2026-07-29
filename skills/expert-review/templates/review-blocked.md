@@ -146,11 +146,6 @@ EOF
 | **修正不能** | 既存設計の制約で修正できない (技術的制約 / 互換性制約) |
 | **別 Issue 化必要** | 修正範囲が PR の scope を完全に超えている (post-check / specialist が「別 Issue 化」と判断) |
 
-> **review-expert の責務外**: 「最終許可 round (= 3) で needs-fix / needs-specialist-review が残った」
-> ケースは review-expert 側で blocked にしてはいけない。round 3 でも通常通り判定を返し、
-> Review Fix Loop 上限超過の自動継続停止は **op-run controller (フェーズ4.5-1)** が処理する。
-> review-expert が勝手に blocked に倒すと、op-run の集約ロジックと重複し state が破綻する。
-
 ## review_round と loop 上限の扱い
 
 review-expert は spawn 時に `review_round` を受け取る。許可される review_round は
@@ -161,8 +156,12 @@ review-expert は spawn 時に `review_round` を受け取る。許可される 
 - round 3: 2 回目の Review Fix Loop 後の **final re-review** (最終許可 round。通常通り判定する)
 - round 4 以上: 規定外 spawn、**即 blocked**
 
-最終許可 round (= 3) で `needs-fix` / `needs-specialist-review` が残った場合に自動継続を停止し
-blocked に倒すのは **op-run (フェーズ4.5-1)** の責務。review-expert 自身は通常通り判定を返す。
+**review-expert が自ら blocked に倒してよいのは `review_round > max_review_fix_rounds + 1` (= 4 以上) の
+規定外 spawn のときだけ**。最終許可 round (= 3) で `needs-fix` / `needs-specialist-review` が残っても
+通常通り判定を返す — Review Fix Loop 上限超過による自動継続停止 (blocked へ倒す) は
+**op-run controller (フェーズ4.5-1)** の責務であり、review-expert が勝手に倒すと op-run の集約ロジックと
+重複して state が破綻する。境界の正本は `references/result-decision.md` の
+「round と blocked の境界 (canonical 表現)」節。
 
 3 回目以降の fix loop は scope creep / 設計問題のサイン。Issue 分割や scope 再定義を人間判断で行う。
 

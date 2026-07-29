@@ -455,6 +455,8 @@ Agent({
     invocation_mode: op_managed
 
     【検証フェーズ — コードを変更しないでください】
+    allow_level_1: true   ← 検証コマンド (lint / typecheck / unit test) の実行を許可する
+                             (scan mode の Level 0 固定契約の例外。ファイル編集は依然禁止)
 
     worktree path: <WT_PATH>
 
@@ -466,7 +468,8 @@ Agent({
     検証コマンドはプロジェクトのスタックに合わせて選択してください。
     不明な場合は CLAUDE.md の規約を確認してください。
 
-    Read-only です。コードを変更しないでください。
+    Read-only (no-write) です。ファイルを変更・commit しないでください。
+    上記 allow_level_1 により検証コマンドの **実行のみ** 許可されています。
     You must not ask interactive questions.
   `
 })

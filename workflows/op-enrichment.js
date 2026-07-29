@@ -927,7 +927,7 @@ function buildGatePrompt(a, designPlanMarkdown) {
     "【Design Plan (designer-expert 出力)】",
     designPlanMarkdown,
     "",
-    `【検証】~/.claude/skills/expert-ux-ui-audit/SKILL.md の gate モード節に従い ${motionInScope ? "7" : "6"} 観点をチェック:`,
+    `【検証】~/.claude/skills/expert-ux-ui-audit/references/criteria.md の Gate 節 (\`<!-- anchor: gate -->\`) の判定基準に従い ${motionInScope ? "7" : "6"} 観点をチェック:`,
     "1. 次の行動が明確になる設計か",
     "2. 必須 UI state が網羅されているか",
     "3. エラー復帰導線が設計されているか",

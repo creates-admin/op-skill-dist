@@ -13,6 +13,9 @@
          「実装順序との対応」「silent fork 防止の整合確認」「happy path 雛形」
          「完了報告フォーマット」は `expert-feature/references/tools.md` 側に残る
          (recipe 本体への pointer のみ持つ)。
+         2026-07-29 (ADR-0030 Wave B1) に expert-debug/SKILL.md 本文の
+         「言語別最小テンプレ」節 (Rust / Vue-TS / Flutter の再現テスト雛形) を
+         「再現テストの言語別最小テンプレ」節として移設した (内容は移設前と同一)。
 注意点: ツールが入っていない環境もあるので、必ず存在確認してから提案する。
        ツール未導入は「失敗」ではなく「検証未実行 (理由)」として扱う。
        pnpm/npm/yarn はコマンド例として概ね等価に読み替え可 (lockfile で判定、下記参照)。
@@ -286,9 +289,72 @@ async def test_async():
 
 ---
 
+## 再現テストの言語別最小テンプレ (apply / fix mode)
+
+apply (fix) モードで **失敗する再現テストを先に書く** ときの最小雛形。
+project-type 別の雛形 (上記 Recipe 1〜6) と重なる部分があるが、こちらは
+「バグ再現 1 本を最短で書く」用途に絞った形。
+
+### Rust (cargo test)
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn handles_empty_input() {
+        assert_eq!(parse(""), Err(ParseError::Empty));
+    }
+
+    #[tokio::test]
+    async fn async_resolves() {
+        assert_eq!(fetch_user(1).await.unwrap().id, 1);
+    }
+}
+```
+
+### Vue / TypeScript (vitest)
+
+```ts
+import { describe, test, expect } from 'vitest';
+
+test('handleSubmit rejects empty input', () => {
+  const result = handleSubmit({ name: '' });
+  expect(result).toEqual({ ok: false, error: 'name required' });
+});
+
+// Tauri invoke 境界の mock
+import { mockIPC } from '@tauri-apps/api/mocks';
+mockIPC((cmd, args) => {
+  if (cmd === 'save_doc') return { ok: true };
+});
+```
+
+### Flutter / Dart (flutter test)
+
+```dart
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('parser rejects empty', () {
+    expect(() => parse(''), throwsArgumentError);
+  });
+
+  testWidgets('disposes controllers', (tester) async {
+    await tester.pumpWidget(const MyForm());
+    await tester.pumpWidget(const SizedBox());  // dispose 強制
+    // controller が dispose されたか副作用で確認
+  });
+}
+```
+
+---
+
 ## ログ挿入テンプレ
 
 すべて `[DEBUG]` プレフィックスで、修正後に grep して全削除する。
+`[DEBUG]` プレフィックス必須 / 修正後に全削除、という**ルール自体は SKILL.md 本文が正本**。
 
 | 言語 | テンプレ |
 |------|---------|

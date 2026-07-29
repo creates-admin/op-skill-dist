@@ -90,43 +90,15 @@ PR の中で見つけた重複なら、その PR の scope 内で安全に統一
 
 ## Token Placement Policy
 
-### feature 固有 token は feature 配下に置く
+置き場は **意味の性質** で決める:
 
-```text
-features/report/report_paths.ts
-features/report/report_status.ts
-features/auth/auth_routes.ts
-```
-
-### 複数 feature で共有される protocol / IPC / event name は shared contract に置く
-
-```text
-shared/ipc/report_commands.ts
-shared/ipc/auth_events.ts
-shared/contracts/notification_events.ts
-```
-
-### domain value は domain 配下に置く
-
-```text
-domain/job/job_status.ts
-domain/document/document_kind.ts
-```
-
-### file system policy / output path policy は path policy layer に置く
-
-```text
-src-tauri/src/path_policy/
-src-tauri/src/path_policy/report_paths.rs
-```
-
-### design token は design system / token layer に置く
-
-```text
-shared/design/tokens.ts
-shared/design/colors.ts
-shared/design/spacing.ts
-```
+| 意味の性質 | 置き場 | 例 |
+|---|---|---|
+| feature 固有 token | feature 配下 | `features/report/report_paths.ts`, `features/auth/auth_routes.ts` |
+| 複数 feature 共有の protocol / IPC / event name | shared contract | `shared/ipc/report_commands.ts`, `shared/contracts/notification_events.ts` |
+| domain value | domain 配下 | `domain/job/job_status.ts`, `domain/document/document_kind.ts` |
+| file system policy / output path policy | path policy layer | `src-tauri/src/path_policy/report_paths.rs` |
+| design token | design system / token layer | `shared/design/tokens.ts`, `shared/design/colors.ts` |
 
 ### 置き場が決められない場合
 

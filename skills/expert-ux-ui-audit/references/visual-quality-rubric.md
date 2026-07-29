@@ -36,7 +36,7 @@ ux-ui-audit-expert は **第三者採点** として gate / post-check で判定
 | 0–69 | redesign | BLOCK (Design Plan 再作成 / 実装やり直し) |
 
 > ux-ui-audit-expert は score を計算しない。designer の自己採点が PR に貼られていれば参考にし、
-> 85 未満なら BLOCK 候補として精査する (post-check-criteria.md の自己点検参照)。
+> 85 未満なら BLOCK 候補として精査する (`criteria.md#post-check` の post-check 時の自己点検参照)。
 
 ---
 

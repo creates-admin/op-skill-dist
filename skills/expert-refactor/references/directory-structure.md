@@ -28,9 +28,11 @@
 
 ## Good Direction
 
-固定テンプレートではなく、**既存構造に沿って最小移動** する。
+固定テンプレートではなく、**既存構造に沿って最小移動** する。どのスタックでも
+「feature 固有 / 複数 feature 共有 (shared) / IO に依存しないロジック (domain) / IO 実体 (infra)」
+という責務分離の考え方は共通で、ディレクトリ名の語彙だけがスタック慣習に合わせて変わる。
 
-### Vue / TS の例
+### Vue / TS の例 (フル)
 
 ```text
 src/
@@ -52,35 +54,17 @@ src/
     document/
 ```
 
-### Tauri / Rust の例
+### Tauri / Rust の例 (差分)
 
-```text
-src-tauri/src/
-  commands/        # Tauri command (薄い、domain / infra に委譲)
-  domain/          # ドメインロジック (IO に依存しない)
-  infra/           # IO / 永続化 / 外部プロセス
-  path_policy/     # path 組み立て・検証
-  services/        # use case (domain + infra を組み合わせる)
-  errors/          # error 型・variant
-```
+`features/` の代わりに `commands/` (薄い Tauri command、domain / infra に委譲)。`domain/` は
+同じ役割。`shared/` 相当は `path_policy/` (path 組み立て・検証) と `services/` (domain + infra
+を組み合わせる use case) に分かれる。IO / 永続化 / 外部プロセスは `infra/`、error 型・variant は
+`errors/` に置く。
 
-### Flutter の例
+### Flutter の例 (差分)
 
-```text
-lib/
-  features/
-    <feature>/
-      data/
-      domain/
-      presentation/
-  shared/
-    widgets/
-    services/
-  core/
-    error/
-    network/
-    storage/
-```
+`features/<feature>/` 配下は `ui/model/api/` の代わりに `data/domain/presentation/`。`shared/`
+は `widgets/` (UI) と `services/` に分かれ、横断基盤 (error / network / storage) は `core/` に置く。
 
 ---
 

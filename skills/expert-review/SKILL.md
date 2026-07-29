@@ -34,6 +34,23 @@ apply expert / specialist expert と物理的に分離し、self-review バイ�
 本 skill は review-expert が判断 / 判定 / 出力の各段階で参照する **方法論の本体** を集約する。
 agent.md は契約に集中し、HOW の詳細は references/ 配下に分割して置く。
 
+### 正本宣言 (ADR-0030 CX-09)
+
+以下は **本 skill (+ その `references/`) が唯一の正本**である。`_shared/expert-spawn.md` の
+該当節は pointer + 要約に降格済みであり、食い違った場合は本 skill が勝つ。
+
+| 概念 | 正本ファイル |
+|---|---|
+| 7 lens の観点本体 / lens 別典型 finding / lens → `recommended_fix_expert` 提案表 | `references/lens-catalog.md` |
+| `review_result` 4 種の判定軸 / **needs-fix 3 条件 AND** / 判定例 | `references/result-decision.md` |
+| 他 expert との責務分離 / handoff 境界 / planned expert の扱い | `references/handoff-boundaries.md` |
+| `op-review-meta` / `op-review-finding` の field 構成と必須性 | `references/finding-schema.md` (marker schema 自体の正本は `_shared/markers/review-markers.md`) |
+
+本 skill が正本でないもの: **op-run の dispatch 判定優先順位 1-8**
+(正本 = `skills/op-run/references/review-fix-loop.md` §4.5-2)、
+spawn prompt テンプレ (正本 = `_shared/expert-spawn.md`)、
+marker 投稿の実行主体 (OP-managed は ClusterOrchestrator = `cluster-orchestrator-directives.md`)。
+
 ---
 
 ## 判断優先順位 (絶対)
@@ -310,5 +327,5 @@ Direct Mode 固有の追加禁止:
 | `skills/_shared/active-expert-registry.md` (>=2) | active / planned 区別、本 expert の no-apply / no-post-check 適格性確認 |
 | `skills/_shared/markers/labels-and-markers.md` (>=2) | 出力 marker (`op-review-meta` / `op-review-finding`) の名前と core semantics |
 | `skills/_shared/common-setup.md` (>=2) | Explore 委譲プロトコル (breadth / クエリ数基準) + フォールバック |
-| `skills/_shared/expert-spawn.md` | scan/apply routing schema / review prompt 規約 / recommended_fix_expert の解決順位 / **Marker Publish Validate 節** |
+| `skills/_shared/expert-spawn.md` (>=16) | scan/apply routing schema / review prompt 規約 / recommended_fix_expert の解決順位 / **Marker Publish Validate 節** |
 | `skills/_shared/read-economy.md` (>=1) | Read Economy 原則 (R1〜R5) |

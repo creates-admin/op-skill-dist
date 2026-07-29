@@ -279,6 +279,41 @@ Manual required: no
 
 ---
 
+## コミットメッセージテンプレ (silent fork 防止の構造的担保)
+
+> 2026-07-29 の分割で SKILL.md 本文から移設。**本節がテンプレ本体の正本**。
+> 「`手本` 節と `再利用した既存資産` 節が空欄なら完了報告不可」という gate と
+> `Fixes` / `Refs` の使い分けの正本は `_shared/commit-convention.md` §3
+> (SKILL.md 本文「コミット時の必須記載 > Fixes / Refs の使い分け」節がその要約 pointer)。
+
+apply 完了時のコミットメッセージは、以下のテンプレに従う。
+**手本ファイルパスと再利用資産を必須記載することで、silent fork が起きなかったことを構造的に証明する**。
+
+```
+feat(<scope>): <要約> (Fixes #N)
+
+<実装の goal を 1〜2 文>
+
+手本:
+- <既存ファイル:LINE>: <参考にした要素 (構成 / 命名 / error 処理 / 状態管理)>
+
+再利用した既存資産:
+- <crate / module / wrapper / component / type>: <用途>
+
+実装内容:
+- <ファイル>: <変更>
+
+テスト:
+- 残: <test_xxx_when_yyy>: happy path 検証
+- 委譲 Issue: #M (異常系 / 境界値テストの追加を test-expert に依頼)
+```
+
+`Fixes` / `Refs` の使い分けの正本は `~/.claude/skills/_shared/commit-convention.md` §3
+(op-merge gate 19 = `op-core/src/merge/verify.rs::eval_issue_link_gates` の prose 転記)。
+既定は `Fixes #N`。
+
+---
+
 ## ツール非導入時の挙動
 
 `expert-debug/references/tools.md` の存在確認ブロックと共通。要点のみ:
@@ -293,7 +328,7 @@ Manual required: no
 実装後、以下の grep で違反がないか確認:
 
 ```bash
-# ネスト深さ確認 (3 階層以上は要警戒、4 階層以上は違反)
+# ネスト深さ確認 (対象 repo 既定 2 階層超は要警戒、repo の CLAUDE.md 定義があればそれに従う)
 # Vue / TS
 grep -rn "                " src/ --include='*.vue' --include='*.ts' | head -10
 

@@ -27,24 +27,17 @@
 ### bundle-full-import — 巨大ライブラリの全 import
 
 ```typescript
-// Bad
+// Bad: tree-shake が効かない全 import
 import _ from 'lodash'
 import * as moment from 'moment'
-import { Icon } from '@iconify/vue'  // 全 icon ロードのケースあり
-```
-
-判定:
-- bundle visualizer で 100 KB 以上 / initial chunk に含まれる
-- tree-shake が効かない named import / default import
-
-改善:
-```typescript
 // Good
 import debounce from 'lodash-es/debounce'
-import dayjs from 'dayjs'  // moment より小さい
-// icon は SVG 個別 or named export
-import IconHome from '~icons/mdi/home'
+import dayjs from 'dayjs'          // moment より小さい
+import IconHome from '~icons/mdi/home'  // icon は個別 SVG / named export
 ```
+
+判定: **bundle visualizer で 100 KB 以上 / initial chunk に含まれることを確認してから**置換する
+(体感で「lodash を消そう」と決めない — 実際は数 KB しか効かないことがある)。
 
 ### bundle-no-lazy-route — route lazy load 不在
 
@@ -123,16 +116,10 @@ const tableConfig = markRaw({ /* reactive 不要 */ })
 
 ### list-no-virtualization — 大量 DOM の virtualization なし
 
-```typescript
-// Bad: 10,000 件の <li> を全 render
-<ul>
-  <li v-for="item in items" :key="item.id">{{ item.name }}</li>
-</ul>
-```
+1 万件規模の `v-for` は DOM 生成だけで固まる。`vue-virtual-scroller` か `useVirtualList`
+(@vueuse/core) で可視範囲だけ render する。
 
-改善:
 ```typescript
-// vue-virtual-scroller / @vueuse/core useVirtualList
 import { useVirtualList } from '@vueuse/core'
 const { list, containerProps, wrapperProps } = useVirtualList(items, { itemHeight: 32 })
 ```
@@ -148,27 +135,11 @@ onMounted(() => {
 // onUnmounted での解除なし → ページ遷移後もリスナー残存
 ```
 
-改善:
-```typescript
-import { onMounted, onUnmounted } from 'vue'
+改善: `onUnmounted` で `removeEventListener` / `clearInterval` を対にする
+(timer id を保持しておく)、または `useEventListener` (@vueuse/core) で自動 cleanup させる。
 
-let timerId: number | undefined
-const handler = () => { /* ... */ }
-
-onMounted(() => {
-  window.addEventListener('resize', handler)
-  timerId = window.setInterval(poll, 1000)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', handler)
-  if (timerId) clearInterval(timerId)
-})
-
-// または useEventListener (vueuse) で自動 cleanup
-import { useEventListener } from '@vueuse/core'
-useEventListener(window, 'resize', handler)
-```
+> listener / timer 解除漏れの詳細パターン (Vue / Tauri unlisten / Flutter dispose の横断) は
+> `memory-and-allocation.md` の「8. listener / watcher 解除」節を正本とする。
 
 ### svg-icon-fullbundle — icon library 全 bundle
 
@@ -228,15 +199,10 @@ diff <(ls -la dist-main/assets) <(ls -la dist/assets)
 
 ## 改善パターン
 
-### route-level code splitting
-
-```typescript
-// vue-router
-const routes = [
-  { path: '/', component: () => import('@/pages/Home.vue') },
-  { path: '/heavy', component: () => import('@/pages/Heavy.vue') },
-]
-```
+> route-level code splitting / async component / shallowRef・markRaw の Before/After は、上記
+> 「検出対象」の `bundle-no-lazy-route` / `bundle-no-async-component` / `deep-watch-overuse`
+> が正本 (ここでは重複させない)。ボタン押下時に初めて重い module を読む形も
+> `const { Editor } = await import('@/components/HeavyEditor.vue')` で同じ — 起点が route か操作かの違い。
 
 ### tree-shakable な dependency 選定
 
@@ -246,26 +212,6 @@ const routes = [
 | lodash | lodash-es / es-toolkit |
 | @iconify/vue 全部 | unplugin-icons (on-demand) |
 | ag-grid 全部 | @tanstack/vue-table + 自前 cell |
-
-### dynamic import で巨大 module を遅延
-
-```typescript
-// ボタン押下時に初めて editor をロード
-async function openEditor() {
-  const { Editor } = await import('@/components/HeavyEditor.vue')
-  // ...
-}
-```
-
-### shallowRef / markRaw で不要 reactive を除く
-
-```typescript
-// 大型 read-only データ
-const config = shallowRef(loadConfig())  // 表面だけ reactive
-
-// reactive 不要な内部 object
-const chartInstance = markRaw(new Chart(...))
-```
 
 ### Web Worker で重い処理を逃がす
 

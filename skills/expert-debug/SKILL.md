@@ -14,13 +14,28 @@ description: debug-expert agent の方法論教科書。Rust / Tauri v2 / Vue 3 
          最適化された不具合探知・最小修正エージェント用 Skill として再設計。
 注意点: agent から skills: で自動プリロードされる前提。直接 /expert-debug
        のような起動は基本想定しない (description で自然に抑制)。
+       2026-07-29 (ADR-0030 決定 1 / Wave B1) に本文を「references を 1 行も
+       読まなくても事故らない層」へ絞り、検出兆候一覧を references/patterns.md、
+       再現テスト雛形を references/tools.md、scan 契約の詳細を
+       references/scan-contract.md へ移設した (捨てた情報はゼロ)。
 -->
 
 ## このドキュメントの位置づけ
 
 debug-expert agent (`~/.claude/agents/debug-expert.md`) が `skills: [expert-debug]` で本ファイルを自動プリロードする。
-agent はここに書かれた **5 ステップの調査メソドロジー**、**3-bucket triage**、**Severity Policy**、**Verification Ladder**、**バグパターン catalog** に従って自走する。
-言語別深掘りは `references/patterns.md`、プロジェクト別検証 recipe は `references/tools.md` (feature-expert とも共有する project-type 別 recipe 辞書の正本、2026-07-23 集約) を必要時に Read する (React / Go は対象外スタックとして通常検出しない)。
+agent はここに書かれた **5 ステップの調査メソドロジー**、**3-bucket triage**、**Severity Policy**、**Repro Lock**、**Verification Ladder** に従って自走する。
+
+本文は「references を 1 行も読まなくても事故らない層」に絞ってある。
+検出兆候の一覧・schema 全文・コード雛形は references が正本なので、下表のタイミングで必ず Read する。
+
+| mode / 状況 | 必読 references |
+|------|----------------|
+| scan (detect) | `references/patterns.md` の「catalog 索引 (top 20)」節 (検出兆候一覧の正本) |
+| scan で patrol_sample / candidate 指定 / bulk_group 付与 | `references/scan-contract.md` (§1 patrol_sample 優先順位 / §2 investigation_candidates schema / §3 bulk_group と分割ルール) |
+| apply (fix) — 再現テスト作成 | `references/tools.md` の「再現テストの言語別最小テンプレ」節 |
+| Level 1 以上の検証を回すとき | `references/tools.md` の project-type 別 recipe (feature-expert とも共有する正本、2026-07-23 集約) |
+
+React / Go は対象外スタックとして通常検出しない。
 
 ---
 
@@ -55,7 +70,10 @@ scan モードの動作:
 
 ## Severity Policy (報告閾値)
 
-報告対象は **Critical / High のみ**。判定基準を以下に固定し、エージェントの主観で揺らがないようにする。
+報告対象は **Critical / High のみ**。報告ルールの共通骨格 (静的証拠必須 / 可能性表現の原則禁止 /
+0 件表現 / 規約準拠は指摘しない) は `~/.claude/skills/_shared/severity-rubric.md` の
+「scan 報告ルール (共通)」節が正本 — **scan (detect) に入る前に Read する**。
+以下は debug-expert 固有の判定基準で、エージェントの主観で揺らがないようにするためのもの。
 
 ### Critical
 
@@ -103,13 +121,18 @@ scan モードの動作:
 
 ### 3. ログ挿入 (フォールバック)
 
-テストで届かない領域 (UI 連携・状態依存・タイミング系・OS 差分) のみ:
+テストで届かない領域 (UI 連携・状態依存・タイミング系・OS 差分) のみ。
+
+**挿す位置は「立てた仮説を 1 回の再現で切り分けられる最小の点」で決める** (全経路にばらまかない。
+どこに出たかで仮説が絞れないログは、読む手間だけ増やして判断を鈍らせる)。
+判断材料として、切り分け点になりやすいのは以下:
 
 - データ入口で型・値・長さ
 - 変換点で中間値 (特に invoke 境界の serde 前後)
 - 条件分岐でどのパスを通ったか
 - データ出口で出力値
-- 必ず `[DEBUG]` プレフィックス → **修正後に全削除**
+
+挿す位置に関わらず、**必ず `[DEBUG]` プレフィックスを付け、修正後に全削除する** (これは判断ではなく固定契約)。
 
 ### 4. 最小修正
 
@@ -195,22 +218,14 @@ scan = **detect mode**、apply = **fix mode** として動作する。命名は 
 
 #### scope mode (3 種)
 
-入力に応じて以下の scope mode で動作する。
+3 モード (`explicit_paths` / `changed_files` / `patrol_sample`) の定義・優先順位・controller の注入義務・
+`scope_origin` 付与・patrol_sample での Medium / Low 報告禁止は
+`~/.claude/skills/_shared/expert-spawn.md` の「scan scope mode 契約 (3 モード)」節が正本 —
+**探索対象を選び始める前に Read する**。以下は debug-expert 固有の差分のみ。
 
-1. **explicit_paths** — 司令官が指定したファイル・ディレクトリのみ。最優先
-2. **changed_files** — git diff / PR diff / staged files を起点。変更ファイルと直接の呼び出し境界だけ追う
-3. **patrol_sample** — 警備員的見回り (op-patrol からの呼び出し含む)。指定箇所も変更箇所もない場合に使う。完全ランダムではなく **risk-weighted sampling** とする
-
-patrol_sample の優先順位:
-1. Tauri invoke 境界
-2. file I/O / path / fs 操作
-3. async spawn / await 境界
-4. error handling / catch / Result 変換
-5. 最近変更された high-churn file
-6. capability / permission / config 周辺
-7. Flutter lifecycle / dispose 周辺
-
-patrol_sample 由来の finding には `scope_origin: "patrol_sample"` を付ける。Medium / Low は報告しない。昇格できないものは investigation_candidates に留める (出力するかは下記の JSON-only 契約に従う)。
+- **patrol_sample で動く場合は、対象を選ぶ前に `references/scan-contract.md` §1 を必ず Read する**
+  (debug の risk-weighted sampling 優先順位 7 項目。Tauri invoke 境界 → file I/O → async 境界 … の順)
+- 昇格できない候補は investigation_candidates に留める (出力するかは下記の JSON-only 契約に従う)
 
 #### 内部 triage: 3-bucket 分類
 
@@ -220,35 +235,13 @@ patrol_sample 由来の finding には `scope_origin: "patrol_sample"` を付け
 
 - 該当行のコードだけで重大さが確定する
 - 静的証拠 (コード引用・呼出経路) だけで断定的に評価でき、そのまま報告の裏付けに使える
-- → `_shared/expert-spawn.md` の **scan 共通スキーマ JSON 配列** にそのまま出力する (これが op-scan が Issue 化する対象)
+- → `_shared/expert-spawn.md` の **scan 共通スキーマ**に従い `{"findings": [...]}` envelope に入れて出力する (これが op-scan が Issue 化する対象)
 
 ##### 2. investigation_candidates — 静的では断定できないが、実行・テスト・ログで確認すべき有力候補
 
 - 該当行のパターンは怪しいが、症状の重大さが入力データや実行条件に依存する
 - **既定では出力しない** (op-scan の JSON-only 契約を破壊しないため)
-- op-scan / op-patrol が `allow_text_tail: true` または `candidate_report: true` を明示した場合のみ、JSON 配列の **後段ではなく** 指定された別セクションに以下のフォーマットで列挙する。
-  指定がない場合は完全に捨てる (confirmed_findings がなければ `[]` のみ返す):
-
-```yaml
-investigation_candidates:
-  - id: candidate-001
-    confidence: high | medium  # high のみ報告、low は捨てる
-    stack: Rust | Tauri | Vue | TypeScript | Flutter
-    category:                  # bug-async-leak 等
-    file: path/to/file.ext
-    lines: "L42-L58"
-    evidence: |                # 該当コード抜粋
-      <該当コード 5-10 行>
-    suspected_failure_scenario: |  # 想定される失敗シナリオ
-      <どういう入力・条件で何が起きるか>
-    required_repro:                # 昇格に必要な再現条件
-      - <データ条件>
-      - <環境条件>
-    suggested_probe:               # 確認方法 (テスト or ログ or bisect)
-      - <test を 1 本書いて XXX を確認>
-    promote_to_confirmed_when: |   # この条件を満たせば confirmed に昇格できる
-      <条件を 1〜2 文>
-```
+- **`allow_text_tail: true` / `candidate_report: true` を明示された時だけ `references/scan-contract.md` §2 の YAML schema を Read して従う。** 指定がなければ完全に捨てる (JSON-only 契約優先。confirmed_findings がなければ `{"findings": []}` のみ返す)
 
 ##### 3. ignored_noise — 報告しない
 
@@ -259,7 +252,7 @@ investigation_candidates:
 
 → **完全に捨てる**。出力に含めない。報告しない。
 
-#### scan 出力 (JSON 配列) — 共通スキーマ
+#### scan 出力 (`{"findings": [...]}` envelope) — 共通スキーマ
 
 `_shared/expert-spawn.md` の **scan 共通スキーマ** に従う。`confirmed_findings` のみがここに入る。
 
@@ -278,21 +271,9 @@ canonical 必須フィールド (`_shared/expert-spawn.md` v14 正本):
 - `post_check_expert` — security domain が絡む場合は `security-expert`、それ以外は `null`
 - `blocking` / `blocking_reason` — 新規変更が既存 debt を悪化させる場合 `true`
 
-debug-expert 固有の bulk_group:
+**bulk_group を付与する前に `references/scan-contract.md` §3 を必ず Read する** (debug 固有 bulk_group と 1 Issue 最大 10 件の分割ルールはそちらが正本)。
 
-| bulk_group | 対象 |
-|-----------|------|
-| `bug-empty-catch` | 例外握りつぶし (`Result` 無視 / `catch (e) {}`) が散在 |
-| `bug-missing-await` | async/await 漏れ・JoinHandle 捨て・spawn 後 await なし |
-| `bug-null-unguarded` | null/undefined / Option 無防備アクセスの集中 |
-| `bug-tauri-invoke-mismatch` | invoke payload と Rust command struct の不一致 |
-| `bug-flutter-dispose-leak` | controller / subscription の dispose 漏れ集中 |
-| `bug-rust-fs-error-swallow` | std::fs / tokio::fs のエラー無視 |
-
-5 件以上の同 bulk_group は op-scan がバッチ Issue 化。
-ただし **1 Issue あたり最大 10 件**まで。10 件を超える場合はディレクトリ単位または stack 単位で分割する (apply エージェントの一撃巨大修正を防ぐ)。
-
-検出 0 件なら `[]`。investigation_candidates だけある場合も JSON は `[]` を返し、text tail への列挙は op-scan が `allow_text_tail: true` / `candidate_report: true` を明示した場合のみ行う (JSON-only 契約優先)。
+検出 0 件なら `{"findings": []}`。investigation_candidates だけある場合も JSON は `{"findings": []}` を返し、text tail への列挙は op-scan が `allow_text_tail: true` / `candidate_report: true` を明示した場合のみ行う (JSON-only 契約優先)。
 
 ### apply (fix) モード — worktree 隔離で実装
 
@@ -317,10 +298,12 @@ debug-expert 固有の bulk_group:
 3. **5 ステップメソドロジー** に従って自走 (OP-managed Mode では司令官と対話しない。
    不足情報は質問せず `assumptions[]` / `needs_human_decision` / `blocked_actions[]` として完了報告に返す)
 4. 失敗する再現テストを書く → 最小修正 → 再現テスト pass を確認
+   - **再現テストを書く前に `references/tools.md` の「再現テストの言語別最小テンプレ」節を必ず Read する。**
+     ログを挿す場合は `[DEBUG]` プレフィックス必須、修正後に `grep '\[DEBUG\]'` で 0 件を確認して全削除する
 5. 1〜2 ファイルごとに Verification Ladder Level 1〜2 を回す
 6. 修正完了後に Level 3 (build) を 1 回回す
 7. デバッグログを削除 (`grep '\[DEBUG\]'` で 0 件確認)、リグレッション確認
-8. コミット (日本語、`Fixes #N` 列挙、修正理由・Repro Lock 要点・残したテスト判定根拠を message に)
+8. コミット (日本語、`Fixes #N` 列挙、修正理由・Repro Lock 要点・残したテスト判定根拠を message に。形式と Fixes/Refs 使い分けの正本は `_shared/commit-convention.md`)
 9. push はしない。commit までで停止し、push / PR open は司令官 / op-run が Post-run conflict check 後に実施する
 10. 完了報告: 修正ファイル一覧 / 検証結果 (Level 別) / 残したテスト一覧 / 残存リスク / 実行できなかった検証
 
@@ -341,9 +324,12 @@ debug-expert 固有の bulk_group:
 | 5 | E2E / 実機 | — | — | `flutter integration_test` | Tauri WebDriver / Windows 実機 / InDesign COM / network drive |
 
 運用ルール:
-- **detect mode は Level 0 のみ**。Read / Grep / Glob に限定し、ビルド・テスト・型チェックは実行しない
-- 例外的に Level 1 を許可する場合は、op-scan 入力に `allow_level_1: true` がある場合のみ
-- fix mode は変更範囲に応じて Level 1〜3 を実行
+- **detect mode は Level 0 のみ** (許可・禁止操作の一覧と `allow_level_1: true` 例外の正本は
+  `~/.claude/skills/_shared/severity-rubric.md`「scan 報告ルール (共通)」§scan 実行レベル。
+  **scan で最初のコマンドを打つ前に Read する**)
+- fix mode は Level 1〜3 の範囲で実行する。どこまで上げるかは **「その変更が壊し得る境界」** で判断する
+  (型・シグネチャに触れた → Level 1 まで / ロジック・分岐・状態遷移に触れた → Level 2 まで /
+  依存・ビルド構成・IPC 境界・公開 API に触れた → Level 3 まで)。迷ったら上の Level に倒す
 - **Level 4 (Tauri 統合)** は原則 dedicated Issue 化。司令官が `allow_level_4: true` を渡した場合のみ fix mode で実施可
 - **Level 5 (E2E / 実機)** は常に dedicated Issue に切り出す。fix mode では実施しない
 - 実行できなかった Level は完了報告に「未実行: Level X (理由)」と明記する
@@ -366,120 +352,20 @@ command -v flutter         # Flutter SDK
 
 ---
 
-## バグパターン catalog (top 20 — active stack 集中版)
+## バグパターン catalog (探知優先度 1 の 4 領域)
 
-scan モード (detect) ではこの表で当たりを付け、apply モード (fix) でも修正方針の参考にする。
-**Critical/High のみ報告対象**。Medium/Low は ignored_noise に分類。
+報告閾値は Severity Policy 節 (Critical/High のみ) に従う。本文にあるのは領域と代表例だけ。
 
-### Tauri v2 境界 (最頻出 / 探知優先度 1)
+| 領域 (すべて探知優先度 1) | 代表パターン 2 件 |
+|---|---|
+| Tauri v2 境界 (最頻出) | invoke payload と Rust command 引数不一致 / capability・path scope 漏れ |
+| Rust | `unwrap()` / `expect()` panic / tokio::spawn の JoinHandle 捨て |
+| Vue 3 + TypeScript | reactivity 喪失 (`state = newObj`) / invoke の catch 漏れ |
+| Flutter / Dart | controller・subscription の dispose 漏れ / async gap 後の context・mounted 利用 |
 
-| # | パターン | 検出兆候 |
-|---|---------|---------|
-| 1 | invoke payload と Rust command 引数不一致 | TS 側の `invoke('cmd', { foo })` と Rust の `#[tauri::command] fn cmd(bar: ...)` で名前/型が乖離 |
-| 2 | command 戻り値の Result serialize 失敗 | `Result<T, E>` の `E` が Serialize 未実装 / 詳細不明エラーが UI に届く |
-| 3 | capability / permission 漏れ | dev では動くが build 後だけ失敗 (`capabilities/*.json` 未記載) |
-| 4 | path scope 漏れ | dialog の戻りを使った fs アクセスが本番だけ deny される |
-| 5 | WebView 側 invoke エラー握りつぶし | `invoke().catch(...)` 不在で UI が無反応 |
-
-### Rust (探知優先度 1)
-
-| # | パターン | 検出兆候 |
-|---|---------|---------|
-| 6 | `unwrap()` / `expect()` panic | None / Err でプロセス終了 (Tauri 経由で UI クラッシュ) |
-| 7 | tokio::spawn の JoinHandle 捨て | spawn 後に handle 無視で処理結果 / panic が消える |
-| 8 | std::fs と async runtime 混在 | async 関数内で `std::fs::*` 直呼び → ランタイム block |
-| 9 | Result / `?` 経路の panic 混入 | エラー伝播パスに `unwrap` / `panic!` が紛れる |
-| 10 | path canonicalize 漏れ | allowed root 外への書き込みを許す TOCTOU / traversal |
-
-### Vue 3 + TypeScript (探知優先度 1)
-
-| # | パターン | 検出兆候 |
-|---|---------|---------|
-| 11 | reactivity 喪失 | `state = newObj` で reactive 参照切れ / `.value` 付け忘れ |
-| 12 | invoke の catch 漏れ | `await invoke(...)` を try/catch なしで呼び、ユーザーに silent 失敗 |
-| 13 | loading / error / success state 競合 | 画面遷移後に古い async result を反映 / 二重 setState 風挙動 |
-| 14 | Pinia store と component local state の二重管理 | 同じデータを両方に持ち、片方だけ更新 |
-| 15 | Promise の非待機 / forEach 内 await 効かない | 並列実行の意図のない for await を `forEach` で書く |
-
-### Flutter / Dart (探知優先度 1)
-
-| # | パターン | 検出兆候 |
-|---|---------|---------|
-| 16 | controller / subscription の dispose 漏れ | TextEditingController / FocusNode / AnimationController / StreamSubscription の close 漏れ |
-| 17 | async gap 後の context / mounted 利用 | `await` 後の `BuildContext` 使用、`if (mounted)` ガード不在 |
-| 18 | FutureBuilder の future 再生成 | build 内で `Future.then(...)` を直接渡し毎フレーム再実行 |
-| 19 | initState で async 直扱い | `initState` で `await` できず未待機の future が走る |
-| 20 | platform channel / file picker の error 未処理 | desktop / mobile の path 差・permission 例外を catch していない |
-
-各パターンの言語別具体例・追加パターン (低頻度) は `references/patterns.md` を参照 (React / Go は対象外スタックのため扱わない)。
-
----
-
-## 言語別最小テンプレ
-
-### Rust (cargo test)
-
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn handles_empty_input() {
-        assert_eq!(parse(""), Err(ParseError::Empty));
-    }
-
-    #[tokio::test]
-    async fn async_resolves() {
-        assert_eq!(fetch_user(1).await.unwrap().id, 1);
-    }
-}
-```
-
-### Vue / TypeScript (vitest)
-
-```ts
-import { describe, test, expect } from 'vitest';
-
-test('handleSubmit rejects empty input', () => {
-  const result = handleSubmit({ name: '' });
-  expect(result).toEqual({ ok: false, error: 'name required' });
-});
-
-// Tauri invoke 境界の mock
-import { mockIPC } from '@tauri-apps/api/mocks';
-mockIPC((cmd, args) => {
-  if (cmd === 'save_doc') return { ok: true };
-});
-```
-
-### Flutter / Dart (flutter test)
-
-```dart
-import 'package:flutter_test/flutter_test.dart';
-
-void main() {
-  test('parser rejects empty', () {
-    expect(() => parse(''), throwsArgumentError);
-  });
-
-  testWidgets('disposes controllers', (tester) async {
-    await tester.pumpWidget(const MyForm());
-    await tester.pumpWidget(const SizedBox());  // dispose 強制
-    // controller が dispose されたか副作用で確認
-  });
-}
-```
-
-#### ログ挿入テンプレ (修正後必ず削除)
-
-| 言語 | テンプレ |
-|------|---------|
-| Rust | `eprintln!("[DEBUG] func: input={:?}", input);` |
-| TS/Vue | `console.log('[DEBUG] funcName:', { input, type: typeof input });` |
-| Dart | `debugPrint('[DEBUG] func: input=$input type=${input.runtimeType}');` |
-
-詳細・他言語は `references/tools.md` を参照。
+**scan (detect) では、当たりを付ける前に `references/patterns.md` の「catalog 索引 (top 20)」節を必ず Read する。**
+本文にあるのは探知優先度 1 の 4 領域と代表例だけで、検出兆候の一覧はそちらが正本
+(言語別具体例・低頻度パターンも同ファイルの各節を参照。React / Go は対象外スタックのため扱わない)。
 
 ---
 
@@ -508,17 +394,24 @@ skip 条件なし。apply 後は必ず invoke する。
 
 ## CLAUDE.md 規約との整合
 
-- **ネスト 2 階層以内**: 修正で深いネストを増やさない、ガード節優先
-- **日本語コメント**: 修正理由を 1 行コメント
-- **最小限の修正**: バグ修正とリファクタは別 PR
-- **検証なしの実装は出荷しない**: Verification Ladder で実行不能だった Level は明記
+共通骨格 (優先順位 3 段 / 既定値 6 項目 / audit・refute 側での扱い) の正本は
+`~/.claude/skills/_shared/project-profile.md` の「対象 repo 規約への準拠 (worker 共通)」節 —
+**apply で最初のファイルを編集する前に Read する** (scan では「規約準拠を指摘しない」判断に使う)。
+
+debug-expert 固有の適用差分のみ:
+
+- **ネスト**: 修正で深いネストを増やさない (ガード節優先)
+- **コメント**: 修正理由を 1 行
+- **変更粒度**: バグ修正とリファクタは別 PR
+- **検証**: Verification Ladder で実行不能だった Level を完了報告に明記
 
 ---
 
 ## 深掘り参照
 
-- 言語別パターン全集 (active stack 中心): `~/.claude/skills/expert-debug/references/patterns.md`
-- プロジェクト別検証 recipe / ツール辞典 (feature-expert とも共有する正本): `~/.claude/skills/expert-debug/references/tools.md`
+- バグパターン catalog (top 20) の索引 + 言語別パターン全集 (active stack 中心): `~/.claude/skills/expert-debug/references/patterns.md`
+- プロジェクト別検証 recipe / 再現テストの言語別最小テンプレ / ログ挿入テンプレ / ツール辞典 (feature-expert とも共有する正本): `~/.claude/skills/expert-debug/references/tools.md`
+- scan 契約の詳細 (patrol_sample 優先順位 / investigation_candidates schema / bulk_group と分割ルール): `~/.claude/skills/expert-debug/references/scan-contract.md`
 - ユニバーサルデザイン (UI 起因バグ): `~/.claude/skills/_shared/universal-design.md`
 
 ---

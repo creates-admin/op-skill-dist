@@ -186,8 +186,8 @@ scout は controller に以下の JSON を返す。controller への要約テキ
 | `result` | 常時必須 | 4 値のいずれか |
 | `filed_issue_url` | result = filed 時必須 | 起票した Issue の URL |
 | `finding_summary` | 常時推奨 | finding の 1〜2 文要約 |
-| `evidence` | not_confirmed 時必須 | 静的根拠または根拠が得られなかった旨 |
-| `evidence_grade` | not_confirmed 時必須 | `direct` / `inferred` / `requires_runtime` |
+| `evidence` | 常時推奨 (not_confirmed 時必須。filed 時も Issue body 組立に転記する) | 静的根拠または根拠が得られなかった旨 |
+| `evidence_grade` | 常時推奨 (not_confirmed 時必須。filed 時も Issue body 組立に転記する) | `direct` / `inferred` / `requires_runtime` |
 | `existing_issue` | result = duplicate 時必須 | 既存 Issue の URL |
 | `needs_human_decision` | result = needs_human_decision 時必須 | `_shared/expert-spawn.md` 正規スキーマに従う |
 | `assumptions` | 推定がある場合 | 確認できなかった項目の推定内容 |

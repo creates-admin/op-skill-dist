@@ -98,7 +98,7 @@ ux-ui:contrast-fail            # 本文 4.5:1 / 非テキスト 3:1 を割る co
 
 ## 出力契約 (canonical schema 補足)
 
-`~/.claude/skills/_shared/expert-spawn.md` の canonical schema に従う JSON 配列。
+`~/.claude/skills/_shared/expert-spawn.md` の canonical schema に従う finding を `{"findings": [...]}` envelope に入れた JSON object。
 `domain` フィールドには **`ux-ui`** を入れる (旧 `ux` / `ui` は廃止)。
 
 canonical 必須フィールドの一覧・詳細は `references/agent-instructions.md` の「出力契約」節を正本とする

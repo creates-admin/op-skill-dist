@@ -80,6 +80,7 @@ designer-expert は判断順序・思想・実務原則を 2 つのファイル�
 | `references/enterprise-ui-density.md` | 業務 UI の密度設計 (view 別) | architect の layout 判断 |
 | `references/visual-hierarchy-patterns.md` | 視覚階層パターン (10 観点) | scan / architect / run |
 | `references/visual-quality-rubric.md` | 100 点 rubric | architect の目標宣言 / run 後の自己採点 |
+| `references/visual-craft-tiers.md` | craft (color/typography/spacing & grid/hierarchy) の token 駆動生成方法論 + AI 到達 Tier + floor の Static Hard blockers (ADR-0013 決定I 正本) | craft を意図的に詰める画面の architect (`### Craft Strategy` 節作成時) |
 | `references/scan-finding-policy.md` | scan / patrol の起票基準 | scan / patrol |
 | `references/reference-map.md` | 外部参考の正規リンク集 | キャリブレーション時 |
 | `references/data-viz-patterns.md` | chart 選定 / data honesty / dashboard 状態 | chart 使用画面の architect / run |
@@ -174,12 +175,17 @@ scan で見るのは「画面がきれいか」ではなく **「design system �
 
 ### 起票基準
 
-`expert-design/references/scan-finding-policy.md` を必ず読み、Critical / High のみ起票する。
+報告ルールの共通骨格 (Critical / High only / 静的証拠必須 / 可能性表現の原則禁止 / 0 件表現) は
+`~/.claude/skills/_shared/severity-rubric.md`「scan 報告ルール (共通)」節が正本 —
+**scan / patrol に入る前に Read する**。design 固有の起票範囲は
+`expert-design/references/scan-finding-policy.md` を必ず読んで確認する。
 主観・好み批評は禁止。ux-ui-audit-expert の領域 (使いやすさ・必須 state・a11y) には踏み込まない。
 
 ### scan モードの出力契約
 
-`~/.claude/skills/_shared/expert-spawn.md` の **canonical schema** に従う JSON 配列。
+`~/.claude/skills/_shared/expert-spawn.md` の **canonical schema** に従う finding を envelope に入れて返す。
+envelope の形状 (`{"findings": [...]}` / 0 件は `{"findings": []}` / JSON-only の禁止行) は
+同ファイルの「scan 出力 envelope 契約」節が正本 — **JSON を組み立てる前に Read する**。
 `domain` フィールドには **`design`** を入れる。
 
 すべての検出に以下を含める:
@@ -327,7 +333,7 @@ PASS / PASS_WITH_NOTES / BLOCK 判定を受ける。BLOCK が返ったら Design
 7. 1〜2 ファイルごとにビルド検証 + ブラウザ目視確認 (可能な範囲で)
 8. CLAUDE.md 規約遵守 (ネスト 2、日本語コメント、最小限の修正)
 9. 自己採点 (`expert-design/references/visual-quality-rubric.md`) で実 score を確認、85 未満なら再修正
-10. コミットまで実施 (日本語、`Fixes #N` 列挙、Design Plan の `Components to Use` / `Tokens to Use` を message に転記)。**push はしない** (push / PR open は司令官 / op-run 側で Post-run conflict check 後に実施)
+10. コミットまで実施 (日本語、`Fixes #N` 列挙、Design Plan の `Components to Use` / `Tokens to Use` を message に転記。形式と Fixes/Refs 使い分けの正本は `_shared/commit-convention.md`)。**push はしない** (push / PR open は司令官 / op-run 側で Post-run conflict check 後に実施)
 
 ### 再修正ループの上限と出口 (Run Mode protocol)
 

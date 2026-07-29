@@ -12,7 +12,10 @@ description: feature-expert agent の方法論教科書。既存資産再利用�
          最大の失敗モード = 既存資産を見落として重複実装する (silent fork) を主敵とし、
          「設計の自由」は commander / 人間に閉じ込め、agent には「実装の自由」のみを渡す契約に揃える。
 注意点: debug-expert / test-expert と同様、agent.md の skills フィールドで自動プリロードされる。
-       references/*.md は必要時のみ Read。
+       ADR-0030 決定1 に従い、本文は「references を 1 行も読まなくても事故らない層」
+       (mode 判定 / 実行権限 / 不変則 / 判断の核 / 手順骨格 / 必須フィールド名 / 誘導) に絞り、
+       schema 全文・catalog 兆候列・patrol 固有制約・コミットテンプレ本体は references/*.md へ置く。
+       references/*.md は mode / 状況に応じて Read (冒頭「mode 別の必読 references」表が索引)。
 -->
 
 > **用語注記 (本ファイル全体に適用)**: `needs_human_decision` の旧名 `needs_human_judgment` は
@@ -21,19 +24,19 @@ description: feature-expert agent の方法論教科書。既存資産再利用�
 ## このドキュメントの位置づけ
 
 feature-expert agent (`~/.claude/agents/feature-expert.md`) が `skills: [expert-feature]` で本ファイルを自動プリロードする。
-agent は以下に従って自走する:
+agent は本文の **中心メッセージ** / **実行権限** / **5 ステップメソドロジー** / **自由の 2 軸** /
+**severity / confidence の判定** / **実装順序の原則** / **良い実装の定義と apply チェックリスト** に従って自走する。
 
-- **中心メッセージ** (資産再利用ファースト、設計せず模倣する)
-- **実行権限** (scan / apply の許可・禁止操作)
-- **5 ステップメソドロジー**
-- **Issue 入力の 2 系統** (scan 由来 / 人間由来)
-- **自由の 2 軸** (設計 = commander、実装 = agent)
-- **silent fork / implementation gap catalog** (top 7 bulk_group)
-- **既存資産探索チェックリスト** (スタック別)
-- **severity / confidence の判定**
-- **scan の責務: 実装計画つき Issue を出す**
-- **実装順序の原則** (型 → サーバ → 通信 → UI)
-- **良い実装の定義と apply チェックリスト** (過剰実装防止を統合)
+**本文は「references を 1 行も読まなくても事故らない層」に絞ってある** (ADR-0030 決定1)。
+schema 全文・catalog 兆候列・patrol 固有制約・コミットテンプレ本体は references が正本。
+
+mode 別の必読 references は以下:
+
+| mode | 必読 references |
+|------|----------------|
+| scan | `references/scan-contract.md` (出力 schema 全体 §0-§4) / `references/silent-fork-patterns.md` (catalog 索引 + enum 対応表) / `references/asset-discovery.md` (資産探索に入る前。既存 helper 全数 sweep の grep cookbook) |
+| scan (op-patrol 経由) | 上記 + `references/scan-contract.md` §5 (patrol 経由の追加制約) |
+| apply | `references/asset-discovery.md` (既存資産探索) / `references/tools.md` (実装順序対応・happy path 雛形・コミットテンプレ) |
 
 ---
 
@@ -82,23 +85,11 @@ op-scan / op-run から呼ばれた時、agent は以下の契約に従う。
 
 scan / detect mode は **Level 0** に固定する。debug-expert / test-expert と同じ契約。
 
-#### 許可
+許可・禁止操作の一覧と `allow_level_1: true` 例外の正本は
+`~/.claude/skills/_shared/severity-rubric.md`「scan 報告ルール (共通)」§scan 実行レベル —
+**scan で最初のコマンドを打つ前に Read する**。feature-expert 固有の追加許可:
 
-- ソースコード / 既存仕様書 / 型定義 / コメントの **読み取り** (Read / Grep / Glob)
-- `git log` / `git blame` / `git diff` / `git ls-files` による履歴・追加意図の確認
-- `gh issue list` / `gh issue view` / `gh search` などの **read-only** GitHub 操作
 - Issue 化に必要な evidence / recommendation の作成 (内部メモのみ。実際の起票は op-scan / op-patrol が行う)
-
-#### 禁止
-
-- ファイル編集
-- ビルド・テスト・型チェック・lint 実行
-- 依存追加・削除 / snapshot 生成 / migration 実行 / 設定ファイル変更
-- `gh issue create` / `edit` / `comment` などの **write** GitHub 操作
-
-#### 例外
-
-- `allow_level_1: true` が op-scan 入力で明示された場合のみ Level 1 (lint / typecheck) を実行できる。
 
 ### apply モードで許可
 
@@ -140,38 +131,16 @@ happy path 以外のテスト (異常系 / 境界値 / 回帰 / fixture 整理) 
 
 ## scan 出力契約 (JSON-only)
 
-応答は **JSON 配列のみ**。JSON の前後にテキスト・markdown 見出し・補足説明を一切付けない。
+**scan / patrol で finding を 1 件でも返すなら、JSON を組み立てる前に `references/scan-contract.md` を必ず Read する**
+(必須フィールドの意味・recommendation テンプレ・patrol 固有制約はそちらが正本)。本文には骨子のみ置く。
 
-### default
+envelope の形状 (`{"findings": [...]}` / 0 件は `{"findings": []}` / JSON-only の禁止行 /
+`candidate_report: true` 時の代替 envelope) の正本は
+`~/.claude/skills/_shared/expert-spawn.md`「scan 出力 envelope 契約」節 —
+**JSON を組み立てる前に Read する**。feature-expert 固有の差分のみ:
 
-- `confirmed_findings` を JSON 配列で返す
-- 0 件なら `[]`
 - `investigation_candidates` / `ignored_noise` は **内部分類のみ**で出力しない
-- medium / low の自然文追記、配列後の補足は禁止
-
-### candidate_report: true (op-scan 入力で明示時のみ)
-
-runner が object 形式に対応していることを前提とする場合のみ、以下の JSON object を返す:
-
-```json
-{
-  "confirmed_findings": [...],
-  "investigation_candidates": [...],
-  "ignored_noise": [...]
-}
-```
-
-`candidate_report` 指定がない / runner が配列のみ対応の場合は **必ず JSON 配列のみ**。
-
-### medium / low の扱い
-
-通常 scan 出力には出さない。ただし以下の場合のみ candidate として **内部保持**する:
-
-- patrol_sample 由来で同一 bulk_group が複数見つかった
-- High 昇格根拠が揃いそう
-- `candidate_report: true` が明示された
-
-これら以外は `ignored_noise` に分類し、JSON には出力しない。
+  (medium / low を内部保持してよい条件は `references/scan-contract.md` §1)
 
 ---
 
@@ -203,7 +172,7 @@ OP-managed Mode は推定した内容を `assumptions[]` に、判断不能な�
 - **再利用候補資産の特定** (既存 crate / wrapper / helper / shared component / composable / type alias / Result alias / error type / fixture)
 - **既存 error / loading / empty state pattern の確認** (UI 系の場合)
 
-スタック別の探索手順は `references/asset-discovery.md` を参照。
+**scan / apply いずれでも、資産探索に入る前に `references/asset-discovery.md` のスタック別チェックリストを必ず Read する。**
 
 ### 3. 模倣計画 (手本との差分だけを計画する)
 
@@ -232,8 +201,10 @@ OP-managed Mode は推定した内容を `assumptions[]` に、判断不能な�
 | 3 | Tauri IPC / 通信層 (wrapper) | Level 1 + Level 3 (build, IPC 変更時) |
 | 4 | フロントエンド UI | Level 1 + Level 2 (unit if applicable) |
 | 5 | happy path test (1〜2 本) | Level 2 (unit / integration) |
+| 6 | 統合検証 (各レイヤーをまたぐ動作確認) | Level は `references/tools.md` の対応表に従う (実行を伴う Tauri 統合検証は Level 4 = `allow_level_4` 必須) |
 
-各レイヤーで 1〜2 ファイル単位で検証し、まとめて変更してから検証は禁止。
+各レイヤーで 1〜2 ファイル単位で fail-fast 検証する。まとめて変更してから検証は禁止
+(どこで壊れたか特定しづらくなる)。この標準順序をどこまで踏むかは Issue の scope 次第 (後述「実装順序の原則」)。
 スタック別の検証コマンド本体は `~/.claude/skills/expert-debug/references/tools.md` (正本) を、
 実装順序との対応・silent fork 防止チェック・happy path 雛形は `references/tools.md` (本 skill 側) を参照。
 
@@ -249,14 +220,12 @@ OP-managed Mode は推定した内容を `assumptions[]` に、判断不能な�
 
 ## Issue 入力の 2 系統
 
-feature-expert への入力は出自が 2 系統あるが、**いずれも「指示書つき Issue」という統一インタフェース**として処理する。
-
-| 出自 | 設計判断の所在 | 指示書の生成元 | apply での扱い |
-|------|--------------|-------------|------------|
-| **scan 由来** (additive detection) | 既存実装が暗黙の設計ソース。silent fork / implementation gap を「既存に揃える」が goal として既に固まっている | op-scan が canonical schema で自動生成 (`recommendation` に実装計画) | `recommendation.steps` をテンプレとして粛々と実装 |
-| **人間由来** (新規機能要求) | 人間 / commander が設計判断を Issue に起こす | 人間 / commander が `_shared/pr-templates.md` の指示書フォーマットで起こす | 同じく指示書節を読んで実装 |
-
-両系統とも、agent は「指示書を読んで実装する」だけ。違うのは指示書を誰が書くかだけ。
+feature-expert への入力は **scan 由来** (op-scan が canonical schema で自動生成、`recommendation` に実装計画) と
+**人間由来** (人間 / commander が `_shared/pr-templates.md` の指示書フォーマットで起こす) の 2 系統あるが、
+**いずれも「指示書つき Issue」という統一インタフェース**として処理する。
+どちらの出自でも agent は「指示書を読んで実装する」だけ (scan 由来なら `recommendation.steps` を
+テンプレとして粛々と実装する)。違うのは指示書を誰が書くかだけで、設計判断は既に Issue 側で
+固定済みである (scan 由来は既存実装が暗黙の設計ソースで、「既存に揃える」が goal として固まっている)。
 
 ---
 
@@ -290,36 +259,17 @@ scope 内の安全な実装のみ進めるか、続行不能なら blocked と�
 
 ## silent fork / implementation gap catalog (top 7)
 
-scan モードで検出する主要パターン。詳細は `references/silent-fork-patterns.md`。
+**scan モードでは、finding を書き出す前に `references/silent-fork-patterns.md` の
+「catalog 索引 + enum 対応表」節を必ず Read する**
+(本文には bulk_group 名と action の意味しか無い。検出兆候と issue_type 対応はそちらが正本)。
 
-| # | bulk_group | 検出兆候 |
-|---|-----------|---------|
-| 1 | `feature-duplicate-helper` | 既存 helper / utility / crate と機能重複した自前実装 (e.g., 既存 sanitize 関数があるのに別ファイルで再実装) |
-| 2 | `feature-bypass-wrapper` | 既存 wrapper を経由せず直接 invoke / fetch / IO (e.g., `src/api/` wrapper を skip して invoke 直叩き) |
-| 3 | `feature-adhoc-error-type` | 既存 error type / Result alias を使わず ad-hoc 新設 (e.g., プロジェクト共通 `AppError` があるのに `Box<dyn Error>` で投げる) |
-| 4 | `feature-pattern-deviation` | 類似機能と構造が大きく外れた孤立実装 (e.g., 同種画面の構成順と全く違う配置) |
-| 5 | `feature-missing-error-path` | 類似機能には error / loading / empty state があるのにこの機能だけ欠けている (e.g., 同種一覧画面に loading skeleton があるのにこの画面はなし) |
-| 6 | `feature-stale-todo` | 本番影響レベルの放置 TODO / FIXME (e.g., `// TODO: implement error handling` が認証パスに残存) |
-| 7 | `feature-spec-divergence` | 仕様書 / 型定義 / コメントと実装の乖離 (e.g., 型は `Result<T, AppError>` 宣言だが実装は `Result<T, String>`) |
+scan モードで検出する主要パターンの bulk_group (7 種):
 
-5 件以上の同 bulk_group は op-scan がバッチ Issue 化。1 Issue 最大 10 件 (apply エージェントの一撃巨大修正を防ぐため)。
+`feature-duplicate-helper` / `feature-bypass-wrapper` / `feature-adhoc-error-type` /
+`feature-pattern-deviation` / `feature-missing-error-path` / `feature-stale-todo` /
+`feature-spec-divergence`
 
-### bulk_group / issue_type / action enum 対応表 (固定)
-
-scan 出力 / Issue 化 / apply の解釈ズレを防ぐため、3 フィールドの対応を **固定**する。
-apply agent はこの対応表に従って動作を選ぶ。
-
-| bulk_group | issue_type | action |
-|------------|-----------|--------|
-| `feature-duplicate-helper` | `duplicate_helper` | `replace_with_existing_asset` |
-| `feature-bypass-wrapper` | `bypass_wrapper` | `replace_with_existing_asset` |
-| `feature-adhoc-error-type` | `adhoc_error_type` | `replace_with_existing_asset` |
-| `feature-pattern-deviation` | `pattern_deviation` | `align_to_pattern` |
-| `feature-missing-error-path` | `missing_error_path` | `complete_missing_state` |
-| `feature-stale-todo` | `stale_todo` | `add_implementation` |
-| `feature-spec-divergence` | `spec_divergence` | `align_to_pattern` |
-
-action enum の意味:
+action enum の意味 (apply が Issue の `action` を解釈するのに必要なので本文に残す):
 
 | action | 意味 |
 |--------|------|
@@ -329,10 +279,8 @@ action enum の意味:
 | `add_implementation` | 未実装部分を新規追加 (既存資産再利用前提) |
 | `needs_human_decision` | 既存パターンが揺らいでいて手本が定まらない場合は人間判断を構造化要求として返す |
 
-> **特例**: `feature-stale-todo` は内容によっては `complete_missing_state` 寄りになることもあるが、
-> apply 入力としては **`add_implementation` を採用**する (新規実装が主体のため)。
-> 例外的な action を使う場合は `needs_human_decision.required: true` を併記する
-> (`_shared/invocation-mode.md` の正規スキーマに従う)。
+`bulk_group` → `issue_type` → `action` の固定対応と `feature-stale-todo` の特例は
+`references/silent-fork-patterns.md` の同節が正本 (本文では重複保持しない)。
 
 ---
 
@@ -375,152 +323,34 @@ silent fork / implementation gap 検出は「ここに穴がある」だけで�
 **apply が即実装できる具体計画** を `recommendation` に詰める。
 これで context 喪失問題を構造的に防ぐ (scan の判断が apply に完全継承)。
 
-### recommendation の構造化フォーマット (additive 検出 Issue 用)
+recommendation の構造化フォーマット (§2)・強化スキーマの骨格スケルトン (§3)・
+スキーマフィールド要点表 (§4) は `references/scan-contract.md` が正本 (Read 必須は上節の誘導文どおり)。
+本文には必須フィールド **名** のみ置く。
 
-```markdown
-## 実装計画
+- feature-expert 固有の必須 (canonical に加えて必ず埋める): `severity` / `confidence` / `action` / `asset_map`
+- canonical 必須 (`_shared/expert-spawn.md` が正本、省略せずすべて埋める): `title` / `severity_reason` /
+  `domain` (= `feature` 固定) / `files` / `symbols` / `summary` / `evidence` / `evidence_sources` /
+  `evidence_grade` / `hypothesis` / `excluded_hypotheses` / `risk_if_ignored` / `risk_if_changed` /
+  `protected_behavior` / `scope_in` / `scope_out` / `verification_steps` / `success_criteria` /
+  `gotchas` / `issue_type` / `bulk_group` / `recommendation` / `needs_human_decision` /
+  `recommended_runner` (= `feature-expert` 固定) / `post_check_expert` (UI ファイルを触るなら
+  `ux-ui-audit-expert`、それ以外は `null`) / `blocking` + `blocking_reason`
 
-### 対象
-- ファイル / 関数: `path/to/file.ext::funcName`
-- 現状: <現状を 1 行で>
-- 検出種別: <duplicate_helper / bypass_wrapper / adhoc_error_type / pattern_deviation / missing_error_path / stale_todo / spec_divergence (enum 対応表に従う)>
-
-### 手本にする既存実装
-- ファイル: `path/to/template.ext:LINE`
-- 抽出する要素:
-  - ファイル構成: <...>
-  - 命名規則: <...>
-  - error 処理形式: <...>
-  - 状態管理パターン: <...>
-
-### 再利用する既存資産
-| # | 種別 | 場所 | 用途 |
-|---|------|------|------|
-| 1 | crate | `src/utils/sanitize.rs::sanitize_html` | XSS 防止 |
-| 2 | wrapper | `src/api/index.ts::invoke` | Tauri 呼び出し |
-| 3 | type alias | `src/types/result.ts::AppResult` | error 統一 |
-
-### 実装するもの
-| # | レイヤー | 追加 / 変更内容 | 期待動作 |
-|---|---------|---------------|---------|
-| 1 | 型 | `src/types/foo.ts` に `Foo` 型追加 | ... |
-| 2 | API | `src-tauri/src/commands/foo.rs` 追加 | ... |
-| 3 | wrapper | `src/api/foo.ts` 追加 | ... |
-| 4 | UI | `src/pages/foo/FooList.vue` 追加 | ... |
-
-### 必要な前提・依存
-- 既存の <fixture / コンポーネント / モジュール> を再利用
-- 新規 <作る場合のみ列挙、最小限>
-
-### 推定規模
-- 追加 LoC: 約 N 行
-- 追加ファイル: N 個
-- 副作用: <なし or 列挙>
-
-### 受入条件
-- <条件 1>
-- <条件 2>
-
-### 検証
-- Level 1: <lint / type コマンド>
-- Level 2: <unit test コマンド>
-- Level 3: <build コマンド、IPC / 依存変更時のみ>
-- happy path test: 1〜2 本追加 (異常系は test-expert に Issue 起票で委譲)
-```
-
-### 強化スキーマ (feature-expert 共通)
-
-検出系・追加系・補完系すべてで共通して使う schema。canonical 必須フィールドの正本は
-`_shared/expert-spawn.md`。apply agent が迷わず処理できるよう、feature-expert は追加で
-**severity / confidence / action / asset_map** を必須とする (各フィールドの意味は次節
-「スキーマフィールド要点」の表を参照)。
-
-判断上の要点 (削っても失わないための補足):
+判断の核 (references を読む前でも守る):
 
 - `asset_map.template_files` / `reusable_assets` / `extracted_pattern` を埋められない場合、
   silent fork 防止の最低充足条件を満たしていない = 実装に入らない
-- `hypothesis` / `excluded_hypotheses` は「なぜこの検出が pattern deviation であり、意図的な省略ではないか」を
-  否定材料つきで書く (単なる推測の断定は禁止)
-- `recommendation` は apply がそのまま実装テンプレとして使えるだけの具体性 (手本ファイル・再利用資産・実装するもの・検証コマンド) を持たせる
-
-骨格スケルトン (値はプレースホルダ、具体スタック非依存):
-
-```json
-{
-  "title": "<画面/機能>の<欠落 state>が欠けている",
-  "severity": "high",
-  "domain": "feature",
-  "files": ["<path>:<line>"],
-  "confidence": "high",
-  "issue_type": "missing_error_path",
-  "action": "complete_missing_state",
-  "evidence_grade": "direct",
-  "asset_map": {
-    "template_files": ["<手本ファイル>:<line>"],
-    "reusable_assets": [{ "kind": "<component|composable|...>", "path": "<path>", "purpose": "<用途>" }],
-    "extracted_pattern": "<抽出したパターンの1行要約>"
-  },
-  "needs_human_decision": { "required": false },
-  "recommendation": "<実装計画テンプレ (下記フォーマット参照)>",
-  "bulk_group": "feature-missing-error-path",
-  "recommended_runner": "feature-expert",
-  "post_check_expert": "ux-ui-audit-expert",
-  "blocking": false,
-  "blocking_reason": null
-}
-```
-
-上記以外の canonical 必須フィールド (`severity_reason` / `symbols` / `summary` / `evidence` /
-`evidence_sources` / `hypothesis` / `excluded_hypotheses` / `risk_if_ignored` / `risk_if_changed` /
-`protected_behavior` / `scope_in` / `scope_out` / `verification_steps` / `success_criteria` /
-`gotchas`) も省略せずすべて埋める。
-
-### スキーマフィールド要点
-
-以下は feature-expert 固有フィールドと canonical 必須フィールドの一覧。
-canonical 必須フィールドの正本定義は `_shared/expert-spawn.md` を参照。
-
-| フィールド | 役割 |
-|-----------|------|
-| `severity` | 危険度 (critical / high / medium / low) |
-| `severity_reason` | **canonical 必須**: Critical / High と判定した根拠 (到達経路・観測可能な被害・影響範囲) |
-| `domain` | **canonical 必須**: `feature` 固定 |
-| `symbols` | **canonical 必須**: 対象コンポーネント名 / 関数名 / 型名 |
-| `evidence_grade` | **canonical 必須**: `direct` / `inferred` / `requires_runtime`。`direct` 以外で Critical 不可 |
-| `hypothesis` | **canonical 必須**: scan が立てた根本原因仮説 |
-| `excluded_hypotheses` | **canonical 推奨**: 検討したが否定した仮説と否定根拠 |
-| `recommended_runner` | **canonical 必須**: `feature-expert` 固定 |
-| `post_check_expert` | **canonical 必須**: UI ファイルを触る場合は `ux-ui-audit-expert`、そうでない場合は `null` |
-| `blocking` | **canonical 必須**: 新規変更が既存 debt を悪化させる場合 `true`。`blocking_reason` と対 |
-| `blocking_reason` | **canonical 必須**: `blocking: false` なら `null`、`true` なら理由を 1 行 |
-| `confidence` | 根拠の強さ (high / medium / low) — severity と独立 |
-| `issue_type` | `duplicate_helper` / `bypass_wrapper` / `adhoc_error_type` / `pattern_deviation` / `missing_error_path` / `stale_todo` / `spec_divergence` (enum 対応表に従う) |
-| `action` | `replace_with_existing_asset` / `align_to_pattern` / `complete_missing_state` / `add_implementation` / `needs_human_decision` (bulk_group との対応は enum 対応表を参照) |
-| `evidence_sources` | `grep` / `source_read` / `git_log` / `git_blame` / `gh_search` の組合せ |
-| `asset_map` | 手本ファイル / 再利用資産 / 抽出パターン (silent fork 防止の証拠) |
-| `protected_behavior` | この実装が守る振る舞い (実装計画の核) |
-| `needs_human_decision` | required:true なら apply は手を出さず人間判断を待つ |
-
-apply agent は `recommendation` の計画を実装テンプレとしてそのまま使う。
-仕様の不明点があれば `needs_human_decision` (decision_type: "behavior") で構造化返却する。
-Issue コメント化は commander が判断する (mode 差は冒頭参照)
-
-`needs_human_decision.required: true` の Issue には apply しない。
+- `evidence_grade` が `direct` 以外なら Critical にしない
+- apply agent は `recommendation` の計画を実装テンプレとしてそのまま使う。仕様の不明点があれば
+  `needs_human_decision` (decision_type: "behavior") で構造化返却する。Issue コメント化は commander が判断する
+- `needs_human_decision.required: true` の Issue には apply しない
 
 ---
 
 ## 実装順序の原則 (依存関係順)
 
-### 標準順序 (新規 / 拡張共通)
-
-```
-1. データモデル / 型定義 (TypeScript types, Rust struct, Dart class)
-2. バックエンド API / Rust command (実処理 + 単体テスト)
-3. Tauri IPC / 通信層 (invoke wrapper, capability 設定)
-4. フロントエンド UI (component, page, store)
-5. happy path test (1〜2 本)
-6. 統合検証 (各レイヤーをまたぐ動作確認)
-```
+標準順序 (型定義 → バックエンド API / command → IPC / 通信層 → UI → happy path test → 統合検証) と
+各レイヤーの検証 Level は「核心メソドロジー > 4. 下から積む」のテーブルが正本。本節はその **省略規則** のみを扱う。
 
 ### スコープに応じた省略
 
@@ -537,13 +367,6 @@ op-run / 人間からの Issue は **常に全レイヤーを触るとは限ら�
 
 scope_in 外への踏み込みが必要になったら **実装を止める** (`needs_human_decision` decision_type: "scope"
 + `blocked_actions[]` で返し、scope_in 内のみ進める。mode 差は冒頭参照)
-
-### 検証はレイヤー単位で
-
-各レイヤーで 1〜2 ファイル単位で fail-fast 検証する。
-まとめて変更してから検証は禁止 (どこで壊れたか特定しづらくなる)。
-
-スタック別の Verification Ladder コマンド本体は `~/.claude/skills/expert-debug/references/tools.md` (正本) を参照。
 
 ---
 
@@ -585,66 +408,18 @@ apply モードで実装する前 / 完了する前に、以下をすべて満�
 read-only audit。実行権限の詳細は本ドキュメント前半「実行権限 (mode 別の許可・禁止操作) > scan モード = Level 0」を参照。
 出力契約は「scan 出力契約 (JSON-only)」に従う。
 
-検出対象:
-
-- 上記 7 カテゴリの silent fork / implementation gap (severity が critical / high のもの)
-- 仕様書 / 型定義 / コメントと実装の乖離
-- 死蔵 TODO / FIXME (本番影響レベルのみ)
-
-報告ルール:
-
-- すべての Issue に `severity` と `confidence` を必ず付ける
-- `confidence: low` のものは断定せず `needs_human_decision.required: true` を検討
-- `severity: high, confidence: low` は **正常な状態** (人間に戻す)
-- finding は静的証拠 (コード引用・呼出経路) で裏付けて報告する
-- disabled stack (React / Go) は報告しない
-- 既存コードが CLAUDE.md 規約に従っているなら指摘しない
-- 検出 0 件なら `[]` を返す
-
-出力契約は `_shared/expert-spawn.md` の **scan 共通スキーマ** + 上記の強化スキーマに従う。
+**scan モードでは、audit を始める前に `references/scan-contract.md` の §0 (検出対象と報告ルール) を必ず Read する。**
+静的証拠 (コード引用・呼出経路) で裏付けられない finding は返さない。検出 0 件なら `{"findings": []}`。
 
 ### scan モード (op-patrol 経由)
 
-`op-patrol` から委譲された場合、area 選定をやり直さない。
-patrol が選んだ area と巡回理由を尊重し、**feature 専門の read-only audit に限定**する。
-
-入力される想定:
-
-- `area`: 巡回対象区画
-- `patrol_reason`: なぜこの area が選ばれたか (1〜2 行)
-- `scope_in` / `scope_out`
-- `suspicion`: `duplicate_helper` / `bypass_wrapper` / `adhoc_error_type` / `pattern_deviation` / `missing_error_path` / `stale_todo` / `spec_divergence` (enum 対応表の `issue_type` に揃える)
-- `run_id`: op-patrol の run id
-
-重要 (op-patrol の read-only policy を優先):
-
-- ビルド・テスト・型チェック・collect コマンドは **禁止**
-- `Read` / `Grep` / `Glob` と `git log` / `git diff` / `git ls-files` のみで判断
-- **Critical / High のみ** 返す。Medium 以下、命名整理、好みのリファクタは返さない
-- 実行しないと確定できないものは `evidence_grade = requires_runtime` + `reproduction_hint` で返し、`--auto` 起票対象にしない
-
-patrol 経由で起票してよい指摘:
-
-| severity | 該当 |
-|----------|------|
-| Critical | data loss / security に直結する silent fork (既存 sanitization bypass で injection 経路露出 等) / Critical 機能の主要 error path 欠如 |
-| High | 既存資産無視による重複実装 (将来保守コスト爆発確定) / 主要 loading / empty state 欠如で UX 致命的破綻 / Critical 機能の spec divergence / 本番影響レベルの死蔵 TODO |
-
-patrol 経由で **起票しないもの** (op-scan モードなら可だが patrol では禁止):
-
-- 命名が微妙、構造を綺麗にできる
-- Medium 以下の pattern deviation
-- 実装の書き方の好み
+**op-patrol から呼ばれた場合は、audit を始める前に `references/scan-contract.md` §5 (patrol 経由の追加制約) を必ず Read する。**
+area 選定はやり直さない / ビルド・テスト・型チェック・collect コマンドの実行は禁止 / **Critical・High のみ**返す。
 
 ### apply モード (op-run から呼ばれた時)
 
-5 ステップメソドロジーに従って自走:
-
-1. Issue 指示書の完全把握 (`recommendation.steps` 含む)
-2. 既存資産探索 (silent fork 防止の最低充足条件を埋める)
-3. 模倣設計 (手本との差分だけを設計する)
-4. 下から積む (型 → サーバ → 通信 → UI、レイヤーごとに検証)
-5. 完了確認とコミット (手本ファイル + 再利用資産をコミットメッセージに記載)
+「核心メソドロジー (5 ステップ)」に従って自走する (指示書の完全把握 → 既存資産探索 → 模倣計画 →
+下から積む → 完了確認とコミット。各ステップの内容は同節が正本)。
 
 apply 前に必ず確認:
 
@@ -674,37 +449,22 @@ apply 前に必ず確認:
 
 ## コミット時の必須記載 (silent fork 防止の構造的担保)
 
-apply 完了時のコミットメッセージは、以下のテンプレに従う。
+**apply の commit を作る前に `references/tools.md` のコミットテンプレ節を必ず Read する。**
+「手本」「再利用した既存資産」が空欄のままの完了報告は不可。
+
+apply 完了時のコミットメッセージは `references/tools.md`「コミットメッセージテンプレ」に従う。
 **手本ファイルパスと再利用資産を必須記載することで、silent fork が起きなかったことを構造的に証明する**。
-
-```
-feat(<scope>): <要約> (Refs #N)
-
-<実装の goal を 1〜2 文>
-
-手本:
-- <既存ファイル:LINE>: <参考にした要素 (構成 / 命名 / error 処理 / 状態管理)>
-
-再利用した既存資産:
-- <crate / module / wrapper / component / type>: <用途>
-
-実装内容:
-- <ファイル>: <変更>
-
-テスト:
-- 残: <test_xxx_when_yyy>: happy path 検証
-- 委譲 Issue: #M (異常系 / 境界値テストの追加を test-expert に依頼)
-```
 
 ### Fixes / Refs の使い分け
 
-| 状態 | 記法 |
-|------|------|
-| acceptance_criteria を全て満たし、未検証項目も委譲 Issue もない (= 完全完了) | `Fixes #N` |
-| Verification Ladder Level 4-5 が未実行 / test-expert 委譲 Issue あり / PR レビュー待ち | `Refs #N` または `Part of #N` |
+**正本は `~/.claude/skills/_shared/commit-convention.md` §3**
+(op-merge gate 19 = `op-core/src/merge/verify.rs::eval_issue_link_gates` の prose 転記)。
 
-feature-expert は happy path 1〜2 本以外を持たない設計のため、初期実装 PR は **原則 `Refs #N`** とする。
-auto-close で Issue が早期に閉じる事故を防ぐ。
+- **既定は `Fixes #N`**。
+- `Refs #N` は **open かつ `op:staged-refactor` / `op:architecture-debt` ラベル付きの親 Issue** を
+  参照する staged PR に限る。通常 PR が `Refs` のみだと gate 19 (`GATE_19_REFS_NOT_STAGED`) で block される。
+- 未検証項目 / 委譲がある場合は `Refs` で Issue を開いたままにせず、**委譲先を別 Issue に起票して
+  本 PR は `Fixes` で閉じる** (§3-2)。
 
 `手本` 節と `再利用した既存資産` 節が空白だった場合は、apply は完了報告できない (silent fork が起きた可能性が高い)。
 完了前に既存資産探索をやり直す。
@@ -722,20 +482,25 @@ skip 条件なし。apply 後は必ず invoke する。
 
 ## CLAUDE.md 規約との整合
 
-- **ネスト 2 階層以内**: ガード節・関数抽出・dispatch table で平坦化
-- **日本語コメント**: 関数・クラス・主要処理に作成意図を記述。自明なコードには書かない
-- **過剰抽象化禁止**: 1 関数 1 ファイル禁止、interface / implementation の形式的分離禁止
-- **デザインパターン導入は合理性必須**: Clean Architecture / DDD は要求がある場合のみ
-- **形式的美しさよりデバッグ容易性を優先**
+共通骨格 (優先順位 3 段 / 既定値 6 項目 / audit・refute 側での扱い) の正本は
+`~/.claude/skills/_shared/project-profile.md` の「対象 repo 規約への準拠 (worker 共通)」節 —
+**apply で最初のファイルを編集する前に Read する** (scan では「規約準拠を指摘しない」判断に使う)。
+
+feature-expert 固有の適用差分のみ:
+
+- **ネスト**: ガード節・関数抽出・dispatch table で平坦化する
+- **抽象化**: 新規実装でも 1 関数 1 ファイル / interface と implementation の形式的分離をしない
+  (Clean Architecture / DDD の導入は指示書に要求がある場合のみ)
 
 ---
 
 ## 深掘り参照
 
-- silent fork / 重複実装の言語別具体例 (Rust / Tauri / Vue / Flutter): `~/.claude/skills/expert-feature/references/silent-fork-patterns.md`
+- scan / patrol 出力契約の完全形 (検出対象・報告ルール / envelope 詳細 / recommendation テンプレ / 強化スキーマ / フィールド要点表 / patrol 追加制約): `~/.claude/skills/expert-feature/references/scan-contract.md`
+- silent fork catalog 索引 (検出兆候列) + bulk_group / issue_type / action enum 対応表、および言語別具体例 (Rust / Tauri / Vue / Flutter): `~/.claude/skills/expert-feature/references/silent-fork-patterns.md`
 - 既存資産探索のスタック別チェックリスト + grep cookbook: `~/.claude/skills/expert-feature/references/asset-discovery.md`
 - 検証コマンド本体 (Verification Ladder スタック別、debug-expert と共有する正本): `~/.claude/skills/expert-debug/references/tools.md`
-- 実装順序との対応・silent fork 防止のレイヤーまたぎ整合確認・happy path 雛形・完了報告フォーマット (feature-expert 固有): `~/.claude/skills/expert-feature/references/tools.md`
+- 実装順序との対応・silent fork 防止のレイヤーまたぎ整合確認・happy path 雛形・完了報告フォーマット・**コミットメッセージテンプレ** (feature-expert 固有): `~/.claude/skills/expert-feature/references/tools.md`
 
 ---
 

@@ -187,14 +187,14 @@ composition を Design Plan で詰めるとき、動的に階層を伝える設�
 
 ## 禁止 (craft アンチパターン)
 
-| 禁止 | 影響 |
-|------|------|
-| 絶対数値 (line-height 145-150% / 8pt 固定等) を floor に焼く | project 固有 DS / op-config と衝突、token-first・原則12 (流行に寄せない) を裏切る |
-| 流行 (Apple 風 / Material 風 / 流行のダッシュボード) 模倣を craft の根拠にする | 模倣ではなく文脈に従う (原則12) に違反、project の延長線上の品質を壊す |
-| 任意値の乱発 (token / scale bypass) | foundation の token / scale が形骸化、AI 生成 UI が generic に見える主因 (任意値 / サイズ過多) |
-| equal-weight (階層なし) | primary / secondary が同強度で視線が迷う、情報階層崩壊 |
-| accent 過多 (restraint 欠如) | 60-30-10 を超えて色が騒がしく、semantic の意味が埋もれる |
-| semantic 色を装飾流用 | success/warning/error/info の意味が揺れ、色記号体系が崩壊 |
-| type scale の中間値乱発 | modular ratio から説明できない font-size が散り、タイポの秩序が崩れる |
-| ③④ craft を AI self-refine loop で無 anchor 仕上げ | self-bias を単調増幅し generic / 不自然に収束 (human / exemplar anchor 必須) |
-| floor フェーズで「おしゃれに / 垢抜けさせる」提案 | ceiling を floor に持ち込む越権、playground スコープ違反 |
+理由 / 影響は上記各節 (Craft token scale・いつ floor を適用するか・AI 到達ライン) を参照。
+
+- 絶対数値 (line-height 145-150% / 8pt 固定等) を floor に焼く
+- 流行 (Apple 風 / Material 風 / 流行のダッシュボード) 模倣を craft の根拠にする
+- 任意値の乱発 (token / scale bypass)
+- equal-weight (階層なし)
+- accent 過多 (restraint 欠如)
+- semantic 色を装飾流用
+- type scale の中間値乱発
+- ③④ craft を AI self-refine loop で無 anchor 仕上げ
+- floor フェーズで「おしゃれに / 垢抜けさせる」提案

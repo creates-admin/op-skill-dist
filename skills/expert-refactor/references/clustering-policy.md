@@ -27,6 +27,17 @@
 > 検討する設計案 (Basic Rule / Good・Bad Clustering Examples) はここから削除した。
 > 詳細は git 履歴 (本ファイルの当該コミット以前) を参照。
 
+### bulk_group の役割 (Phase 1)
+
+`bulk_group` は **finding 同士の関連性を示す情報** であって、batch 起票の合図ではない。
+Phase 1 では bulk_group / subtype の付与は引き続き必須 (将来 batch 化や dedup に使う)。
+
+### Phase 2 以降の検討 (現在は適用しない)
+
+Phase 2 で batch 化する場合は、finding schema に
+`root_path` / `rollback_unit` / `verification_key` を追加し、
+**すべて完全一致** する場合のみ batch を許可する設計を検討する。
+
 ---
 
 ## op-scan / op-patrol の bulk Issue 化との関係

@@ -381,7 +381,7 @@ mismatch を検出しても、subagent は質問で停止しない。以下の�
 | `active-expert-registry.md` | 3 | 2026-05-08 |
 | `clustering.md` | 6 | 2026-05-21 |
 | `runtime-contract.md` | 2 | 2026-05-07 |
-| `apply-completion-checklist.md` | 4 | 2026-05-24 |
+| `apply-completion-checklist.md` | 5 | 2026-07-29 |
 | `apply-completion-verify.md` | 3 | 2026-05-24 |
 | `severity-rubric.md` | 4 | 2026-05-05 |
 | `dedup-policy.md` | 3 | 2026-05-05 |
@@ -410,6 +410,8 @@ mismatch を検出しても、subagent は質問で停止しない。以下の�
 | `issue-health-policy.md` | 1 | 2026-05-21 |
 | `workflow-calling.md` | 1 | 2026-07-29 |
 | `bash-fence-convention.md` | 1 | 2026-07-29 |
+| `commit-convention.md` | 1 | 2026-07-29 |
+| `refute-contract.md` | 1 | 2026-07-29 |
 | `version-check.md` | 3 | 2026-05-16 |
 
 > **additive-only policy**: 上記テーブルの更新と新行追加は schema_version の bump を要しない。

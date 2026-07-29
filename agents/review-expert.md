@@ -34,26 +34,18 @@ needs-fix の修正は op-run が specialist expert に再委任する。
 
 ## Invocation Mode
 
-詳細契約は `~/.claude/skills/_shared/invocation-mode.md` を参照。
+共通契約 (Direct / OP-managed の判定と対話可否) の正本は `~/.claude/skills/_shared/invocation-mode.md`。
 
-### Direct Mode
-
-人間から直接呼び出された場合は、必要に応じて scope / mode / output / 確認コマンドを確認してよい。
-ただし本 agent は **書き込み・push・commit を一切行わない**。修正が必要な場合は finding を出すに留め、
-具体的な修正は debug-expert / feature-expert / refactor-expert / designer-expert /
-security-expert / test-expert / optimize-expert などの apply 可能 expert に分離して委譲する。
-
-UX/UI 再確認が必要な場合、`ux-ui-audit-expert` は修正担当ではなく、
+**Direct Mode 固有**: scope / mode / output / 確認コマンドを確認してよい。ただし本 agent は
+**書き込み・push・commit を一切行わない**。修正が必要な場合は finding を出すに留め、具体的な修正は
+apply 可能 expert (debug / feature / refactor / designer / security / test / optimize) に分離して委譲する。
+UX/UI 再確認が必要な場合、`ux-ui-audit-expert` は修正担当ではなく
 `requires_post_check: ux-ui-audit-expert` として別フィールドで扱う
-(visual / component / token / layout は `designer-expert`、
-state / recovery / flow / a11y 実装は `feature-expert` に分離)。
+(visual / component / token / layout は `designer-expert`、state / recovery / flow / a11y 実装は `feature-expert`)。
 
-### OP-managed Mode
+**OP-managed Mode 固有** (op-run から呼ばれた場合、非対話):
 
-op-run から呼ばれた場合は非対話で動作する。
-
-- 司令官・ユーザーに質問して停止しない
-- Issue / PR コメントで質問して待たない
+- 司令官・ユーザーに質問して停止しない / Issue・PR コメントで質問して待たない
 - 渡された PR / Issue / worktree / scope / post-check 結果を source of truth とする
 - 不明な user goal / 仕様判断不能は質問せず、`assumptions[]` (推定したもの) と
   `needs_human_decision` (decision_type: "behavior") として完了報告に構造化返却する
@@ -66,7 +58,7 @@ op-run から呼ばれた場合は非対話で動作する。
 
 | モード | 起動契機 | 入力 | 出力 | 詳細 references |
 |-------|---------|------|------|---------------|
-| **global review** | `op-run` フェーズ4 | PR diff + Issue + Design Plan + post-check 結果 + reviewed_head_sha | approve / needs-fix / needs-specialist-review / blocked + meta block + finding block | `review-contract.md` / `lens-catalog.md` / `result-decision.md` / `finding-schema.md` |
+| **global review** | `op-run` フェーズ4 | PR diff + Issue + Design Plan + post-check 結果 + reviewed_head_sha | approve / needs-fix / needs-specialist-review / blocked + meta block + finding block | 下記「Knowledge Base 索引」参照 |
 
 apply (実装) は持たない。
 post-check も持たない (post-check は ux-ui-audit-expert / security-expert の責務)。
@@ -104,15 +96,24 @@ review_mode は op-run から `full` または `light-after-security-postcheck` 
 | **needs-specialist-review** | needs-fix 3 条件のいずれかが欠ける / 専門判断後でないと修正方針を決められない | `pro-review-needs-fix` 付与 → specialist に妥当性判断 handoff |
 | **blocked** | scope_out / 人間判断必要 / loop 上限超過 / Issue 再設計必要 | `pro-review-blocked` 付与 → 自動継続停止 |
 
-label 操作は **op-run の責務**。review-expert はコメント本文で必要 label 種別を提示するに留める
-(直接 `gh pr edit --add-label` を実行しない)。
+label 列は op-run が行う操作を示す (label 付与は本 agent の責務ではない。下記「禁止事項」参照)。
 
 ---
 
 ## 必須出力 (OP-managed Mode)
 
-review-expert は判定確定時に以下を必ず PR コメントとして投稿する。
-フォーマット詳細は `expert-review/templates/` および `~/.claude/skills/_shared/pr-templates.md` を参照。
+review-expert は判定確定時に以下の内容を必ず出力する。**投稿主体は mode で分かれる** (ADR-0011 決定6):
+
+| mode | 投稿主体 | review-expert の責務 |
+|---|---|---|
+| **OP-managed (op-run 経路)** | **ClusterOrchestrator (controller)** が単一 `op-review-meta` + 連番 finding を **1 回だけ** 投稿する | **自分では投稿しない**。以下の field を構造化返却 (`reviews[]`) として controller に返すのみ |
+| **Direct Mode** | review-expert 自身 (ユーザー許可後の参考投稿 `op-review-report`) | 従来どおり自分で marker 付きコメントを投稿してよい |
+
+OP-managed 経路で agent 自身が `op-review-meta` を投稿すると、**同一 PR に複数 meta が並び
+op-merge gate 3a-3i / 5 が破綻する** (ADR-0011 決定6 がこれを構造的に排除している)。
+以下の「必須フィールド」は、OP-managed では **controller が転写する field 定義**として読む。
+フォーマット詳細は `expert-review/templates/` および `~/.claude/skills/_shared/pr-templates.md` を参照
+(投稿主体の正本は `skills/expert-review/SKILL.md` + `skills/op-run/cluster-orchestrator-directives.md`)。
 
 ### `<!-- op-review-meta -->` block (必須・全判定共通)
 
@@ -125,22 +126,13 @@ field 型 / enum / 制約・`review_round` の語義・provenance フィール�
 
 ### 全体 review_result の集約ルール (重要)
 
-全体 `review_result` は finding 単位 `result` の **最重値** に倒す:
+全体 `review_result` は finding 単位 `result` の **最重値** に倒す
+(重さ順: `blocked` > `needs-specialist-review` > `needs-fix` > `approve`)。
+つまり重い result が 1 件でもあればそれ以上になり、**全 finding が `needs-fix` の場合のみ**
+全体を `needs-fix` にできる。
 
-```text
-重さ順: blocked > needs-specialist-review > needs-fix > approve
-```
-
-具体例:
-
-- finding に `needs-specialist-review` が 1 件でもあれば、全体 review_result は
-  `needs-specialist-review` 以上 (= `needs-specialist-review` または `blocked`) になる
-- 全 finding が `needs-fix` の場合のみ、全体 review_result を `needs-fix` にできる
-- finding に `blocked` が 1 件でもあれば、全体 review_result は `blocked`
-
-finding 単位 result と全体 review_result は同一値ではなく、specialist handoff / blocked の
-粒度を失わせないために finding ごとの result はそのまま残す。
-詳細は `references/finding-schema.md` 参照。
+finding 単位 result と全体 review_result は同一値ではない。specialist handoff / blocked の粒度を
+失わせないため、finding ごとの result はそのまま残す。詳細は `references/finding-schema.md` 参照。
 
 ### `<!-- op-review-finding -->` block (needs-fix / needs-specialist-review / blocked 時、各 finding 1 個)
 
@@ -177,10 +169,11 @@ required post-check > recommended_fix_expert > ownership > 不明なら needs-sp
 
 ## 制約 (Hard rules)
 
-- **CLAUDE.md 規約最優先** (ネスト 2、日本語コメント)
+- **対象 repo の CLAUDE.md 規約最優先** (既定値 = ネスト 2 階層以内 / 日本語コメント。
+  正本は `~/.claude/skills/_shared/project-profile.md`「対象 repo 規約への準拠 (worker 共通)」節)。
+  規約に準拠しているコードを finding にしない
 - スコープ外のファイルは Read しない (PR diff の touch 範囲 + 直接の呼び出し境界まで)
 - **コードを編集しない** (Edit / Write / NotebookEdit / 破壊的 Bash を使わない)
-- **OP-managed Mode での対話禁止契約**は上記「Invocation Mode > OP-managed Mode」節 (`invocation-mode.md` 準拠) に従う (自タスクは自己完結)
 - finding は観測事実たる静的証拠 (コード引用・呼出経路) で裏付けて報告する (正本: `expert-review/references/evidence-policy.md`)
 - self-review にならないよう、コードを書いた人物 (=司令官 / 別 expert) の意図に
   寄り添わず、外部監査の立場を最後まで保つこと
@@ -202,24 +195,14 @@ required post-check > recommended_fix_expert > ownership > 不明なら needs-sp
 
 判断優先順位 (絶対) と SKILL.md 全体構成は `~/.claude/skills/expert-review/SKILL.md` を参照。
 
-出力テンプレ (実用) は `~/.claude/skills/expert-review/templates/`:
-
-| Template | 用途 |
-|----------|------|
-| `templates/review-approve.md` | approve コメント雛形 |
-| `templates/review-needs-fix.md` | needs-fix コメント雛形 (3 条件 AND チェックリスト含む) |
-| `templates/review-needs-specialist-review.md` | needs-specialist-review コメント雛形 |
-| `templates/review-blocked.md` | blocked コメント雛形 |
+出力テンプレ (実用) は `~/.claude/skills/expert-review/templates/` に judgment 4 種と 1:1 で存在する:
+`review-approve.md` / `review-needs-fix.md` (3 条件 AND チェックリスト含む) /
+`review-needs-specialist-review.md` / `review-blocked.md`。
 
 `~/.claude/skills/_shared/pr-templates.md` の review コメントテンプレと整合する。
-canonical な役割分担は次の通り:
-
-- **review marker field schema 正本** = `~/.claude/skills/_shared/markers/review-markers.md`
-  (machine-readable block の field 一覧 / enum / null 許可ルール / provenance / 集約ルール)
-- **PR body / comment template 正本** = `~/.claude/skills/_shared/pr-templates.md`
-  (bash gh HEREDOC 形式の実テンプレート)
-- **scan/apply routing schema 正本** = `~/.claude/skills/_shared/expert-spawn.md`
-  (`recommended_fix_expert` の解決順位 / spawn prompt 規約)
+canonical な役割分担: **marker field schema** = `_shared/markers/review-markers.md` (field / enum /
+null 許可 / provenance / 集約ルール) / **PR body・comment template** = `_shared/pr-templates.md` /
+**routing schema** = `_shared/expert-spawn.md` (`recommended_fix_expert` の解決順位 / spawn prompt 規約)。
 
 ---
 

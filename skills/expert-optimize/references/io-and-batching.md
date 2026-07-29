@@ -53,12 +53,9 @@ for item in items {
 
 ### N+1 (DB / HTTP / IPC / fs)
 
-```sql
--- Bad: N+1 SQL
-SELECT * FROM orders;        -- 1 query
--- per order:
-SELECT * FROM order_items WHERE order_id = ?;  -- N queries
-```
+SQL (`SELECT * FROM order_items WHERE order_id = ?` を order 件数ぶん) / HTTP / Tauri invoke /
+InDesign COM のいずれも **同型の問題**。1 件ずつ取る形を JOIN / batch endpoint / 1 回の script に畳む
+(COM の具体例は後述「InDesign COM 特有の注意」)。
 
 ```rust
 // Bad: N+1 HTTP
@@ -71,13 +68,6 @@ for job in jobs {
 // Bad: N+1 Tauri command
 for (const page of pages) {
   const meta = await invoke('get_meta', { page })
-}
-```
-
-```javascript
-// Bad: N+1 InDesign COM (ExtendScript)
-for (var i = 0; i < pageCount; i++) {
-  doc.pages.item(i).pageItems.everyItem().getElements();  // 毎回 COM round trip
 }
 ```
 
@@ -128,22 +118,9 @@ for item in items {
 
 ### BufReader / BufWriter で syscall 削減
 
-```rust
-use std::io::{BufRead, BufReader, BufWriter, Write};
-
-// 1 行ずつ read を OS から取らずに buffer 経由
-let f = BufReader::new(File::open("input.txt")?);
-for line in f.lines() {
-    process(&line?);
-}
-
-// write も buffer
-let mut w = BufWriter::new(File::create("out.txt")?);
-for line in lines {
-    writeln!(w, "{}", line)?;
-}
-w.flush()?;
-```
+1 行ずつの read / write を都度 syscall させず、buffer 経由にする (Rust 標準の基本形)。
+`BufReader::new(File::open(..)?)` の `.lines()` で読み、`BufWriter::new(File::create(..)?)` に
+`writeln!` する。**`w.flush()?` を明示的に呼ぶ** — drop 時の暗黙 flush はエラーを握り潰す。
 
 ### batch API で N+1 解消 (SQL)
 
@@ -174,15 +151,8 @@ for r in rows {
 let details = http_post("/api/jobs/batch", &json!({ "ids": ids })).await?;
 ```
 
-```typescript
-// Tauri: 1 invoke で複数件取得
-const metas = await invoke('get_meta_batch', { pages })
-```
-
-```javascript
-// InDesign: ExtendScript 内で loop して 1 回だけ COM round trip
-// (Tauri / Rust から呼ぶときは ExtendScript 1 ファイルにまとめて exec)
-```
+Tauri は 1 invoke で複数件返す command を作る (`tauri-performance.md`「改善パターン 1. command batching」
+が正本)。InDesign COM は ExtendScript 1 ファイルにまとめて 1 回だけ exec する (後述の COM 節)。
 
 ### async + concurrency limit (I/O parallel)
 
@@ -235,42 +205,29 @@ loop {
 }
 ```
 
-```rust
-// JSON streaming (serde_json::StreamDeserializer)
-use serde_json::Deserializer;
+> 巨大 JSONL も `serde_json::Deserializer::from_reader(f).into_iter::<Record>()` で
+> 同様に streaming parse できる (全体を String に読み込まない)。
 
-let f = File::open("huge.jsonl")?;
-let stream = Deserializer::from_reader(f).into_iter::<Record>();
-for record in stream {
-    process(record?);
-}
-```
+### bounded queue (+ worker 分配の注意)
 
-### bounded queue / worker pool
+producer と consumer を **bounded** channel で繋ぎ、capacity で backpressure をかける
+(unbounded channel は OOM 経路)。
 
 ```rust
 use tokio::sync::mpsc;
 
 let (tx, mut rx) = mpsc::channel::<Job>(100);  // bounded
-
-// producer
 tokio::spawn(async move {
-    for job in load_jobs() {
-        tx.send(job).await.unwrap();
-    }
+    for job in load_jobs() { tx.send(job).await.unwrap(); }
 });
-
-// workers
-let mut workers = Vec::new();
-for _ in 0..8 {
-    let mut rx = rx.clone();  // 注: mpsc は単一 receiver。flume / async-channel を使うか dispatcher パターン
-    workers.push(tokio::spawn(async move {
-        while let Some(job) = rx.recv().await {
-            process(&job).await;
-        }
-    }));
+while let Some(job) = rx.recv().await {
+    process(&job).await;
 }
 ```
+
+> **`tokio::sync::mpsc` は単一 receiver** — `rx` を clone して worker N 本に配ることはできない。
+> 複数 worker に分配したい場合は `flume` / `async-channel` を使うか、
+> 1 receiver が受けて worker に dispatch する形にする。
 
 ### cache (明確な invalidation がある場合のみ)
 

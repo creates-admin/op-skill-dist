@@ -1,7 +1,10 @@
 <!--
 schema_version: 4
 last_breaking_change: 2026-05-05
-notes: v4 (2026-05-05) — security-expert を Attack Surface & Usable Security specialist として正式化。
+notes: v4 (2026-07-29, additive) — ADR-0030 決定3 (C): 「scan 報告ルール (共通)」節を新設
+       (Critical/High only / 可能性表現禁止 / 0 件表現 / Level 0 read-only 実行ポリシーの抽出先正本)。
+       節追加のみ・判定基準そのものは不変ゆえ schema_version 据置。
+       v4 (2026-05-05) — security-expert を Attack Surface & Usable Security specialist として正式化。
        severity 判定で source → sink reachability + threat_model.actor + usable_security 判定を組み合わせる
        前提を追加。「to_be_reachable と to_be_practical を区別」「direct evidence のみ Critical」
        「reachable: false / theoretical only / hardening は起票しない」「capability 全体 disable を提案する
@@ -89,6 +92,47 @@ op-scan が起票するのは Critical / High のみ。
 4. **被害が「主要導線を塞ぐ / セキュリティ境界の弱体化」のいずれか?**
    - はい → High
    - いいえ → 起票しない (Medium 以下)
+
+---
+
+## scan 報告ルール (共通)
+
+> **本節が scan / patrol の報告ルールと実行レベルの唯一正本** (ADR-0030 決定3 (C) / DUP-05 / DUP-06)。
+> L1 (`agents/*.md`) / L2 (`skills/expert-*/`) / L3 (workflow spawn prompt) の「報告ルール」節は
+> 本節への pointer + expert 固有差分 (domain 固有の ignored_noise 等) に留める。
+
+### 報告してよいもの
+
+- **Critical / High のみ**報告する。Medium 以下は検出しても報告しない (「起票しない (Medium 以下)」節)。
+- finding は **静的証拠** (コード引用・呼び出し経路) で裏付ける。
+- 「〜の可能性がある」「〜かもしれない」は **原則禁止**。例外は次節「「可能性がある」を許可する条件」の
+  全条件を満たす場合のみ。
+- **検出 0 件は `{"findings": []}`** で返す (自然文で「問題なし」と書かない)。
+  envelope 形状の正本は `_shared/expert-spawn.md`「scan 出力 envelope 契約」節。
+- **対象 repo で無効なスタックの検出は報告しない** (ignored_noise 扱い)。
+  無効スタックの定義は `_shared/project-profile.md`「Out of scope」節。
+- **対象 repo の CLAUDE.md 規約に従っているコードは指摘しない**
+  (詳細は `_shared/project-profile.md`「対象 repo 規約への準拠 (worker 共通)」節)。
+
+### scan 実行レベル (Level 0 固定 — read-only)
+
+scan / patrol / detect モードは **Level 0 のみ**。
+
+許可:
+
+- Read / Grep / Glob
+- `git log` / `git blame` / `git diff` / `git ls-files`
+- `gh issue list` / `gh issue view` / `gh search` 等の **read-only** GitHub 操作
+
+禁止:
+
+- ファイル編集 / commit / push
+- ビルド・テスト・型チェック・lint 実行 (`cargo check` / `vue-tsc` / `flutter analyze` 等)
+- 依存の追加・削除 / migration / snapshot 生成 / 設定ファイル変更
+- `gh issue create` / `edit` / `comment` 等の **write** GitHub 操作
+
+例外: spawn 入力に **`allow_level_1: true` が明示された場合のみ** lint / typecheck を実行してよい。
+Level 1 以上は apply / investigation Issue / 司令官が明示した verification task で実行する。
 
 ---
 

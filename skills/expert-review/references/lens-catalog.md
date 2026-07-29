@@ -214,14 +214,14 @@ review-expert は重複監査しない。
 
 ### 主な観点
 
-- **構造劣化**: ネスト 3 階層超過 / 関数 100 行超過 / 責務混線
+- **構造劣化**: 対象 repo 既定 2 階層 (repo の CLAUDE.md 定義があればそれ) を超えるネスト / 関数 100 行超過 / 責務混線
 - **過剰抽象化**: 1 関数 1 ファイル / interface / impl 形式分離 / 不要な generic
 - **命名・配置**: 一貫性のない命名 / 既存ディレクトリ規則からの逸脱
 - **バグの種**: 暗黙の副作用 / 非対称な dispose / 後で踏みやすい罠
 
 ### 典型 finding 例
 
-- ネストが CLAUDE.md 規約 (if 3 階層 / for 2 階層) を超過
+- ネストが対象 repo 既定 2 階層 (repo の CLAUDE.md 定義があればそれ) を超過
 - 同じ責務のコードが 3 箇所に散在 (DRY 違反)
 - 既存命名規則と異なる命名で導入された (例: snake_case / camelCase 混在)
 - 不要な抽象化が複雑性を増した (層が増えただけで価値がない)
@@ -270,7 +270,7 @@ review-expert は finding ごとに `recommended_fix_expert` を提案する (op
 | Workflow / UX (visual / component / design token / layout pattern) | designer-expert | ux-ui-audit-expert | — |
 | Test / Regression | test-expert | null | spec-expert (仕様不明確時は spec-expert へ先) |
 | Compatibility | compatibility-expert (planned) | null | debug-expert / refactor-expert (fallback) |
-| Release | release-expert (planned) | null | release / installer / distribution 方針判断は `needs_human_decision`。build / packaging failure / artifact / config 構造整理が主題の場合のみ debug-expert / refactor-expert に **誤分類の再分類** (release-expert を経路に残す fallback は禁止) |
+| Release | release-expert (planned) | null | 方針判断は `needs_human_decision`。build / packaging failure / artifact / config 構造整理が主題の場合のみ **誤分類の再分類** として debug-expert / refactor-expert。**release-expert を経路に残す fallback は禁止** |
 | Spec | spec-expert (Utility Worker) | null | feature-expert (実装観点) |
 | Refactor / Maintainability | refactor-expert | null | debug-expert (バグの種なら) |
 
@@ -282,7 +282,7 @@ review-expert は finding ごとに `recommended_fix_expert` を提案する (op
 - **planned expert** (`compatibility-expert` / `release-expert` / `env-expert`) は実装後に有効。planned 期間中は op-run が spawn 前に正規化する。
   - `compatibility-expert` / `env-expert` は active fallback (`debug-expert` / `refactor-expert`) または `needs_human_decision` に置き換える
 - **Utility Worker** (`spec-expert`) は active だが op-run routing 対象外 (op-spec 専用 worker)。recommended_fix に現れても op-run は spawn 前に `feature-expert` (acceptance 明確) / `needs_human_decision` (仕様不明) に正規化する (`op-run-expert: spec-expert → feature-expert`)。
-  - `release-expert` は **fallback destination として扱わない**。release / installer / updater / distribution / signing / versioning 方針判断は `needs_human_decision`。build / packaging failure / artifact / config 構造整理が主題なら release-expert の fallback ではなく **誤分類の再分類** として `debug-expert` / `refactor-expert` に付け直す
+  - `release-expert` は **fallback destination として扱わない** (解決規則の詳細は `handoff-boundaries.md` §7-2)
   - canonical な正規化ルールは `~/.claude/skills/_shared/expert-spawn.md` の Planned Expert Notice を参照
 
 `recommended_fix_expert` はあくまで提案。op-run が以下の優先順位で最終決定する。

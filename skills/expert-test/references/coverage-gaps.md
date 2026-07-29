@@ -1,13 +1,28 @@
 # expert-test カバレッジギャップ検出辞典
 
 <!--
-機能概要: SKILL.md の top 5 ギャップカテゴリの言語別検出方法と修正テンプレ
+機能概要: カバレッジギャップ top 5 の catalog 索引 + 言語別検出方法と修正テンプレ
+         (索引は SKILL.md 本文から移設。本ファイルが catalog の正本)
 作成意図: coverage 値だけでなく "なぜそこが穴か" を見抜く判定材料を提供
 注意点: カバレッジ拡張は削除より優先度低い。明らかな Critical 機能の穴のみ対象
 -->
 
 カバレッジツールの「行カバー率」だけでは「**意味のある穴**」を見抜けない。
 本辞典は 5 カテゴリのギャップを言語別に検出する方法を集約。
+
+---
+
+## catalog 索引 (top 5)
+
+| # | ギャップ | 検出方法 |
+|---|---------|---------|
+| 1 | 未テスト分岐 | coverage report の missing lines、`if` の片側のみテスト |
+| 2 | エラーパス未検証 | `try` 内の正常系のみテスト、`except`/`catch` 側未到達 |
+| 3 | 境界値未テスト | 空配列・null・最大値・1 件・0 件の入力テスト不在 |
+| 4 | 並行性未テスト | async / lock / shared state の race condition 検証なし |
+| 5 | 権限境界未テスト | 認可違反パス未テスト、role 別の各 role 未網羅 |
+
+言語別の検出コマンド・穴の例・修正テンプレは以下の対応する番号の節を Read する。
 
 ---
 
@@ -250,3 +265,7 @@ def test_delete_endpoint_authorization(client, role, expected_status):
 - `coverage-gap-permission`: 権限境界の未網羅 role が複数
 
 5 件以上の同一カテゴリは個別 Issue ではなくバッチ Issue 化して 1 PR で一括追加。
+
+> test-expert の bulk_group 全量 (8 種、garbage 系含む) と想定 action の正本は
+> `references/scan-contract.md` の「bulk_group カテゴリ (test-expert 固有)」節。
+> 本節はカバレッジ穴側の補足カテゴリを示す。

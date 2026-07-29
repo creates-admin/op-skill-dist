@@ -9,6 +9,41 @@
        visibility を広げて通すだけの分割を「悪化」として扱う。
 -->
 
+<!-- anchor: patrol-sampling -->
+
+## Patrol Sampling 優先度 (op-patrol 経由の巡回対象選定)
+
+op-patrol から呼ばれた場合、repo 全体を均等に見ず **risk-weighted に巡回**する。
+巡回対象を決める前に本節を読み、優先度高の観点から着手する。
+
+主な patrol 対象 (何を探すか):
+
+- 肥大化し続けているファイル
+- ゴッド関数 / 巨大 Tauri command / 巨大 Vue component / 巨大 Flutter Widget
+- utils / common / helpers のゴミ箱化
+- feature 間の依存逆流
+- path / key / command / status / token の散乱
+- ディレクトリ構造の一貫性崩壊
+- architecture_debt の再検出
+- 新規コードによる既存負債の悪化
+
+優先度高 (どこから見るか):
+
+- 最近変更されたファイル
+- 行数が増加傾向のファイル
+- import 数が多いファイル
+- public export が多いファイル
+- utils / common / helpers
+- src-tauri commands
+- feature boundary
+- path / config / IPC / storage / status を含むファイル
+- 過去に `architecture_debt` として検出された affected_paths
+- 新規実装によって触られた既存 debt 周辺
+
+出力契約は scan モードと同じ (SKILL.md「Canonical Schema Contract」節が正本)。
+
+---
+
 ## God Function
 
 ### Detection (High として検出する条件)

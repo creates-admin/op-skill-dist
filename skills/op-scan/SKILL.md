@@ -217,7 +217,7 @@ spawn の並列管理 (16 並列上限の透過キューイング) は workflow 
 
 ```
 1. デフォルト: 6 expert (debug / refactor / optimize / security / ux-ui-audit / designer)
-   ※ security-expert は Phase 2 で active 化済み (subagent_type: op-skill:security-expert で正式 spawn)。
+   ※ security-expert は Phase 2 で active 化済み (subagent_type: "op-skill:security-expert" で正式 spawn)。
      installed check は agent 実体削除等の異常状態を検出する legacy guard として残る。
 2. --domain a,b,c が指定された場合: そのリストのみ
    - alias: ux → ux-ui (ux-ui-audit-expert)
@@ -284,7 +284,7 @@ skip 時の挙動 (詳細は `skills/_shared/runtime-contract.md` の fallback �
 | `--domain <planned>` が明示指定され、対象 expert が planned (例: `--domain env`) | warning + 司令官 fallback scan (grep ベース audit) に切り替え。検出 finding には planned 名を **routing metadata として保持してよい** が runtime spawn はしない (Issue 起票時のラベルは `labels-and-markers.md` 参照) |
 | `--domain` で planned のみ指定された場合 (例: `--domain env` のみ) | fallback scan を実行し、結果が空でも空配列で正常終了 |
 
-`--domain security` 等の active expert は通常通り `subagent_type: op-skill:<expert-name>` で正式 spawn する
+`--domain security` 等の active expert は通常通り `subagent_type: "op-skill:<expert-name>"` で正式 spawn する
 (plugin scoped-name 規約の正本は `_shared/expert-spawn.md` §Plugin scoped-name 規約)。
 agent 実体が万一削除されている異常状態 (legacy guard) では、`runtime-contract.md` の fallback 規約に従い
 司令官 fallback scan に切り替える。fallback の事実は、フェーズ3 のサマリと最終報告の両方に必ず明示する
@@ -661,7 +661,7 @@ apply はこの計画をテンプレとして即実装。
 #### 必須 marker (全 Issue 共通)
 
 ```markdown
-<!-- op-fingerprint: <domain>:<short-id>:<primary_file>:<symbol> -->
+<!-- op-fingerprint: <domain>:<normalized_title>:<primary_file>:<symbol> -->
 <!-- op-source: op-scan -->
 <!-- op-domain: <debug | refactor | optimize | security | ux-ui | design | test | feature | env> -->
 <!-- op-scan-expert: <検出した expert agent 名> -->

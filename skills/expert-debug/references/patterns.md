@@ -1,16 +1,73 @@
 # expert-debug 言語別パターン全集 (active stack)
 
 <!--
-機能概要: SKILL.md の top 20 catalog から漏れた言語別バグパターンを網羅
+機能概要: バグパターン catalog (top 20) の索引と、そこから漏れた言語別バグパターンの網羅
 作成意図: Rust / Tauri v2 / Vue 3 / TypeScript / Flutter / Dart の
          境界・低頻度・固有パターンを深掘り辞典として提供する。
          SKILL.md を肥大化させずにカバー範囲を広げる。
+         2026-07-29 (ADR-0030 Wave B1) に SKILL.md 本文の top 20 catalog
+         (検出兆候列) を冒頭「catalog 索引 (top 20)」節へ移設し、
+         本ファイルを **検出兆候一覧の正本** とした (内容は移設前と同一)。
 注意点: agent は必要時のみ Read する想定。常時参照ではない。
        React / Go は対象外スタックのため扱わない。
 -->
 
-SKILL.md の top 20 が当たらない場合、または特定スタックの深掘りが必要な場合に Read する。
+scan (detect) で当たりを付けるとき、top 20 が当たらない場合、
+または特定スタックの深掘りが必要な場合に Read する。
 **active_stack: Rust / Tauri v2 / Vue 3 / TypeScript / Dart / Flutter** が対象。
+
+冒頭の「catalog 索引 (top 20)」節が **検出兆候一覧の正本**である
+(SKILL.md 本文には 4 領域と各領域の代表 2 件しか無い)。
+
+---
+
+## catalog 索引 (top 20 — active stack 集中版)
+
+scan モード (detect) ではこの表で当たりを付け、apply モード (fix) でも修正方針の参考にする。
+報告閾値は SKILL.md の Severity Policy 節 (Critical/High のみ) に従う。
+
+### Tauri v2 境界 (最頻出 / 探知優先度 1)
+
+| # | パターン | 検出兆候 |
+|---|---------|---------|
+| 1 | invoke payload と Rust command 引数不一致 | TS 側の `invoke('cmd', { foo })` と Rust の `#[tauri::command] fn cmd(bar: ...)` で名前/型が乖離 |
+| 2 | command 戻り値の Result serialize 失敗 | `Result<T, E>` の `E` が Serialize 未実装 / 詳細不明エラーが UI に届く |
+| 3 | capability / permission 漏れ | dev では動くが build 後だけ失敗 (`capabilities/*.json` 未記載) |
+| 4 | path scope 漏れ | dialog の戻りを使った fs アクセスが本番だけ deny される |
+| 5 | WebView 側 invoke エラー握りつぶし | `invoke().catch(...)` 不在で UI が無反応 |
+
+### Rust (探知優先度 1)
+
+| # | パターン | 検出兆候 |
+|---|---------|---------|
+| 6 | `unwrap()` / `expect()` panic | None / Err でプロセス終了 (Tauri 経由で UI クラッシュ) |
+| 7 | tokio::spawn の JoinHandle 捨て | spawn 後に handle 無視で処理結果 / panic が消える |
+| 8 | std::fs と async runtime 混在 | async 関数内で `std::fs::*` 直呼び → ランタイム block |
+| 9 | Result / `?` 経路の panic 混入 | エラー伝播パスに `unwrap` / `panic!` が紛れる |
+| 10 | path canonicalize 漏れ | allowed root 外への書き込みを許す TOCTOU / traversal |
+
+### Vue 3 + TypeScript (探知優先度 1)
+
+| # | パターン | 検出兆候 |
+|---|---------|---------|
+| 11 | reactivity 喪失 | `state = newObj` で reactive 参照切れ / `.value` 付け忘れ |
+| 12 | invoke の catch 漏れ | `await invoke(...)` を try/catch なしで呼び、ユーザーに silent 失敗 |
+| 13 | loading / error / success state 競合 | 画面遷移後に古い async result を反映 / 二重 setState 風挙動 |
+| 14 | Pinia store と component local state の二重管理 | 同じデータを両方に持ち、片方だけ更新 |
+| 15 | Promise の非待機 / forEach 内 await 効かない | 並列実行の意図のない for await を `forEach` で書く |
+
+### Flutter / Dart (探知優先度 1)
+
+| # | パターン | 検出兆候 |
+|---|---------|---------|
+| 16 | controller / subscription の dispose 漏れ | TextEditingController / FocusNode / AnimationController / StreamSubscription の close 漏れ |
+| 17 | async gap 後の context / mounted 利用 | `await` 後の `BuildContext` 使用、`if (mounted)` ガード不在 |
+| 18 | FutureBuilder の future 再生成 | build 内で `Future.then(...)` を直接渡し毎フレーム再実行 |
+| 19 | initState で async 直扱い | `initState` で `await` できず未待機の future が走る |
+| 20 | platform channel / file picker の error 未処理 | desktop / mobile の path 差・permission 例外を catch していない |
+
+各パターンの言語別具体例・追加パターン (低頻度) は以下の各節を参照
+(React / Go は対象外スタックのため扱わない)。
 
 ---
 
@@ -196,8 +253,8 @@ AI Gateway 等の Python backend リポジトリでのみ参照する。それ�
 | パターン | 症状 | 確認方法 |
 |---------|------|---------|
 | Daylight Saving Time | 3/11, 11/4 付近で時刻計算ズレ | UTC で計算、表示時のみローカル変換 |
-| 整数オーバーフロー | 32bit int で大きな掛け算 | 型を 64bit / BigInt / Rust なら i64 / checked_* |
-| 文字列正規化 (NFC/NFD) | macOS と Linux / Windows でファイル名比較失敗 | NFC 統一 (Rust: `unicode-normalization`、Python: `unicodedata`) |
+| 整数オーバーフロー | 32bit int で大きな掛け算 | 型を 64bit / JS は BigInt / Rust なら i64 / `checked_*` (Rust の詳細は上記 panic safety 節) |
+| 文字列正規化 (NFC/NFD) | macOS と Linux / Windows でファイル名比較失敗 | NFC 統一 (Rust: `unicode-normalization`、Python: `unicodedata`。詳細は上記 filesystem / path 節) |
 | BOM 付きファイル | 先頭 3 バイトが `\xef\xbb\xbf` | utf-8-sig で読む / Rust なら手動スキップ |
 | ロケール依存ソート | 言語環境で結果が違う | 明示ロケール指定、または codepoint sort |
 | 浮動小数点比較 | `0.1 + 0.2 != 0.3` | epsilon 比較 / 整数化 / Decimal |

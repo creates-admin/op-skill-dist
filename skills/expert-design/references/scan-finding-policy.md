@@ -24,7 +24,7 @@ scan の `design_principle_violated` フィールドの値域は agent.md `desig
 
 ## non-frontend scope での挙動 (即終了ルール)
 
-scope / area に **UI surface が一切存在しない場合は、即座に空配列 `[]` を返す**。
+scope / area に **UI surface が一切存在しない場合は、即座に空 envelope `{"findings": []}` を返す**。
 op-scan / op-patrol が誤って designer-expert を呼んだ場合の安全弁であり、巡回コスト削減にも効く。
 
 ### UI surface とみなすもの (1 つでもあれば audit を進める)
@@ -44,7 +44,7 @@ op-scan / op-patrol が誤って designer-expert を呼んだ場合の安全弁�
 - インフラ・設定ファイル (`Dockerfile`, `.github/`, `terraform/`)
 
 判定不能な mixed scope (Tauri 等) は UI surface があるかを Glob で素早く確認し、
-あれば audit、無ければ `[]` を返す。
+あれば audit、無ければ `{"findings": []}` を返す。
 
 ---
 
@@ -116,7 +116,7 @@ design:visual-hierarchy-break # 重要度と視覚重みの不一致
 
 ## scan 出力契約 (canonical schema 補足)
 
-`~/.claude/skills/_shared/expert-spawn.md` の canonical schema に従う JSON 配列。
+`~/.claude/skills/_shared/expert-spawn.md` の canonical schema に従う finding を `{"findings": [...]}` envelope に入れた JSON object。
 `domain` フィールドには **`design`** を入れる。
 
 各検出に以下を含める。
@@ -308,7 +308,7 @@ canonical schema の正本は `_shared/expert-spawn.md`。design ドメインで
 ### 骨格スケルトン (値は全てプレースホルダ)
 
 ```json
-[
+{"findings": [
   {
     "title": "<検出パターン>が<N>箇所に散在し<影響>を阻害",
     "severity": "high",
@@ -325,5 +325,5 @@ canonical schema の正本は `_shared/expert-spawn.md`。design ドメインで
     "blocking": false,
     "blocking_reason": null
   }
-]
+]}
 ```

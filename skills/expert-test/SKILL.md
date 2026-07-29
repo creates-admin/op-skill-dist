@@ -6,8 +6,9 @@ description: test-expert agent の方法論教科書。テストスイートの 
 # expert-test: test-expert の知識ベース
 
 <!--
-機能概要: test-expert agent がテストスイートの保守・改善を担う際に
-         参照する方法論・ゴミテスト catalog・最適テスト原則を集約した教科書。
+機能概要: test-expert agent がテストスイートの保守・改善を担う際の方法論・実行権限・
+         severity 判定・最適テスト原則・削除 3 段階モデルを集約した教科書 (薄い入口型)。
+         catalog 兆候列 / scan 出力 schema 完全形 / 削除 PR テンプレは references/ 側が正本。
 作成意図: 各 expert が "ついで書き" する最低限テスト (debug = 1 本リグレッション、
          feature = 1〜2 本 happy path) と、スイート全体の保守・最適化を分離する。
          test-expert はスイート全体のオーナー。
@@ -28,10 +29,17 @@ agent は以下に従って自走する:
 - **実行権限** (scan / apply の許可・禁止操作)
 - **5 ステップメソドロジー**
 - **severity / confidence の判定** (危険度と確信度を分ける)
-- **ゴミテスト catalog** / **カバレッジギャップ catalog**
 - **テスト種別の選択基準** (テストピラミッド)
 - **最適なテスト原則** / **良いテストの定義** (追加前チェックリスト)
 - **テスト削除の 3 段階モデル**
+
+mode 別の必読 references は以下:
+
+| mode | 必読 references |
+|------|----------------|
+| scan | `references/garbage-patterns.md` (catalog 索引 top14 + 言語別具体例) / `references/coverage-gaps.md` (catalog 索引 top5 + 検出法) / `references/scan-contract.md` (recommendation テンプレ / 強化スキーマ / フィールド要点 / bulk_group) |
+| apply (テスト追加・書き直し) | `references/tools.md` (mock 方針 / flaky 診断 / parametrize / fixture) |
+| apply (削除・quarantine) | `references/tools.md` の「削除時の PR テンプレと安全弁コマンド」節 |
 
 ---
 
@@ -114,7 +122,8 @@ op-scan / op-run から呼ばれた時、agent は以下の契約に従う。
 
 ### 2. ゴミテストの検出
 
-`references/garbage-patterns.md` の 14 カテゴリで grep / Read / coverage report を突き合わせる。
+**scan では、grep を回す前に `references/garbage-patterns.md` の「catalog 索引 (top 14)」節を必ず Read する**
+(本文に catalog 表は持たない)。14 カテゴリで grep / Read / coverage report を突き合わせる。
 
 主要検出キー:
 - `\.skip\(|\.todo\(|xit\(|xdescribe\(` (スキップ放置)
@@ -126,7 +135,7 @@ op-scan / op-run から呼ばれた時、agent は以下の契約に従う。
 
 ### 3. カバレッジギャップの検出
 
-`references/coverage-gaps.md` の 5 カテゴリで分析:
+**`references/coverage-gaps.md` の「catalog 索引 (top 5)」節と 5 カテゴリを必ず Read してから**、以下の観点で分析する:
 - 未テスト分岐 (coverage report の missing lines)
 - エラーパス (try/except の except 側未テスト)
 - 境界値 (空・null・最大値の入力テストなし)
@@ -155,43 +164,6 @@ op-scan / op-run から呼ばれた時、agent は以下の契約に従う。
 - fixture 整理 → 影響テスト全 pass を確認
 - 1〜2 ファイルごとに `pytest -x` / `vitest run --bail` で fail-fast 検証
 - 完了後にスイート全体の実行時間を比較 (悪化していないか)
-
----
-
-## ゴミテスト catalog (top 14)
-
-scan モードで検出する主要パターン。詳細は `references/garbage-patterns.md`。
-
-| # | カテゴリ | 検出兆候 |
-|---|---------|---------|
-| 1 | 死んだテスト | import エラーで collect 失敗、削除されたコードを参照 |
-| 2 | 重複カバレッジ | 同じ関数を 3 回以上テスト、parametrize で統合可能 |
-| 3 | 自明なテスト | getter/setter の値返し、フレームワーク機能テスト |
-| 4 | 実装詳細依存 | private メソッド直テスト、内部フィールド検証 |
-| 5 | 脆弱セレクタ | 深い CSS / XPath、絶対座標、index ベース選択 |
-| 6 | 非決定的 | `Date.now()` / `Math.random()` 凍結なし、order-dependent |
-| 7 | 環境依存 | 実 HTTP 呼び出し、`/tmp` 書込放置、locale 依存 |
-| 8 | モック過多 | 全部 mock で本体コード未経由 |
-| 9 | アサーション弱 | snapshot のみ、意味検証なし、常時 true |
-| 10 | 放置スキップ | `.skip` / `xit` がチケット参照なし |
-| 11 | 長 setup / 短 assert | fixture 30 行 + assert 1 行 |
-| 12 | 命名不良 | `test1`, `it('works')`, 振る舞い説明なし |
-| 13 | タイミング依存 | `sleep(100)` ハードコード、CI で flaky |
-| 14 | TODO 放置 | `TODO: implement` のまま skip |
-
----
-
-## カバレッジギャップ catalog (top 5)
-
-| # | ギャップ | 検出方法 |
-|---|---------|---------|
-| 1 | 未テスト分岐 | coverage report の missing lines、`if` の片側のみテスト |
-| 2 | エラーパス未検証 | `try` 内の正常系のみテスト、`except`/`catch` 側未到達 |
-| 3 | 境界値未テスト | 空配列・null・最大値・1 件・0 件の入力テスト不在 |
-| 4 | 並行性未テスト | async / lock / shared state の race condition 検証なし |
-| 5 | 権限境界未テスト | 認可違反パス未テスト、role 別の各 role 未網羅 |
-
-詳細・言語別検出方法は `references/coverage-gaps.md`。
 
 ---
 
@@ -226,173 +198,8 @@ agent が断定的に削除・修正に倒れるのを防ぐため、**severity*
 > severity が高くても confidence が low のものは、断定的に処理せず必ずレビューを挟む。
 > 例: `severity: critical, confidence: low, needs_human_decision.required: true` は **正常な状態**。
 
----
-
-## scan の責務: 「実装計画つき Issue」を出す
-
-カバレッジギャップ検出 (テスト不足) は「ここに穴がある」だけでなく、
-**apply が即実装できる具体計画** を `recommendation` に詰める。
-これで context 喪失問題を構造的に防ぐ (scan の判断が apply に完全継承)。
-
-### recommendation の構造化フォーマット (テスト追加 Issue 用)
-
-```markdown
-## 追加テスト計画
-
-### 対象
-- 関数 / モジュール: `path/to/file.ext::funcName`
-- 現状カバレッジ: <line N% / branch M%>
-
-### テスト意図 (なぜこのテストが必要か)
-- 守る仕様:
-  - <このテストが保証する外部仕様・業務仕様>
-- 想定する失敗モード:
-  - <このテストが落ちることで検出したいバグ>
-- テスト種別:
-  - unit / integration / contract / e2e / regression / property / perf のいずれか
-- なぜこの層でテストするか:
-  - <unit で十分か、integration が必要か、e2e でしか確認できないか>
-- mock 方針:
-  - mock するもの: <...>
-  - mock しないもの: <...>
-  - 理由: <...>
-- このテストが失敗したときに疑う箇所:
-  - <原因候補>
-
-### 追加するテストケース
-| # | ケース名 | 入力 | 期待出力 | カバー対象 |
-|---|---------|------|---------|----------|
-| 1 | empty_input | `[]` | `0` | 境界値 (空) |
-| 2 | single_item | `[5]` | `5` | 通常系 |
-| 3 | mixed_signs | `[-1, 2, -3]` | `-2` | 符号混在 |
-| 4 | overflow_safe | `[MAX_INT]` | `MAX_INT` | 境界値 (最大) |
-
-### 必要な fixture / mock
-- 既存 fixture 再利用: `<fixture-name>` (`tests/conftest.py`)
-- 新規 fixture: <なし or 名前と内容 / 2 箇所以上で使う見込みがあるか>
-- mock 対象: <なし or 対象関数とモック方針>
-
-### 推定規模
-- 追加 LoC: 約 N 行
-- 追加ファイル: 0 (既存テストファイルに追加) or 1 (新規テストファイル)
-- 実行時間影響: <推定 +X ms>
-
-### カバレッジ予測
-- Before: line X% / branch Y%
-- After: line A% / branch B%
-- 注: Critical 機能のみ Critical/High 起票、それ以外は対象外。
-       coverage 上昇だけを目的にしたテストは追加しない。
-```
-
-### 強化スキーマ (test-expert 共通)
-
-削除系・修正系・追加系すべてで共通して使う schema。
-apply agent が迷わず処理できるよう、**severity / confidence / action / safety_gate** を必須とする。
-
-```json
-{
-  "title": "discount() の else 分岐が未テスト",
-  "severity": "high",
-  "severity_reason": "請求ロジックの通常価格パス (else 分岐) がカバーされておらず、バグが混入しても自動検出できない。billing 機能に直結するため High。",
-  "domain": "test",
-  "files": ["src/pricing.ts:42", "tests/pricing.test.ts"],
-  "symbols": ["discount"],
-  "confidence": "high",
-  "issue_type": "coverage_gap",
-  "action": "add_test",
-
-  "summary": "premium ユーザー以外の通常価格パスがテストされていない。請求ロジックに直結するため High。",
-  "evidence": "discount() の if user.isPremium 側のみ test_discount_premium がカバー、else 側は未到達 (branch coverage で確認)",
-  "evidence_grade": "direct",
-  "evidence_sources": ["coverage", "source_read", "test_run"],
-
-  "hypothesis": "discount() 追加時に premium ユーザーのテストだけ書かれ、else 分岐のテストが漏れたまま放置された。",
-  "excluded_hypotheses": [
-    "else 分岐は到達不能: 否定 (通常ユーザーで呼ばれる実装パスが存在する)"
-  ],
-
-  "risk_if_ignored": "請求ロジックの通常価格パスにバグが入ってもテストで検出できない",
-  "risk_if_changed": "なし (テスト追加のみ、本体変更なし)",
-  "protected_behavior": "premium 以外のユーザーは total そのままを返す",
-
-  "test_intent": {
-    "spec": "discount(user, total) は user.isPremium=false のとき total を変更しない",
-    "failure_mode": "通常ユーザーに対して誤って割引が適用される、または 0 / NaN が返る",
-    "test_type": "unit",
-    "why_this_layer": "純粋関数。integration や e2e に逃がす理由がなく、unit で十分守れる",
-    "mock_policy": {
-      "mock": [],
-      "do_not_mock": ["discount 本体"],
-      "reason": "純粋関数のため mock は不要。mock するとテストが本体を経由しなくなる"
-    },
-    "failure_suspects": ["discount の条件式の反転", "isPremium プロパティ名の typo"]
-  },
-
-  "safety_gate": {
-    "requires_blame": false,
-    "requires_coverage_diff": false,
-    "requires_ci_pass": true,
-    "requires_observation_period": false
-  },
-  "needs_human_decision": {"required": false},
-
-  "scope_in": ["tests/pricing.test.ts"],
-  "scope_out": ["src/pricing.ts (実装変更不要)"],
-  "verification_steps": [
-    "branch coverage が 100% になる",
-    "test.each で premium / regular の両方を 1 テストでカバー"
-  ],
-  "success_criteria": "tests/pricing.test.ts の discount テストが両分岐カバー、coverage.branches >= 100% で discount 関数",
-  "gotchas": [
-    "既存テストの命名が test_discount_premium のため、追加分は test_discount_regular とする"
-  ],
-
-  "recommendation": "## 追加テスト計画\n\n### 対象\n- 関数: src/pricing.ts::discount\n- 現状: line 100% / branch 50%\n\n### テスト意図\n- 守る仕様: isPremium=false のとき total そのまま\n- 失敗モード: 通常ユーザーに誤割引\n- 種別: unit / mock なし\n\n### 追加ケース\n| # | ケース | 入力 | 期待 |\n|---|-------|------|------|\n| 1 | regular | { isPremium: false } | total そのまま |\n\n### fixture\n既存 makeUser を再利用\n\n### 推定: +6 LoC, branch 50% → 100%",
-
-  "bulk_group": null,
-  "recommended_runner": "test-expert",
-  "post_check_expert": null,
-  "blocking": false,
-  "blocking_reason": null
-}
-```
-
-### スキーマフィールド要点
-
-以下は test-expert 固有フィールドと canonical 必須フィールドの一覧。
-canonical 必須フィールドの正本定義は `_shared/expert-spawn.md` を参照。
-
-| フィールド | 役割 |
-|-----------|------|
-| `severity` | 危険度 (critical / high / medium / low) |
-| `severity_reason` | **canonical 必須**: Critical / High と判定した根拠 (到達経路・観測可能な被害・影響範囲) |
-| `domain` | **canonical 必須**: `test` 固定 |
-| `symbols` | **canonical 必須**: テスト対象の関数名 / クラス名 / コンポーネント名 |
-| `evidence_grade` | **canonical 必須**: `direct` / `inferred` / `requires_runtime`。`direct` 以外で Critical 不可 |
-| `hypothesis` | **canonical 必須**: scan が立てた根本原因仮説 |
-| `excluded_hypotheses` | **canonical 推奨**: 検討したが否定した仮説と否定根拠 |
-| `recommended_runner` | **canonical 必須**: `test-expert` 固定 |
-| `post_check_expert` | **canonical 必須**: 不要なら `null` を明示 (テスト追加のみなら原則 `null`) |
-| `blocking` | **canonical 必須**: 新規変更が既存 debt を悪化させる場合 `true`。`blocking_reason` と対 |
-| `blocking_reason` | **canonical 必須**: `blocking: false` なら `null`、`true` なら理由を 1 行 |
-| `confidence` | 根拠の強さ (high / medium / low) — severity と独立 |
-| `issue_type` | `garbage_test` / `coverage_gap` / `flaky` / `fixture_refactor` / `naming` / `performance` |
-| `action` | `add_test` / `rewrite_test` / `consolidate_tests` / `mark_skip` / `delete_test` / `needs_human_decision` |
-| `evidence_sources` | `grep` / `coverage` / `test_run` / `git_blame` / `ci_log` / `source_read` の組合せ |
-| `risk_if_ignored` | 放置した時の被害 |
-| `risk_if_changed` | 変更による副作用リスク |
-| `protected_behavior` | このテストが守っている仕様 (削除候補で必須) |
-| `test_intent` | 守る仕様 / 失敗モード / 種別 / mock 方針 / 失敗時の被疑箇所 |
-| `safety_gate` | blame / coverage diff / CI / 観察期間のうち、apply 前に通過すべき関門 |
-| `needs_human_decision` | required:true なら apply は手を出さず人間判断を待つ |
-
-apply agent は `recommendation` の計画を実装テンプレとしてそのまま使う。
-仕様の不明点があれば:
-- Direct Mode: Issue コメント / ユーザーへの確認可
-- OP-managed Mode: 質問せず `needs_human_decision` (decision_type: "behavior") で構造化返却。
-  Issue コメント化は commander が判断する
-
-`needs_human_decision.required: true` の Issue には apply しない。
+> **scan で finding を返すなら、JSON を組み立てる前に `references/scan-contract.md` を必ず Read する**
+> (recommendation の構造化フォーマット・強化スキーマ全文・スキーマフィールド要点表・bulk_group 表はそちらが正本)。
 
 ---
 
@@ -456,7 +263,15 @@ apply モードでテストを追加する前に、以下をすべて満たす�
 □ coverage 上昇だけを目的にしていない
 ```
 
-1 項目でも満たせない場合は、テストを書く前に Issue にコメントして仕様を確認する。
+1 項目でも満たせないなら、そのテストは「守る仕様」か「検出したい失敗モード」のどちらかが未確定である。
+書き始める前に、不足しているのが **仕様の確定** か **検証手段の設計** かを切り分けて判断する。
+
+- **仕様が確定していない** (何が正しい挙動か決められない / business rule か偶然か不明): 書かずに止める。
+  Direct Mode は人間に確認してよい。OP-managed Mode は質問せず `needs_human_decision`
+  (decision_type: "behavior") で構造化返却する
+- **検証手段の設計が足りない** (mock 方針・fixture・決定性の作り方が決まらない): 仕様は確定しているので
+  止めず、`references/tools.md` (mock 方針 / flaky 診断 / fixture) を Read してから書く
+- 判断がつかない場合は「書かずに返す」側に倒す (価値を説明できないテストを足すより、棚卸しに残す方が安い)
 
 ---
 
@@ -464,6 +279,10 @@ apply モードでテストを追加する前に、以下をすべて満たす�
 
 「削除候補 → 隔離 → 実削除」の 3 段階に分け、各段階で安全弁を通過させる。
 agent が一気に実削除に倒れるのを構造的に防ぐ。
+
+**delete_candidate 以降 (quarantine / delete) を実施する apply では、ファイルに触れる前に
+`references/tools.md` の「削除時の PR テンプレと安全弁コマンド」節を必ず Read する。**
+安全弁 4 種 (blame / coverage diff / CI / 観察期間) を通していない削除は不可。
 
 ### 1. delete_candidate (棚卸し段階)
 
@@ -485,7 +304,7 @@ agent が一気に実削除に倒れるのを構造的に防ぐ。
 - git blame で追加意図を確認済み
 - 同等カバレッジが他テストに存在することを coverage diff で確認済み
 - 必要なら補完テストを **先に** 追加済み
-- PR 本文に削除根拠 (追加コミット / 意図 / 価値喪失理由 / 同等カバレッジ) を記載
+- PR 本文に削除根拠を記載 (テンプレは `references/tools.md` の「削除時の PR テンプレと安全弁コマンド」節を参照)
 
 ### 3. delete (実削除段階)
 
@@ -513,95 +332,37 @@ agent が一気に実削除に倒れるのを構造的に防ぐ。
 read-only audit。テストファイル・カバレッジレポート・CI 履歴・**git blame** を参照。
 
 検出対象:
-- 上記 14 カテゴリのゴミテスト (severity が critical / high のものを報告)
-- 上記 5 カテゴリのカバレッジギャップで Critical 機能に該当するもの
+- ゴミテスト 14 カテゴリ (severity が critical / high のものを報告)
+- カバレッジギャップ 5 カテゴリで Critical 機能に該当するもの
 - スイート実行時間の異常 (> 5 分等)
 
-報告ルール:
-- すべての Issue に `severity` と `confidence` を必ず付ける
-- `confidence: low` のものは断定せず `needs_human_decision.required: true` を検討
-- `severity: critical, confidence: low` は **正常な状態** (人間判断要求として返す)
+報告ルール: severity / confidence の付け方・`needs_human_decision` 判定は上記「severity / confidence の判定」節に従う。
 
 出力契約は `_shared/expert-spawn.md` の **scan 共通スキーマ** に従う。
-test-expert 固有の `bulk_group` カテゴリ:
-
-| bulk_group | 対象 | 想定 action (3 段階モデル準拠) |
-|-----------|------|---------|
-| `garbage-skip-untracked` | チケット参照なしの `.skip` / `xit` | delete_candidate (skip 理由追記 or quarantine) |
-| `garbage-trivial-snapshot` | snapshot のみで意味検証なし | rewrite_test (振る舞いアサート追加) |
-| `garbage-always-pass` | `expect(true).toBe(true)` 等の常時 pass | delete_candidate |
-| `garbage-dead-import` | import 壊れて collect 失敗 | delete (例外として 1 PR 削除可) |
-| `garbage-flaky-timing` | `sleep(N)` ハードコードで CI flaky | rewrite_test (仮想時計化) |
-| `garbage-trivial-getter` | 自明な getter/setter テスト | delete_candidate |
-| `coverage-gap-error-path` | 同領域で error path 未テストが集中 | add_test (一括追加) |
-| `coverage-gap-boundary` | 境界値テスト未整備 | add_test (parametrize で一括追加) |
-
-5 件以上の同 bulk_group は op-scan がバッチ Issue 化する。
+**scan で finding を返す前に `references/scan-contract.md` を必ず Read する** —
+recommendation の構造化フォーマット・強化スキーマ・スキーマフィールド要点表・
+test-expert 固有の `bulk_group` カテゴリ (8 種) とバッチ Issue 化ルールはそちらが正本。
 delete_candidate は **3 段階モデル** に従い、いきなり物理削除しない。
 
 ### apply モード (op-run から呼ばれた時)
 
-5 ステップメソドロジーに従って自走:
+**核心メソドロジーの 5 ステップ**に従って自走する (手順詳細は該当節を参照)。apply 固有の優先度づけ:
 
-1. 現状把握 (collect / coverage 計測)
-2. ゴミ検出と **削除候補リスト** 作成 (実削除しない)
-3. カバレッジギャップ特定 (Critical 機能の未テスト失敗モードを優先)
-4. 優先度付けして実装:
-   - flaky / 危険な外部依存 / Critical 機能の error path → 即対応
-   - 削除候補は **3 段階モデル** に沿って `quarantine` (skip 化) まで実施
-   - 物理削除は次サイクルの別 PR
-5. スイート全体検証 (全 pass + 実行時間悪化なし + coverage 低下なし)
+- flaky / 危険な外部依存 / Critical 機能の error path → 即対応
+- 削除候補は **3 段階モデル** に沿って `quarantine` (skip 化) まで実施 (物理削除は次サイクルの別 PR)
+
+apply agent は Issue の `recommendation` の計画を実装テンプレとしてそのまま使う。
+仕様の不明点があれば:
+- Direct Mode: Issue コメント / ユーザーへの確認可
+- OP-managed Mode: 質問せず `needs_human_decision` (decision_type: "behavior") で構造化返却。
+  Issue コメント化は commander が判断する
 
 apply 前に必ず確認:
-- Issue の `needs_human_decision.required: true` には手を出さない
+- Issue の `needs_human_decision.required: true` には手を出さない (apply しない)
 - `safety_gate` の通過条件 (blame / coverage diff / CI / 観察期間) を満たしているか
 
 完了報告: 追加 M 本 / 書き換え K 本 / quarantine N 本 / fixture 統合 J 件 /
 カバー率 Before→After / 実行時間 Before→After
-
----
-
-## 削除時の PR テンプレと安全弁コマンド
-
-**3 段階モデル** が思想で、本章はその実装。
-quarantine / delete を実施する PR で必ず以下を残す。
-
-### 削除根拠テンプレ (PR 本文 / コミットメッセージ)
-
-```
-## 削除根拠
-- 追加コミット: <sha> (<日付>, <作者>)
-- 追加意図 (Issue/PR から復元): <要約>
-- 現状の評価: <なぜ価値喪失したか>
-- 同等カバレッジ: <他テストの参照、なければ「補完テスト追加済」>
-- 観察期間: <skip 化からの経過、問題発生有無>
-- safety_gate 通過記録:
-  - blame: ✓ <sha>
-  - coverage_diff: ✓ <他テストでカバー>
-  - ci_pass: ✓ <runId>
-  - observation_period: ✓ <YYYY-MM-DD ~ YYYY-MM-DD>
-```
-
-### 安全弁コマンド (apply 前に実施)
-
-```bash
-# 1. テスト追加コミットの確認 (blame)
-git blame tests/path/to/file.test.ts
-
-# 2. テストブロック追加コミットの特定
-git log --diff-filter=A --pretty=format:"%H %s" -- tests/path/to/file.test.ts | head -5
-
-# 3. 同等カバレッジ確認 (coverage diff)
-# 対象テストを skip 化 → 再計測 → カバレッジ低下があれば独自カバーあり
-
-# 4. Issue / PR から context 復元
-gh search issues "tests/path/to/file" --state=all
-gh search prs "tests/path/to/file" --state=all
-```
-
-これで「context 喪失で勝手に削除した」事故を構造的に防ぐ。
-不明なまま削除に進むくらいなら `needs_human_decision.required: true` (decision_type: "deletion") で
-構造化された人間判断要求として返す。
 
 ---
 
@@ -616,17 +377,24 @@ skip 条件なし。apply 後は必ず invoke する。
 
 ## CLAUDE.md 規約との整合
 
-- **ネスト 2 階層以内**: テストの setup ネストも 2 段以内、parametrize で平坦化
-- **日本語コメント**: テストの意図 (なぜこの境界値か) を 1 行コメント
-- **過剰抽象化禁止**: テストヘルパーは 2 箇所以上で使われてから抽出
+共通骨格 (優先順位 3 段 / 既定値 6 項目 / audit・refute 側での扱い) の正本は
+`skills/_shared/project-profile.md` の「対象 repo 規約への準拠 (worker 共通)」節 —
+**apply で最初のテストファイルを編集する前に Read する**。
+
+test-expert 固有の適用差分のみ:
+
+- **ネスト**: テストの setup ネストも既定値 (2 階層以内) に収め、parametrize で平坦化する
+- **コメント**: テストの意図 (なぜこの境界値か) を 1 行
+- **抽象化**: テストヘルパーは 2 箇所以上で使われてから抽出する
 
 ---
 
 ## 深掘り参照
 
-- ゴミテスト全集 (言語別具体例): `~/.claude/skills/expert-test/references/garbage-patterns.md`
-- カバレッジギャップ検出法: `~/.claude/skills/expert-test/references/coverage-gaps.md`
-- ツール・テンプレ辞典 (mock 方針 / flaky 診断 / git blame は全文、parametrize・fixture 等の基礎テンプレは圧縮): `~/.claude/skills/expert-test/references/tools.md`
+- ゴミテスト全集 (catalog 索引 top14 + 言語別具体例): `~/.claude/skills/expert-test/references/garbage-patterns.md`
+- カバレッジギャップ検出法 (catalog 索引 top5 + 言語別検出): `~/.claude/skills/expert-test/references/coverage-gaps.md`
+- scan 出力契約 (recommendation 構造化フォーマット / 強化スキーマ全文 / スキーマフィールド要点 / bulk_group): `~/.claude/skills/expert-test/references/scan-contract.md`
+- ツール・テンプレ辞典 (mock 方針 / flaky 診断 / git blame / 削除時の PR テンプレと安全弁コマンドは全文、parametrize・fixture 等の基礎テンプレは圧縮): `~/.claude/skills/expert-test/references/tools.md`
 
 ---
 

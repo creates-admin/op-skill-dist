@@ -41,7 +41,7 @@ Invariants 2 (状態が網羅されている) / 3 (エラー時に復帰でき�
 逆に、UI 種別に該当しない state を強要することはしない (静的画面に empty / disabled は要らない)。
 
 > gate / post-check 側では、apply / Plan が該当しない state を `not_applicable_reason` 付きで省略
-> していれば PASS。詳細は `gate-criteria.md` / `post-check-criteria.md` を参照。
+> していれば PASS。詳細は `criteria.md` (両モード) を参照。
 
 ---
 

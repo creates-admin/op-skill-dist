@@ -48,7 +48,9 @@ expert 固有の判断基準は本ファイルが唯一の正本 (`op-run-fanout
 6. CLAUDE.md 規約遵守 (ネスト 2、日本語コメント、最小限の修正)
 7. report の files_likely_to_modify から外れるファイルを触る必要が出た場合は、
    **修正を止めて司令官に追加申告する** (再 Stage 2 検証が必要)
-8. コミット (メッセージは日本語、Fixes #N 列挙、判定根拠を message に)
+8. コミット (メッセージは日本語、`Fixes #N` 列挙、判定根拠を message に。
+   header 形式 / `Fixes` と `Refs` の使い分け / expert 別の必須節は
+   `_shared/commit-convention.md` が正本)
    **push と PR open は ClusterOrchestrator (cluster-orchestrator-directives.md フェーズ4) が行うため、apply agent は push しない**
    完了報告の末尾に **必ず以下の 1 行を含める** (ADR-0007 §設計の骨子 §worker prompt パターン 6):
    ```
@@ -95,6 +97,10 @@ Issue コメント化は op-run / commander 側が後段で必要に応じて行
 
 ### 自己検証 (Skill op-code-review)
 
+> 順序の正本は `_shared/apply-completion-checklist.md` **Section 2-A (op-run 経路の例外分岐)**。
+> op-run 経路は commit 先行 (commit → 自己検証 → Critical/High 時のみ追加 commit)、
+> Direct apply は Section 2 の 5 段階順序 (code-review → commit) を使う。
+
 実装・commit が完了したら、PR 作成前に以下を実行すること (ClusterOrchestrator フェーズ3、push は ClusterOrchestrator がフェーズ4 で行う)。
 自己検証の手順・angle・verify 判定・出力形式の正本は `skills/op-code-review/SKILL.md` (plugin 同梱の自前 correctness review skill)。
 built-in `code-review` は disable-model-invocation のため subagent から invoke できない — 使わないこと。
@@ -102,12 +108,13 @@ built-in `code-review` は disable-model-invocation のため subagent から in
 ```
 1. Skill(op-skill:op-code-review) を worktree の変更差分に対して実行する
    (scope: apply-expert が変更した diff のみ、PR 全体ではない。
-    引数例: args: "diff: ${BASE_SHA}...HEAD effort: high"。
-    controller が code_review_effort を渡した場合はその値を effort に転写する
-    — 派生ルールの正本は _shared/model-selection.md §5.5)
+    引数例: args: "diff: ${OP_RUN_BASE_SHA}...HEAD effort: ${code_review_effort}"。
+    controller が code_review_effort を渡した場合はその値を effort に転写し、
+    `auto` / 未指定なら effort 引数なしで呼ぶ — 派生ルールの正本は _shared/model-selection.md §5.5)
    - skill 解決に失敗した場合の fallback: op-code-review/SKILL.md の Angle A〜E +
      3 値 verify を同一 context で手動一巡する (checklist 正本は同 SKILL.md、ここに複製しない)
-2. Critical または High が検出された場合: 自己修正して再 commit し、自己検証を再実行する
+2. Critical または High が検出された場合: 自己修正して **追加 commit** を打ち、自己検証を再実行する
+   (追加 commit は必須。uncommitted 変更を残したまま完了報告することは contract violation)
    (再実行は 1 回まで。2 回目の Critical/High は self_check_blocked: true を含めて ClusterOrchestrator に返す)
    - 修正不可能な場合は ClusterOrchestrator に self_check_blocked: true を含めて返す
 3. Medium / Low のみの場合: 自己修正せず ClusterOrchestrator に返し、formal review 工程に委ねる
@@ -119,7 +126,8 @@ built-in `code-review` は disable-model-invocation のため subagent から in
 ### 完了手順
 
 ```
-完了手順は `_shared/apply-completion-checklist.md` に集約。各 expert は固有 skip 条件のみ
+完了手順は `_shared/apply-completion-checklist.md` に集約 (op-run 経路は **Section 2-A** の
+commit 先行分岐、Direct apply は Section 2 の 5 段階順序)。各 expert は固有 skip 条件のみ
 自身の SKILL.md に持つ。完了報告 (`expert-spawn.md` v14 schema) には `code_review_invoked` /
 `code_review_result` を必ず含める (skip の場合は `code_review_skip_reason` も必須)。
 v14 / v15 完了報告 (旧 `simplify_*` フィールド) も controller の auto-translate で 1 release
@@ -133,6 +141,7 @@ commits_added が空のまま完了報告を返すことは contract violation�
 fail を含むまま完了報告してはいけない (PR は draft のまま)。
 完了後、変更ファイル一覧と検証レベル一覧を報告。
 - [ ] Skill(op-skill:op-code-review) を実行し (解決不可時は手動 fallback)、Critical/High を解消した (Medium/Low は formal review に委ねる)
+- [ ] 自己修正が発生した場合、追加 commit を打ち終えた (git status --porcelain が空)
 ```
 
 ---

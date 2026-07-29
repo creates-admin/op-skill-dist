@@ -310,8 +310,7 @@ Boundaries / Verification。正規テンプレは `pr-templates.md`「op-archite
 ### Design Plan gate (Phase 3、ux-ui-audit-expert gate Mode)
 
 workflow が `ux-ui-audit-expert` を gate Mode で spawn し、Design Plan を独立検証して
-PASS / PASS_WITH_NOTES / BLOCK を返す。検証 6 観点 (正本は `~/.claude/skills/expert-ux-ui-audit/SKILL.md`
-gate モード節): (1) 次の行動が明確になる設計か (2) 必須 UI state が網羅されているか
+PASS / PASS_WITH_NOTES / BLOCK を返す。検証 6 観点 (正本は `~/.claude/skills/expert-ux-ui-audit/references/criteria.md` の Gate 節): (1) 次の行動が明確になる設計か (2) 必須 UI state が網羅されているか
 (3) エラー復帰導線が設計されているか (4) 業務フローに合った画面構成か (5) accessibility 要件が十分か
 (6) 見た目に寄りすぎていないか。出力は `pr-templates.md`「op-architect: UX/UI Audit Gate Result」
 テンプレ準拠の Markdown。情報不足時は `needs_human_decision` を使う (free-form question 禁止)。

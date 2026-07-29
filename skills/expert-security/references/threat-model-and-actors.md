@@ -101,22 +101,8 @@ threat_model:
 ## preconditions (必ず明記する)
 
 `preconditions` には攻撃が成立する **観測可能な前提条件** を 1 行ずつ列挙する。
-
-例:
-
-```yaml
-preconditions:
-  - "attacker can deliver a malicious .idml file to the user"
-  - "user opens the file from File menu"
-  - "app does not validate inner path entries before extraction"
-```
-
-```yaml
-preconditions:
-  - "frontend is compromised (XSS in WebView)"
-  - "Tauri command write_file is registered"
-  - "command does not check that path is within workspace scope"
-```
+具体例は本ファイル末尾「判定例」の 例1 (compromised_frontend) / 例2 (malicious_document) の
+`preconditions` block を参照。
 
 不明確な前提 (「いつかそうなるかも」「設定次第」) は **High / Critical の根拠にならない**。
 

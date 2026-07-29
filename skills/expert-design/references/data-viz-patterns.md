@@ -186,15 +186,15 @@ dashboard / 監視 / 比較 / KPI 画面で使う chart の選定・配色・状
 
 ## 禁止 (data viz アンチパターン)
 
-| 禁止 | 影響 |
-|------|------|
-| 3D chart 全般 | 軸が歪み data honesty 違反 |
-| 軸切り (理由なし) | 差を誇張、データ偽装 |
-| rainbow / jet palette | 色覚多様性で破綻 |
-| 色だけで series 区別 | 印刷 / 色覚で破綻 |
-| 凡例なし chart | 解読不能 |
-| 単位 / ラベルなし chart | 比較不能 |
-| pie 6 セグメント以上 | 角度認知の限界 |
-| 動き優先 chart (回転 pie 等) | 静止で読めない |
-| 動的 refresh で last updated を出さない | データの新鮮度が不明 |
-| chart の代替 data table がない | 色覚 / SR ユーザーに不利 |
+理由 / 影響は上記各節 (禁止 chart・Data Honesty 規則・Color & Accessibility) を参照。
+
+- 3D chart 全般
+- 軸切り (理由なし)
+- rainbow / jet palette
+- 色だけで series 区別
+- 凡例なし chart
+- 単位 / ラベルなし chart
+- pie 6 セグメント以上
+- 動き優先 chart (回転 pie 等)
+- 動的 refresh で last updated を出さない
+- chart の代替 data table がない

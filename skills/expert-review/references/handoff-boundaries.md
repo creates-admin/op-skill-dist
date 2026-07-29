@@ -171,7 +171,9 @@ planned 期間中は **op-run の判定優先順位 1-8 で fallback expert に�
 | `env-expert` | 環境構築 / dependency / toolchain | debug-expert / refactor-expert (active fallback。release / installer / distribution 方針判断は `needs_human_decision`) |
 
 planned expert は `recommended_fix_expert` 値として記録してよい (将来 spawn される設計のため)。
-canonical な fallback ルールは `~/.claude/skills/_shared/expert-spawn.md` の Planned Expert Notice 参照。
+canonical な fallback ルールは `~/.claude/skills/_shared/expert-spawn.md` の Planned Expert Notice /
+`~/.claude/skills/_shared/planned-experts.md` (`release-expert` 禁止規約の canonical)。本 skill 内では
+**上表 `release-expert` 行が禁止規約の詳細説明の置き場**で、`lens-catalog.md` は 1 行の禁止言明 + pointer に留める。
 
 ---
 
@@ -232,11 +234,11 @@ canonical な fallback ルールは `~/.claude/skills/_shared/expert-spawn.md` �
 
 ---
 
-## 9. self-review バイアス防止 (再掲)
+## 9. self-review バイアス防止 (境界内の想起表)
 
-review-expert は **apply 担当の意図を擁護しない**。
-spawn prompt に「あなたはこの PR を書いていない独立 reviewer」と明記される理由は、
-self-review バイアス (= 自分が書いたコードの欠陥を見逃す現象) を構造的に防ぐため。
+review-expert は **apply 担当の意図を擁護しない** (正本は `evidence-policy.md` §5
+「self-review バイアス防止の工夫」— 別 worktree / 別 context / 第三者を演じる / PR 本文と Issue を疑う)。
+境界判断中に迷った時のために、やる / やらない だけをここに残す。
 
 | やる | やらない |
 |------|---------|
@@ -244,8 +246,6 @@ self-review バイアス (= 自分が書いたコードの欠陥を見逃す現�
 | PR 本文と diff のズレを疑う | PR 本文を信じる |
 | Issue scope と diff のズレを疑う | Issue 通りに書かれていると信じる |
 | post-check 結果と PR 本文の整合を疑う | post-check が PASS なら全部信じる |
-
-詳細は `evidence-policy.md` の「self-review バイアス防止の工夫」節を参照。
 
 ---
 

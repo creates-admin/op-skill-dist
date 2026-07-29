@@ -96,20 +96,10 @@ Rust 実装例は本ファイル末尾「統合チェック関数の例」の `v
 ### 検査
 
 - `std::fs::symlink_metadata().file_type().is_symlink()` だけでは不十分 (reparse point 全般を捉えない)
-- Windows API `GetFileAttributesW` で `FILE_ATTRIBUTE_REPARSE_POINT` を確認するか、canonicalize で resolve
+- Windows API `GetFileAttributesW` で `FILE_ATTRIBUTE_REPARSE_POINT` (定数値 `0x400`) を確認するか、canonicalize で resolve
 - canonicalize 後の path で scope check
 
-### Rust 例
-
-```rust
-use std::os::windows::fs::MetadataExt;
-
-fn is_reparse_point(p: &Path) -> std::io::Result<bool> {
-    let m = std::fs::symlink_metadata(p)?;
-    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-    Ok(m.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0)
-}
-```
+Rust 実装例は本ファイル末尾「統合チェック関数の例」の `is_reparse_point` を参照。
 
 ---
 
@@ -297,6 +287,15 @@ ADS を含む path は reject。
 
 ```rust
 use std::path::{Component, Path, PathBuf};
+use std::os::windows::fs::MetadataExt;
+
+/// reparse point (symlink / junction / mount point / OneDrive placeholder 等) の判定。
+/// FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+fn is_reparse_point(p: &Path) -> std::io::Result<bool> {
+    let m = std::fs::symlink_metadata(p)?;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    Ok(m.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0)
+}
 
 #[derive(Debug)]
 enum PathRejectReason {

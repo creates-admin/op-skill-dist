@@ -1,7 +1,8 @@
 # expert-test ツール・テンプレ辞典
 
 <!--
-機能概要: テストランナー / カバレッジ / parametrize / fixture / mock の言語別最小テンプレ集
+機能概要: テストランナー / カバレッジ / parametrize / fixture / mock の言語別最小テンプレ集 +
+         削除 (quarantine / delete) 実施時の PR テンプレと安全弁コマンド
 作成意図: agent が "どう書くか" で迷ったときの参照辞典。実用最小形のみ
 注意点: 環境にツールがない場合は提案 (インストール強制はしない)
        2026-07-23 の重複解消編集で、他 tools.md (expert-debug / expert-feature) と
@@ -153,3 +154,47 @@ gh search prs "tests/path/to/file" --state=all
 ```
 
 これで「なぜ追加されたか」が分かる。それでも不明なら **削除せず .skip** で観察期間を取る。
+
+---
+
+## 削除時の PR テンプレと安全弁コマンド
+
+**3 段階モデル** (通過条件は SKILL.md の「テスト削除の 3 段階モデル」節が正本) が思想で、本章はその実装。
+quarantine / delete を実施する PR で必ず以下を残す。
+
+### 削除根拠テンプレ (PR 本文 / コミットメッセージ)
+
+```
+## 削除根拠
+- 追加コミット: <sha> (<日付>, <作者>)
+- 追加意図 (Issue/PR から復元): <要約>
+- 現状の評価: <なぜ価値喪失したか>
+- 同等カバレッジ: <他テストの参照、なければ「補完テスト追加済」>
+- 観察期間: <skip 化からの経過、問題発生有無>
+- safety_gate 通過記録:
+  - blame: ✓ <sha>
+  - coverage_diff: ✓ <他テストでカバー>
+  - ci_pass: ✓ <runId>
+  - observation_period: ✓ <YYYY-MM-DD ~ YYYY-MM-DD>
+```
+
+### 安全弁コマンド (apply 前に実施)
+
+```bash
+# 1. テスト追加コミットの確認 (blame)
+git blame tests/path/to/file.test.ts
+
+# 2. テストブロック追加コミットの特定
+git log --diff-filter=A --pretty=format:"%H %s" -- tests/path/to/file.test.ts | head -5
+
+# 3. 同等カバレッジ確認 (coverage diff)
+# 対象テストを skip 化 → 再計測 → カバレッジ低下があれば独自カバーあり
+
+# 4. Issue / PR から context 復元
+gh search issues "tests/path/to/file" --state=all
+gh search prs "tests/path/to/file" --state=all
+```
+
+これで「context 喪失で勝手に削除した」事故を構造的に防ぐ。
+不明なまま削除に進むくらいなら `needs_human_decision.required: true` (decision_type: "deletion") で
+構造化された人間判断要求として返す。

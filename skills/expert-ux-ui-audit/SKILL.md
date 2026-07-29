@@ -58,8 +58,7 @@ mode 判定 (scan / patrol / gate / post-check) → 入力取得 → output sche
 | `references/usability-invariants.md` | 10 不変条件 + bulk_group 命名規則 (本文一次保持) | scan / patrol / gate / post-check |
 | `references/a11y-checklist.md` | WCAG 2.2 AA / contrast / keyboard / focus / aria | 全フェーズ |
 | `references/recovery-and-states.md` | loading / empty / error / undo / confirm の設計指針 | scan / gate |
-| `references/gate-criteria.md` | Design Plan gate の判定軸 + 出力フォーマット | gate (op-architect) |
-| `references/post-check-criteria.md` | apply 後 audit の判定軸 + 出力フォーマット | post-check (op-run) |
+| `references/criteria.md` | gate / post-check の判定軸 + 出力フォーマット (`#gate` / `#post-check` の 2 節) | gate / post-check |
 | `references/visual-quality-rubric.md` | Hard blockers + Decision (BLOCK 絶対条件) | gate / post-check |
 | `references/scan-finding-policy.md` | scan / patrol の起票 / 不起票境界 | scan / patrol |
 | `references/reference-map.md` | 外部参考の正規リンク (NN/g / WCAG / GOV.UK 等) | キャリブレーション時 |
@@ -94,12 +93,12 @@ mode 判定 (scan / patrol / gate / post-check) → 入力取得 → output sche
 3. `references/usability-invariants.md` の 10 不変条件で audit
 4. `references/a11y-checklist.md` で a11y 観点を確認
 5. Critical / High のみ起票 (patrol は Medium / Low 完全禁止)
-6. 検出 0 件のときは空配列 `[]` を返す (`agent-instructions.md` のゼロ件報告節)
+6. 検出 0 件のときは空 envelope `{"findings": []}` を返す (`agent-instructions.md` のゼロ件報告節)
 
 ### Gate Mode (`op-architect` の Design Plan 検証)
 
 1. `references/agent-instructions.md` を黙読
-2. `references/gate-criteria.md` の 6 観点 (+ Motion Strategy 節があれば motion 安全性の観点7、ADR-0012 Wave4) で Design Plan を検証
+2. `references/criteria.md#gate` の 6 観点 (+ Motion Strategy 節があれば motion 安全性の観点7、ADR-0012 Wave4) で Design Plan を検証
 3. `references/recovery-and-states.md` で必須 state 網羅性を確認
 4. `references/visual-quality-rubric.md` の Hard blockers を点呼
 5. PASS / PASS_WITH_NOTES / BLOCK を判定 (Hard blockers 1 件残でも BLOCK)
@@ -107,7 +106,7 @@ mode 判定 (scan / patrol / gate / post-check) → 入力取得 → output sche
 ### Post-Check Mode (`op-run` の apply 結果監査)
 
 1. `references/agent-instructions.md` を黙読
-2. `references/post-check-criteria.md` の 7 観点で実装差分を検証
+2. `references/criteria.md#post-check` の 7 観点で実装差分を検証
 3. `references/a11y-checklist.md` で a11y 退化を確認
 4. `references/visual-quality-rubric.md` の Hard blockers で実装が合格ラインを満たすか確認
 5. PASS / PASS_WITH_NOTES / BLOCK を判定 (Hard blockers 1 件残でも BLOCK)

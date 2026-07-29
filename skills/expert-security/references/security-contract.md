@@ -39,8 +39,8 @@
 
 | mode | 起動契機 | 入力 | 出力 |
 |------|---------|------|------|
-| **scan** | `op-scan` (security domain) / Direct Mode で scope 指定 | scope / hidden marker / 既存 Issue Ledger | canonical schema 配列 |
-| **patrol** | `op-patrol` | repo map / Patrol Ledger / area 候補 | canonical schema 配列 (Critical/High のみ) |
+| **scan** | `op-scan` (security domain) / Direct Mode で scope 指定 | scope / hidden marker / 既存 Issue Ledger | canonical finding の `{"findings": [...]}` envelope |
+| **patrol** | `op-patrol` | repo map / Patrol Ledger / area 候補 | 同上 (Critical/High のみ) |
 | **apply** | `op-run` フェーズ2-C (security domain Issue) | Issue 指示書 + worktree + branch | apply report + commit (push しない) |
 | **post-check** | `op-run` フェーズ3.5-B | PR diff + Issue + reviewed_head_sha | PASS / PASS_WITH_NOTES / BLOCK / NEEDS_HUMAN_DECISION + meta block |
 
@@ -180,62 +180,30 @@
 
 ### scan / patrol mode
 
-詳細 schema は `report-schema.md` を正本とする。canonical 配列は以下を含む:
+出力は canonical finding を `{"findings": [...]}` envelope に入れた JSON object (0 件は `{"findings": []}`)。JSON の前後にテキストを付けない。
 
-```json
-[
-  {
-    "title": "<60 文字以内、症状の要約>",
-    "severity": "critical | high",
-    "severity_reason": "<到達経路 + 観測可能な被害 + 影響範囲>",
-    "domain": "security",
-    "files": ["path/to/file.ext:LINE"],
-    "symbols": ["<関数名 / コマンド名>"],
-    "summary": "<2-3 文の問題説明>",
-    "evidence": "<該当コード 5-10 行>",
-    "evidence_grade": "direct | inferred | requires_runtime",
-    "reproduction_hint": "<再現条件>",
-    "hypothesis": "<scan が立てた根本原因仮説>",
-    "excluded_hypotheses": ["<検討したが否定した仮説>"],
-    "scope_in": ["..."],
-    "scope_out": ["..."],
-    "recommendation": {
-      "type": "fix | refactor | test",
-      "steps": ["<実装手順 (mitigation ladder に従う)>"]
-    },
-    "verification_steps": ["..."],
-    "success_criteria": ["..."],
-    "gotchas": ["..."],
-    "bulk_group": "security:...",
-    "confidence": "high | medium",
-    "requires_dynamic_verification": true | false,
-    "recommended_runner": "security-expert | debug-expert",
-    "post_check_expert": "security-expert",
-    "security": { ... },
-    "threat_model": { ... },
-    "usable_security": { ... },
-    "post_check": {
-      "primary_post_check_expert": "security-expert",
-      "requires_aux_post_check": true | false,
-      "aux_post_check_experts": ["ux-ui-audit-expert"]
-    }
-  }
-]
-```
+**field の詳細 schema (必須/任意・enum・shape) は `report-schema.md` が正本** (= `op help payload security-finding --json` で self-describe)。共通 field 群 (title / severity / severity_reason / domain / files / symbols / summary / evidence / evidence_grade / hypothesis / excluded_hypotheses / scope_in / scope_out / recommendation / verification_steps / success_criteria / gotchas / bulk_group / confidence / recommended_runner / post_check_expert 等) は `_shared/expert-spawn.md` の canonical schema に従う。ここでは security 固有分のみ挙げる。
+
+security 固有の拡張 4 group (**欠落は schema 違反 = immediate fail**):
+
+- `security`: `attack_surface` / `trust_boundary` / `source` / `sink` / `attack_path` / `exploitability` / `impact` / `data_sensitivity`
+- `threat_model`: `actor` / `preconditions` / `required_user_action` / `asset_at_risk`
+- `usable_security`: `affected_user_capability` / `legitimate_workflow_preserved` / `ux_impact` / `preferred_mitigation` / `forbidden_shortcuts`
+- `post_check`: `primary_post_check_expert` (常に `security-expert`) / `requires_aux_post_check` / `aux_post_check_experts`
+
+security domain で固定される値: `domain` = `security` / `severity` = `critical | high` のみ /
+`recommended_runner` = `security-expert | debug-expert` / `post_check_expert` = **必ず `security-expert`** /
+`recommendation.steps` は mitigation ladder の順序に従う。
 
 ### apply mode
 
-詳細 schema は `report-schema.md`。apply report に含む:
+詳細 schema は `report-schema.md`。apply report は以下の group を含む:
 
-- `apply_decision`: applied | needs_human_decision | blocked
-- `mitigation_applied`: validate | canonicalize | scope | confirm | audit | permission_split (複数可)
-- `files_changed`: 変更ファイル一覧
-- `legitimate_workflow_preserved`: true | false (false なら apply してはいけない)
-- `ux_impact`: none | low | medium | high (high なら apply してはいけない)
-- `requires_aux_post_check`: true | false
-- `aux_post_check_experts`: [...]
-- `verification_results`: 静的 / unit / build / integration の結果
-- `commit_sha`: commit したらここに記録
+- 決定: `apply_decision` (applied | needs_human_decision | blocked) / `mitigation_applied` (validate | canonicalize | scope | confirm | audit | permission_split、複数可)
+- 変更: `files_changed` / `commit_sha` (commit したら記録)
+- **apply 可否 gate**: `legitimate_workflow_preserved` が false、または `ux_impact` (none | low | medium | high) が high の場合は **apply してはならない** (`needs_human_decision` へ倒す)
+- 後続 post-check: `requires_aux_post_check` / `aux_post_check_experts`
+- 検証: `verification_results` (静的 / unit / build / integration)
 
 ### post-check mode
 
@@ -270,7 +238,7 @@ label 操作は **op-run の責務**。security-expert は label を直接付与
 op-scan / op-patrol / op-run への報告は以下を含む。
 
 - mode (scan / patrol / apply / post-check)
-- 結果サマリ (canonical schema 配列 / apply 結果 / post-check 判定)
+- 結果サマリ (`{"findings": [...]}` envelope / apply 結果 / post-check 判定)
 - 投稿した PR コメント URL (post-check の場合、gh pr comment の出力から)
 - post_checked_head_sha (post-check の場合)
 - requires_aux_post_check / aux_post_check_experts / aux_post_check_status (post-check / apply の場合)

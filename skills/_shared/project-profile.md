@@ -1,7 +1,10 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-05-03
-notes: 2026-07-29 追記 — `OP_MERGE_UI_PATH_PATTERN` 節の実装 SSoT を Rust (op merge verify live builder) へ訂正 (corrective、version 据置)。
+notes: v1 (2026-07-29, additive) — ADR-0030 決定3 (C): 「対象 repo 規約への準拠 (worker 共通)」節を新設
+       (L1/L2 に 16 箇所散在していた「CLAUDE.md 規約との整合」節の共通骨格の抽出先正本)。
+       ネスト深さの数値揺れを「2 階層以内」に一本化。節追加のみ・既存記述不変ゆえ schema_version 据置。
+       2026-07-29 追記 — `OP_MERGE_UI_PATH_PATTERN` 節の実装 SSoT を Rust (op merge verify live builder) へ訂正 (corrective、version 据置)。
        初版。schema_version 導入時点でのスナップショット (Primary Stack / Out of scope / 検証コマンドの現行仕様)。
 -->
 
@@ -350,6 +353,51 @@ export OP_MERGE_UI_PATH_PATTERN="^(frontend/|.*\\.(vue|tsx)$)"
 
 # NG: double quote + \. のまま → grep -E では \. でも動くが bash 変数内では意図が不明確
 ```
+
+---
+
+## 対象 repo 規約への準拠 (worker 共通)
+
+> **本節が worker 共通の「対象 repo の CLAUDE.md 規約に従う」骨格の唯一正本**
+> (ADR-0030 決定3 (C) / DUP-04)。L1 (`agents/*.md`) / L2 (`skills/expert-*/SKILL.md`) の
+> 「CLAUDE.md 規約との整合」節は本節への pointer + **expert 固有差分のみ**に降格する。
+
+### 優先順位
+
+1. **対象 repo の CLAUDE.md が最優先**。本節の既定値と矛盾する場合は CLAUDE.md が勝つ。
+2. CLAUDE.md に該当規約が無い場合のみ、下記の既定値を適用する。
+3. どちらにも無い場合は既存コードの支配的パターンに合わせる (新様式を持ち込まない)。
+
+### 既定値 (CLAUDE.md が沈黙している場合)
+
+| 規約 | 既定値 |
+|---|---|
+| **ネスト深さ** | **2 階層以内**。ガード節 (早期 return) / 関数抽出 / dispatch table で平坦化する |
+| **コメント言語** | **日本語**。関数・クラス・主要処理に「なぜそうしたか (作成意図)」を 1 行。自明なコードには書かない |
+| **抽象化** | **過剰抽象化禁止**。抽象化は重複を **観測してから**行う。1 関数 1 ファイル / interface と implementation の形式的分離 / 要求のない Clean Architecture・DDD 導入は行わない |
+| **変更粒度** | **最小限**。目的外の変更 (バグ修正にリファクタを混ぜる等) を同じ PR に入れない |
+| **検証** | **検証なしの実装は出荷しない**。実行できなかった検証 Level は PR / 完了報告に明記する (Level 定義は本ファイル「検証レベルの分類」節) |
+| **優先思想** | **形式的美しさよりデバッグ容易性**を優先する |
+
+> **ネスト深さの一本化 (ADR-0030 DUP-04)**: 従来 `optimize-expert` 系のみが
+> 「if/switch ≤3・for/while ≤2・callback/lambda ≤2」という構文別の数値を持ち、他 worker は
+> 「ネスト 2 階層以内」だった。**既定値は「2 階層以内」に一本化**する。構文別の数値は
+> 対象 repo の CLAUDE.md がそう定めている場合にのみ従う (worker 側の既定値としては保持しない)。
+
+### audit / refute 側での扱い
+
+- **CLAUDE.md 規約に準拠しているコードを「問題」として起票してはならない**
+  (規約準拠は refute において **refuted 方向**の材料。`_shared/refute-contract.md` §4)。
+- 逆に CLAUDE.md が「禁止パターン」を定義している場合、それに違反する検出は
+  **High 以上**として扱う (`_shared/severity-rubric.md`「CLAUDE.md との関係」節)。
+- CLAUDE.md の規約そのものを「規約が間違っている」と批判しない。
+
+### expert 固有差分として各 expert 側に残るもの (正本化しない)
+
+上記の共通骨格に対し、**各 expert が自分の Run Mode 文脈で言い換える 1 行**は各 expert 側に残る
+(例: test = 「setup ネストも 2 段以内、parametrize で平坦化」/ refactor = 「refactor 後にネストを増やさない」/
+optimize = 「性能のための抽象レイヤー追加は最小限」/ feature = 「dispatch table で平坦化」)。
+これらは共通骨格の **適用例**であり、骨格そのものを再定義してはならない。
 
 ---
 

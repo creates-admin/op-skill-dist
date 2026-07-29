@@ -185,46 +185,21 @@ usable_security:
 修正は禁止 (`legitimate_workflow_preserved` の判定基準を参照)。正しい mitigation は常に
 validate / canonicalize / scope / confirm / audit の組合せで攻撃経路だけを閉じる。
 
-### 早見表 (残り 4 capability)
+### 早見表 (代表 6 capability)
 
-| capability | 典型 finding | 正しい mitigation |
-|---|---|---|
-| `save_as` | path が canonicalize されない / ADS・device path・reserved name (CON/PRN/AUX 等) を reject しない / overwrite 確認がない | validate (extension/reserved/ADS/device path) + canonicalize + confirm (overwrite) + audit |
-| `open_file` | project file 内 path を再検証しない (boundary D) | validate (entry name/size/depth/count) + canonicalize + scope |
-| `export` | 出力 path に user input をそのまま使う / artifact に secret・production path 混入 | validate + canonicalize + confirm (overwrite) + audit (artifact sanitize) |
-| `batch_processing` | 途中エラー時の rollback・部分成功の扱いが曖昧で artifact が不整合状態に | validate + canonicalize + scope + audit (途中失敗時の状態を log) + confirm (大量処理開始前) |
+> `affected_user_capability` enum は上記 7 値が正本。本表は代表 6 種のみを載せる
+> (`choose_directory` は行を持たないが enum からは外れない)。
 
-### import に関する finding (代表例)
+NG mitigation 列が「共通原則参照」の行は、上記共通原則 (capability の UI / 導線を削除する等) がそのまま適用される。
 
-```text
-典型 finding:
-  import で外部 file を扱うが parser に size / depth / count limit がない /
-  archive extraction で zip-slip / encoding 検査なしで panic
-
-正しい mitigation:
-  validate + canonicalize + scope + audit
-
-NG mitigation:
-  import 機能を削除する / 受け入れ format を 1 つに固定する (UX 退化)
-```
-
-### external_app_launch に関する finding (代表例)
-
-```text
-典型 finding:
-  shell 文字列連結で外部アプリ起動 (InDesign / Photoshop / Acrobat / explorer / open / xdg-open) /
-  COM / ExtendScript で user input を文字列 interpolation /
-  起動先 binary が PATH 依存 (任意 binary 起動リスク)
-
-正しい mitigation:
-  validate (起動先 binary の trusted path) +
-  args 配列で渡す (shell 文字列禁止) +
-  audit (output / error sanitize) +
-  confirm (起動前確認 - ただし既存導線を壊さない範囲)
-
-NG mitigation:
-  外部アプリ連携を全部削除する / InDesign 連携を全部禁止する
-```
+| capability | 典型 finding | 正しい mitigation | NG mitigation |
+|---|---|---|---|
+| `save_as` | path が canonicalize されない / ADS・device path・reserved name (CON/PRN/AUX 等) を reject しない / overwrite 確認がない | validate (extension/reserved/ADS/device path) + canonicalize + confirm (overwrite) + audit | 共通原則参照 |
+| `open_file` | project file 内 path を再検証しない (boundary D) | validate (entry name/size/depth/count) + canonicalize + scope | 共通原則参照 |
+| `export` | 出力 path に user input をそのまま使う / artifact に secret・production path 混入 | validate + canonicalize + confirm (overwrite) + audit (artifact sanitize) | 共通原則参照 |
+| `batch_processing` | 途中エラー時の rollback・部分成功の扱いが曖昧で artifact が不整合状態に | validate + canonicalize + scope + audit (途中失敗時の状態を log) + confirm (大量処理開始前) | 共通原則参照 |
+| `import` | import で外部 file を扱うが parser に size / depth / count limit がない / archive extraction で zip-slip / encoding 検査なしで panic | validate + canonicalize + scope + audit | import 機能を削除する / 受け入れ format を 1 つに固定する (UX 退化) |
+| `external_app_launch` | shell 文字列連結で外部アプリ起動 (InDesign / Photoshop / Acrobat / explorer / open / xdg-open) / COM / ExtendScript で user input を文字列 interpolation / 起動先 binary が PATH 依存 (任意 binary 起動リスク) | validate (起動先 binary の trusted path) + args 配列で渡す (shell 文字列禁止) + audit (output / error sanitize) + confirm (起動前確認 - ただし既存導線を壊さない範囲) | 外部アプリ連携を全部削除する / InDesign 連携を全部禁止する |
 
 ---
 

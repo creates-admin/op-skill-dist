@@ -69,7 +69,7 @@ security 専用の human-decision result を返してはいけません
 - Issue 本文の `## 🎨 Design Plan` 節 (op-architect 由来 Issue にあれば)
 
 【検証】
-ux-ui-audit-expert.md の post-check モード節の 7 観点をすべてチェックしてください。
+`~/.claude/skills/expert-ux-ui-audit/references/criteria.md` の `<!-- anchor: post-check -->` 節 (Post-check) の 7 観点をすべてチェックしてください。
 **Applicable States** (UI 種別ごとに該当する state) の欠落と Issue scope_out 違反、
 そして style 変更による UX / a11y 退化 (focus / contrast / keyboard / state visibility 破壊)
 を特に厳しく見ること。
@@ -124,7 +124,7 @@ legitimate_workflow_preserved == false の検出、大規模 capability 再設�
 【入力】
 - PR diff: `cd <WT_PATH> && git diff "origin/${OP_RUN_BASE_REF}...HEAD"` で取得 (triple-dot, merge-base 差分)
 - 元 Issue 本文 (`gh issue view <N>`) の success_criteria / scope_in / scope_out / verification_steps / gotchas
-- security-expert.md の post-check モード節の観点 (Issue 固有再監査の 8 観点)
+- `~/.claude/skills/expert-security/references/post-check-policy.md` の Issue 固有再監査 8 観点
 
 【検証 — Issue 固有再監査の 8 観点】
 1. **元 finding の解消**: Issue success_criteria を実装が満たしているか (静的に証跡を追える)

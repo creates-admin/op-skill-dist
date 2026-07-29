@@ -71,7 +71,9 @@ scan モードの動作:
 
 ## Severity Policy (報告閾値)
 
-`_shared/severity-rubric.md` の判定手順に従う。optimize-expert 固有の典型例:
+`_shared/severity-rubric.md` の判定手順、および同ファイルの「scan 報告ルール (共通)」節
+(Critical / High only / 静的証拠必須 / 可能性表現の原則禁止 / 0 件表現) に従う —
+**scan (detect) に入る前に Read する**。以下は optimize-expert 固有の典型例:
 
 ### Critical
 
@@ -194,11 +196,10 @@ scan = **detect mode**、apply = **optimize mode** として動作する。命�
 
 #### scope mode (3 種)
 
-入力に応じて以下の scope mode で動作する。
-
-1. **explicit_paths** — 司令官が指定したファイル・ディレクトリのみ。最優先
-2. **changed_files** — git diff / PR diff / staged files を起点。変更ファイルと直接の呼び出し境界だけ追う
-3. **patrol_sample** — 警備員的見回り (op-patrol からの呼び出し含む)。指定箇所も変更箇所もない場合に使う。完全ランダムではなく **risk-weighted sampling** とする
+3 モード (`explicit_paths` / `changed_files` / `patrol_sample`) の定義・優先順位・controller の注入義務・
+`scope_origin` 付与・patrol_sample での Medium / Low 報告禁止は
+`_shared/expert-spawn.md` の「scan scope mode 契約 (3 モード)」節が正本 —
+**探索対象を選び始める前に Read する**。以下は optimize-expert 固有の差分のみ。
 
 patrol_sample の優先順位 (optimize 観点):
 1. ホットパス候補 (main loop / batch processor / page-by-page 処理 / OCR / PDF / IDML)
@@ -209,8 +210,6 @@ patrol_sample の優先順位 (optimize 観点):
 6. cache / pool / batch API の周辺
 7. frontend bundle entry point / route splitting
 
-patrol_sample 由来の finding には `scope_origin: "patrol_sample"` を付ける。Medium / Low は報告しない。
-
 #### 内部 triage: 3-bucket 分類
 
 検出物を以下 3 つに分類する。**この分類を経てから JSON 出力にマップする** ことで、誤検知ノイズと「測れば分かる」推測報告を構造的に抑える。
@@ -220,36 +219,14 @@ patrol_sample 由来の finding には `scope_origin: "patrol_sample"` を付け
 - 該当行のコードと既知の入力規模だけで重大さが確定する
 - 計算量・I/O 回数・呼び出し頻度が静的に示せる
 - 推測語句 (「可能性」「もしかしたら」「測れば分かる」) を一切使わずに評価できる
-- → `_shared/expert-spawn.md` の **scan 共通スキーマ JSON 配列** に出力 (op-scan が Issue 化)
+- → `_shared/expert-spawn.md` の **scan 共通スキーマ**に従い `{"findings": [...]}` envelope で出力 (op-scan が Issue 化)
 
 ##### 2. investigation_candidates — 静的では断定できないが、計測すれば High 化する有力候補
 
 - 該当行のパターンは怪しいが、規模感が入力データ・実行条件に依存する
 - **既定では出力しない** (op-scan の JSON-only 契約を破壊しないため)
-- op-scan / op-patrol が `allow_text_tail: true` または `candidate_report: true` を明示した場合のみ、別セクションに以下のフォーマットで列挙する:
-
-```yaml
-investigation_candidates:
-  - id: candidate-001
-    confidence: high | medium  # high のみ報告、low は捨てる
-    stack: Rust | Tauri | Vue | TypeScript | Flutter
-    category:                  # perf-nested-loop-on2 等
-    file: path/to/file.ext
-    lines: "L42-L58"
-    evidence: |                # 該当コード抜粋
-      <該当コード 5-10 行>
-    suspected_bottleneck: |    # 想定されるボトルネック
-      <どういう入力規模で何が破綻するか>
-    measurement_plan:          # op-run で取るべきベンチマーク
-      tool: hyperfine | criterion | flamegraph | bundle-visualizer
-      command: |
-        <コマンド>
-      input_sizes: [small, medium, large]
-      expected_signal: |
-        <何が見えれば bottleneck と確定できるか>
-    promote_to_confirmed_when: |
-      <この計測結果を満たせば confirmed に昇格できる>
-```
+- op-scan / op-patrol が `allow_text_tail: true` または `candidate_report: true` を明示した場合のみ、別セクションに列挙する
+  - **その指定を受けた時だけ** `references/report-schema.md` の「investigation_candidates schema」節を読み、YAML フォーマットに従う
 
 ##### 3. ignored_noise — 報告しない
 
@@ -261,7 +238,7 @@ investigation_candidates:
 
 → **完全に捨てる**。出力に含めない。報告しない。
 
-#### scan 出力 (JSON 配列) — 共通スキーマ + optimize 固有規約
+#### scan 出力 (`{"findings": [...]}` envelope) — 共通スキーマ + optimize 固有規約
 
 `_shared/expert-spawn.md` の **scan 共通スキーマ** に従う。`confirmed_findings` のみがここに入る。
 
@@ -323,8 +300,10 @@ optimize-expert 固有の規約 (canonical の後に併存):
 
 #### scan 実行ポリシー (Level 0 固定)
 
-scan / detect mode は **Level 0 のみ**。Read / Grep / Glob に限定し、ベンチマーク・型チェック・ビルドは実行しない。
-例外的に Level 1 を許可する場合は、op-scan 入力に `allow_level_1: true` がある場合のみ。
+許可・禁止操作の一覧と `allow_level_1: true` 例外の正本は
+`_shared/severity-rubric.md`「scan 報告ルール (共通)」§scan 実行レベル —
+**scan で最初のコマンドを打つ前に Read する**。optimize 固有の追加禁止として、
+**ベンチマーク (hyperfine / criterion) も scan では回さない**。
 
 scan で hyperfine / criterion を回さないのは、リポジトリ全体スキャン中に重い処理を走らせると爆発するため。
 計測は apply mode で実施する。
@@ -354,7 +333,7 @@ scan で hyperfine / criterion を回さないのは、リポジトリ全体ス�
 5. 1〜2 ファイルごとに Verification Ladder Level 1〜2 を回す
 6. 改善後に Level 3 (build) を 1 回回す
 7. デバッグ計測コード (eprintln, console.log, debug print) を削除
-8. コミット (日本語、`Fixes #N`、Before/After 数値・改善率・統計信頼度・リスクレベルを message に)
+8. コミット (日本語、`Fixes #N`、Before/After 数値・改善率・統計信頼度・リスクレベルを message に。形式と Fixes/Refs 使い分けの正本は `_shared/commit-convention.md`)
 9. push はしない。commit までで停止し、push / PR open は司令官 / op-run が Post-run conflict check 後に実施する
 10. 完了報告 (`templates/apply-report.schema.json` 形式)
 
@@ -446,10 +425,17 @@ optimize 特有の順序 (Before benchmark → 実装 → After benchmark → �
 
 ## CLAUDE.md 規約との整合
 
-- **ネスト規約遵守** (if/switch ≤3、for/while ≤2、callback/lambda ≤2): 最適化で深いネストを増やさない (ガード節・関数抽出を維持)
-- **日本語コメント**: 改善理由を 1 行コメント (なぜこの構造が必要か。「なぜ速いか」は benchmark report に書く)
-- **検証なしの実装は出荷しない**: Before/After + 既存テストが必須
-- **過度な抽象化を避ける**: 性能のための抽象レイヤー追加は最小限
+共通骨格 (優先順位 3 段 / 既定値 6 項目 / audit・refute 側での扱い) の正本は
+`_shared/project-profile.md` の「対象 repo 規約への準拠 (worker 共通)」節 —
+**apply で最初のファイルを編集する前に Read する**。
+ネスト深さの既定値は **2 階層以内**であり、構文別の数値は対象 repo の CLAUDE.md がそう定める場合のみ従う。
+
+optimize-expert 固有の適用差分のみ:
+
+- **ネスト**: 最適化で深いネストを増やさない (ガード節・関数抽出を維持)
+- **コメント**: 改善理由を 1 行 (なぜこの構造が必要か。「なぜ速いか」は benchmark report に書く)
+- **検証**: Before/After benchmark + 既存テスト pass が必須
+- **抽象化**: 性能のための抽象レイヤー追加は最小限
 
 ---
 

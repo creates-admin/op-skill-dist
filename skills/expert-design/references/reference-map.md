@@ -4,8 +4,8 @@ sync_policy: 両ファイルに共通する Tier 1 (NN/g, GOV.UK, IBM 等 heuris
              Tier 2 (enterprise DS) / Tier 3 (information design) は本ファイル (designer 側) のみ保持。
              a11y 標準 (WCAG / WAI-ARIA / USWDS) は ux 側に独自保持し、本ファイルでは持たない
              (a11y 監査は ux-ui-audit-expert の責務で designer は触らないため、重複させない)。
-             Tier P (Apple HIG / Material / Fluent) は両 agent が校正用に持つが役割が違うため、
-             URL は揃えるが Tier 名や使い方節は agent ごとに書き分けてよい。
+             Tier 4 (Apple HIG / Material / Fluent) は両 agent が校正用に持つが役割が違うため、
+             URL は揃えるが Tier 名や使い方節は agent ごとに書き分けてよい (ux 側の呼称は Tier P)。
              変更時:
                (a) Tier 1 のリンクを両ファイルで diff
                (b) Tier 2 / Tier 3 を変更しても ux 側更新不要
@@ -21,7 +21,7 @@ designer-expert が判断のキャリブレーションに使う「外部教養�
 
 - **token / component の運用ルールを校正したい** → Tier 2 を見る
 - **情報設計 / 余白 / 階層を校正したい** → Tier 3 を見る
-- **a11y / platform 慣習を確認したい** → Tier 4 を見る
+- **platform 慣習を確認したい** → Tier 4 を見る
 - **そもそも「何のための画面か」を見直したい** → Tier 1 に戻る
 
 ## 注意
@@ -72,11 +72,10 @@ host surface consistency / role-based UI。
 
 ## Tier 4: Calibration only
 
-platform literacy / quality calibration / accessibility / token / layout literacy。
+platform literacy / quality calibration / token / layout literacy。
 **模倣対象ではなく、校正用の教養** として扱う。
 
 - Fluent 2 Design Principles: https://fluent2.microsoft.design/design-principles
 - Apple Human Interface Guidelines: https://developer.apple.com/jp/design/human-interface-guidelines/
 - Material Design 3 Tokens: https://m3.material.io/foundations/design-tokens
 - Material Design 3 Layout: https://m3.material.io/foundations/layout/understanding-layout
-- USWDS Design Principles: https://designsystem.digital.gov/design-principles/

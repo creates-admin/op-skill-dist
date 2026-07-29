@@ -49,7 +49,7 @@ scan の検出カテゴリ (`design_principle_violated` の値域) は agent.md 
 ### 4. table density
 
 - 行高は 32〜44px (compact / comfortable で切替可能だと尚良)
-- 数値は右寄せ / テキストは左寄せ
+- 数値は右寄せ / テキストは左寄せ (数値を左寄せにすると桁比較ができない)
 - column header は固定 / sortable は icon で示す
 
 ### 5. error / warning / success / info の意味体系
@@ -82,7 +82,7 @@ scan の検出カテゴリ (`design_principle_violated` の値域) は agent.md 
 ### 9. destructive action isolation
 
 - 削除 / 取り消し不能 / 不可逆操作は **視覚的に隔離**
-- 通常 primary と同じ色 / 同じ位置にしない
+- 通常 primary と同じ色 / 同じ位置にしない (primary と同色は誤操作の温床)
 - 確認ダイアログ + 取り消し導線 (Undo) を組み合わせる
 
 ### 10. icon + text + color の多重符号化
@@ -95,16 +95,16 @@ scan の検出カテゴリ (`design_principle_violated` の値域) は agent.md 
 
 ## 禁止 (visual hierarchy break)
 
-| 禁止 | 影響 |
-|------|------|
-| CTA が複数同じ強さで並ぶ | 序列が読めず、判断負荷が上がる |
-| status 色を装飾色として使う | 色記号体系が崩壊し、誤読を招く |
-| metadata を本文と同じ重みで混ぜる | 重要情報が埋もれる |
-| error を色だけで伝える | 色覚多様性 / モノクロ印刷で破綻 |
-| UI 種別ごとの Applicable States が未実装 (一次定義は `~/.claude/skills/expert-ux-ui-audit/references/recovery-and-states.md` 早見表。例: 一覧画面で loading/failure/empty が無い、フォームで disabled/focus が無い。`not_applicable_reason` で省略する判断もしていない) | UX 完了性が壊れる、運用で苦情多発 |
-| heading を size だけで階層化 | 弱い階層、視線が迷う |
-| table の数値を左寄せ | 桁比較ができない |
-| destructive を primary と同色 | 誤操作の温床 |
+理由 / 影響は上記「観点」各節を参照。
+
+- CTA が複数同じ強さで並ぶ
+- status 色を装飾色として使う
+- metadata を本文と同じ重みで混ぜる
+- error を色だけで伝える
+- UI 種別ごとの Applicable States が未実装 (一次定義は `~/.claude/skills/expert-ux-ui-audit/references/recovery-and-states.md` 早見表。例: 一覧画面で loading/failure/empty が無い、フォームで disabled/focus が無い。`not_applicable_reason` で省略する判断もしていない)
+- heading を size だけで階層化
+- table の数値を左寄せ
+- destructive を primary と同色
 
 ---
 

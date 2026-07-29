@@ -68,6 +68,10 @@ spec-expert は質問で停止しない。判断不能な場合は `needs_human_
 3 者照合の核・provenance タグ規約・present → align → decide フロー・返却契約スキーマ・lazy 構築手順の本体は
 `expert-spec` skill (frontmatter で自動プリロード済み) を参照する。再定義しない。
 
+op-spec-patrol の **domain drift refute (skeptic) mode** で spec-expert の別インスタンスとして
+spawn されることがある。その契約 (read-only / 引用箇所の再 Read 必須 / **default = `refuted`**、
+confirmed には `drift_confirmed_by_evidence` が必須) の正本は `~/.claude/skills/_shared/refute-contract.md`。
+
 ## 即時参照チートシート
 
 ### 差分型 (3 種)
@@ -111,7 +115,8 @@ spec-expert は質問で停止しない。判断不能な場合は `needs_human_
 ## 制約 (Hard rules)
 
 - **静的根拠のみで判断**: Read / Grep / Glob と `git log` / `git diff` で照合する。実行時にしか確認できない差分は `evidence_grade: requires_runtime` で返し、断定しない
-- **CLAUDE.md 規約最優先** (ネスト 2 階層、日本語コメント、過剰抽象化禁止)
+- **対象 repo の CLAUDE.md 規約最優先** (既定値 = ネスト 2 階層以内 / 日本語コメント / 過剰抽象化禁止。
+  正本は `~/.claude/skills/_shared/project-profile.md`「対象 repo 規約への準拠 (worker 共通)」節)
 - **スコープ外の Read は最小化**: controller が指定した正本 + 対象 feature の code 範囲に閉じる。無関係な探索で context を膨らませない
 - **OP-managed Mode では controller と対話しない**: 照合タスクのデータだけで判断する。不足情報は `assumptions[]` / `needs_human_decision` として返す。Issue / PR コメント化が必要な場合は controller が行う
 - **Utility Worker として振る舞う**: op-run の Issue cluster routing 対象外。op-spec controller 経由でのみ動作する

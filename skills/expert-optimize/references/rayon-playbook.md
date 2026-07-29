@@ -48,60 +48,30 @@ Rayon は **CPU-bound な data parallelism** のための crate。
 
 ## 良い並列化パターン
 
-### 1. map → collect (最もシンプル、最も安全)
+### 1〜4. 基本形 (map / filter_map / par_chunks / fold+reduce)
+
+4 つとも **shared mutable state を持たない**点が共通で、最も安全な形。
+`Vec` に collect する場合は順序が保持される。
 
 ```rust
 use rayon::prelude::*;
 
-let results: Vec<_> = pages
-    .par_iter()
-    .map(|page| analyze_page(page))
-    .collect();
-```
+// 1. map → collect: 各要素が独立、最もシンプル
+let results: Vec<_> = pages.par_iter().map(|page| analyze_page(page)).collect();
 
-- 各 page が独立
-- shared mutable state なし
-- collect で順序保持される (`Vec` に集める場合)
+// 2. filter_map → collect: None / Err を除外しつつ集める
+let valid: Vec<_> = items.par_iter().filter_map(|item| validate(item).ok()).collect();
 
-### 2. filter_map → collect (None を除外しつつ collect)
+// 3. par_chunks: chunk 内 sequential / chunk 間 parallel で粒度を上げる
+//    (1 要素の処理が小さすぎて overhead 負けするときの逃げ道)
+let results: Vec<_> = data.par_chunks(1024).map(|chunk| process_chunk(chunk)).collect();
 
-```rust
-let valid: Vec<_> = items
-    .par_iter()
-    .filter_map(|item| validate(item).ok())
-    .collect();
-```
-
-### 3. par_chunks (chunk 単位で処理)
-
-```rust
-let results: Vec<_> = data
-    .par_chunks(1024)
-    .map(|chunk| process_chunk(chunk))
-    .collect();
-```
-
-- 粒度を chunk size で制御
-- chunk 内 sequential、chunk 間 parallel
-- 1 要素の処理が小さい場合に有効
-
-### 4. fold + reduce (集約)
-
-```rust
-let total: f64 = items
-    .par_iter()
-    .fold(|| 0.0_f64, |acc, item| acc + item.score)
-    .sum::<f64>();
-
-// または reduce
-let total: f64 = items
-    .par_iter()
-    .map(|item| item.score)
-    .reduce(|| 0.0, |a, b| a + b);
+// 4. fold + reduce: 集約
+let total: f64 = items.par_iter().map(|item| item.score).reduce(|| 0.0, |a, b| a + b);
 ```
 
 > 浮動小数点の reduce は **非結合的**。順序が変わると結果が微妙に変わることに注意。
-> 完全な決定性が必要なら sequential。
+> 完全な決定性が必要なら sequential (後述「浮動小数点 reduce の決定性」)。
 
 ### 5. thread local accumulation → final merge
 
@@ -199,19 +169,8 @@ items.par_iter().for_each(|item| {
 - file system / disk が並列 write を捌けないと逆に遅い
 - error handling が複雑化 (panic で thread が死ぬ)
 
-→ **async + semaphore で concurrency limit**:
-
-```rust
-use tokio::sync::Semaphore;
-let sem = Arc::new(Semaphore::new(8));
-let handles: Vec<_> = items.into_iter().map(|item| {
-    let sem = Arc::clone(&sem);
-    tokio::spawn(async move {
-        let _permit = sem.acquire().await.unwrap();
-        tokio::fs::write(format!("out/{}.json", item.id), serialize(&item)).await
-    })
-}).collect();
-```
+→ **async + semaphore で concurrency limit に置き換える**
+(実装は `io-and-batching.md` の「async + concurrency limit (I/O parallel)」節が正本)。
 
 ### 3. par_iter 内で Tauri command / COM / UI 操作
 
@@ -258,17 +217,11 @@ items.par_iter().for_each(|item| {
 });
 ```
 
-→ **DashMap (concurrent HashMap) を使う**、または thread local cache + final merge:
+→ `Mutex<HashMap>` の代わりに **DashMap** (concurrent HashMap。`dashmap::DashMap::new()` を作り
+`cache.entry(k).or_insert_with(|| compute(..))` をそのまま並列で呼べる)、
+または **thread local に貯めて最後に merge** (上記「5. thread local accumulation → final merge」)。
 
-```rust
-use dashmap::DashMap;
-let cache: DashMap<Key, Value> = DashMap::new();
-items.par_iter().for_each(|item| {
-    cache.entry(item.key.clone()).or_insert_with(|| compute(item));
-});
-```
-
-> ただし DashMap も無料ではない。**まず benchmark を取る**。
+> ただし DashMap も shard 単位の lock を持つので無料ではない。**まず benchmark を取る**。
 
 ---
 

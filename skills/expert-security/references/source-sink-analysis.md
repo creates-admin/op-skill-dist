@@ -92,46 +92,10 @@ security:
 ## attack_path.steps の書き方
 
 `attack_path.steps` は **source から sink までを観測可能な順序で 3〜7 ステップ**で書く。
-
-### 例 1: frontend → write_user_data → 任意ファイル書き込み
-
-```yaml
-attack_path:
-  reachable: true
-  steps:
-    - "WebView 内 frontend が compromise される (XSS / 脆弱な依存)"
-    - "frontend が invoke('write_user_data', { path: '../../system32/config.bin', content: '...' }) を呼ぶ"
-    - "src-tauri/src/commands/io.rs::write_user_data は path をそのまま PathBuf::from で受け取る"
-    - "path canonicalize / scope check が無いまま std::fs::write(path, content) が実行される"
-    - "結果として workspace 外の任意 path に書き込みが成立する"
-```
-
-### 例 2: imported .idml → zip-slip → 任意ファイル書き込み
-
-```yaml
-attack_path:
-  reachable: true
-  steps:
-    - "攻撃者が malicious .idml ファイルをユーザーに送る"
-    - "ユーザーが File menu → Import IDML から該当ファイルを選択"
-    - "src-tauri/src/idml.rs::extract_idml は zip entry name を canonicalize せず std::path::Path::join で結合"
-    - "entry name に `../` が含まれる場合、解凍先が指定 directory の外を指す"
-    - "std::fs::create_dir_all + std::fs::write が外部 path に書き込み"
-```
-
-### 例 3: log::error! で絶対 path 漏洩
-
-```yaml
-attack_path:
-  reachable: true
-  steps:
-    - "アプリが std::path::Path::display() の値をそのまま log::error! に渡す"
-    - "production ビルドでも default log level が ERROR で /var/log や %APPDATA% に出力される"
-    - "ログファイルの permission が 644 / Everyone:Read で他ユーザーから読める"
-    - "結果として user 名 / 内部 directory 構造 / 文書名が他者に開示される"
-```
-
 steps は **断定的かつ短い文** で書き、各 step を静的証拠 (コード引用・呼出経路) で裏付ける。
+
+具体的な書き方 (frontend write_user_data traversal / idml zip-slip / log path leak の 3 パターン) は
+本ファイル末尾「判定例 (scan finding)」の各 `attack_path` block (full canonical schema 込み) を参照。
 
 ---
 

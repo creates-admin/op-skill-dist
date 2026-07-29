@@ -53,6 +53,36 @@ op help payload --list                 # 既知 payload 一覧
   `references/benchmark-protocol.md` の「統計的有意性の判定」節が正本 (ここでは再定義しない)。
 - Markdown 形式の報告 (PR description / Issue コメント用) は `templates/benchmark-report.md` を使う。
 
+## investigation_candidates schema (text tail — 既定では出力しない)
+
+3-bucket triage (`SKILL.md`「内部 triage: 3-bucket 分類」) の 2 番目のバケット。
+**op-scan / op-patrol が `allow_text_tail: true` または `candidate_report: true` を明示した場合のみ**、
+`findings` envelope とは別セクションに以下のフォーマットで列挙する
+(既定で出力しないのは op-scan の JSON-only 契約を破壊しないため)。
+
+```yaml
+investigation_candidates:
+  - id: candidate-001
+    confidence: high | medium  # high のみ報告、low は捨てる
+    stack: Rust | Tauri | Vue | TypeScript | Flutter
+    category:                  # perf-nested-loop-on2 等
+    file: path/to/file.ext
+    lines: "L42-L58"
+    evidence: |                # 該当コード抜粋
+      <該当コード 5-10 行>
+    suspected_bottleneck: |    # 想定されるボトルネック
+      <どういう入力規模で何が破綻するか>
+    measurement_plan:          # op-run で取るべきベンチマーク
+      tool: hyperfine | criterion | flamegraph | bundle-visualizer
+      command: |
+        <コマンド>
+      input_sizes: [small, medium, large]
+      expected_signal: |
+        <何が見えれば bottleneck と確定できるか>
+    promote_to_confirmed_when: |
+      <この計測結果を満たせば confirmed に昇格できる>
+```
+
 ## schema 同期の責務 (pointer 化後も継続)
 
 payload schema の変更時は **Rust types 正本を起点**に、以下と同期させる (どれか一方だけ変更してはならない):

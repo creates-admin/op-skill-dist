@@ -13,7 +13,7 @@
 ## 現行の許容値 (硬い制限)
 
 **refactor domain 限定の制約として**、refactor-expert が返してよい `post_check_expert` の値は
-**以下 3 値のみ**:
+**以下 3 値のみ** (判定ロジックの早見表は本ドキュメント末尾「早見表」節を参照):
 
 ```text
 ux-ui-audit-expert      # op-run フェーズ3.5-A で active dispatch
@@ -21,30 +21,24 @@ security-expert         # op-run フェーズ3.5-B で active dispatch (Phase 2 
 null                    # post-check 不要
 ```
 
-これ以外の値を返してはいけない。理由:
+これ以外の値を返してはいけない。op-run フェーズ3.5 の post-check dispatcher
+(`skills/op-run/SKILL.md` フェーズ3.5) は上記 3 値しか処理せず、他の値を hidden marker に
+書いても dispatcher 経路が無く silent skip になる。
 
-- op-run フェーズ3.5 の post-check dispatcher は上記 3 値しか処理しない
-  (`skills/op-run/SKILL.md` フェーズ3.5)
-- それ以外の値を hidden marker に書いても dispatcher 経路が無く、silent skip になる
+> **重要**: `security-expert` は Phase 2 で **active 化済み** であり、file IO / path traversal /
+> permission / credential / network / deserialization / command execution 周辺の refactor では
+> `post_check_expert: security-expert` を必ず指定する (silent merge gate stall は発生しない)。
+> 例外条件は「security-expert を **選ばない** ケース」節 (正本) を参照。
 
-> **重要 (Phase 2 以降の動作)**: `security-expert` は **active dispatch** であり、
-> file IO / path traversal / permission / credential / network / deserialization / command execution
-> 周辺の refactor では `post_check_expert: security-expert` を必ず指定する
-> (silent merge gate stall は発生しない)。例外条件と理由は本ドキュメント下部
-> 「security-expert を **選ばない** ケース」節 (正本) を参照。
-
-> **注意 — `_shared/pr-templates.md` の marker enum 全体について**: pr-templates.md の
-> `<!-- op-post-check-expert: ... -->` marker enum は **他 domain (env など) も含む全 domain 共通**
-> のものであり、`env-expert` 等の値も列挙されている (op-run dispatcher 側で domain ごとに処理)。
-> 本 3 値制限は **refactor domain finding に限定** された、より厳しい制約である。
-> refactor finding では `env-expert` / `compatibility-expert` / `release-expert` /
-> `designer-expert` / `test-expert` を post_check_expert に指定しない (Phase 1)。
+> **補足**: `_shared/pr-templates.md` の `<!-- op-post-check-expert: ... -->` marker enum は
+> `env-expert` 等も含む **全 domain 共通** のものだが、refactor finding に限っては本 3 値制限が
+> より厳しい制約として優先する。`env-expert` / `compatibility-expert` / `release-expert` /
+> `designer-expert` / `test-expert` は refactor の post_check_expert に指定しない (Phase 1)。
 > 必要な follow-up 検証は `recommended_followup_experts` に逃がす。
 
-将来 Phase 2 以降で `compatibility-expert` / `release-expert` / `test-expert` /
-`designer-expert` を post-check に正式追加する場合は、
-**op-run フェーズ3.5 への dispatcher 追加 + pr-templates の marker 許容値拡大 +
-op-merge gate 拡張 + stale 判定 + ラベル追加** をすべて済ませてから本ドキュメントを更新する。
+Phase 2 以降でこれらを post-check に正式追加する場合は、**op-run フェーズ3.5 への dispatcher
+追加 + pr-templates の marker 許容値拡大 + op-merge gate 拡張 + stale 判定 + ラベル追加**を
+すべて済ませてから本ドキュメントを更新する。
 
 ---
 

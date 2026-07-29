@@ -6,7 +6,17 @@ additive_only_policy:
   - breaking change (既存フィールドの削除 / 型変更 / required 化 / marker 仕様変更) のみ schema_version を bump する
   - 現行 schema_version 一覧は `~/.claude/skills/_shared/version-check.md` の
     「## _shared ファイル 現行 schema_version 一覧」節を参照する
-notes: v16 (2026-07-29, corrective) — spawn 3 パターン template 内に残存していた質問禁止 fallback の縮約 variant
+notes: v16 (2026-07-29, additive) — ADR-0030 決定3 (A) B3a: 「scan 出力 envelope 契約」節と
+       「scan scope mode 契約 (3 モード)」節を新設 (L1/L2 に散在していた重複記述の抽出先正本)。
+       canonical scan schema に `scope_origin` を optional 追加。refute (skeptic) 契約は
+       _shared/refute-contract.md へ分離 (本ファイルは肥大回避のため保持しない)。
+       節追加 + optional field 追加のみ・既存 field 不変ゆえ schema_version 据置。
+       v16 (2026-07-29, additive / clarification) — ADR-0030 B-fix: scan 出力の top-level envelope を
+       `{"findings": [...]}` と明記 (実装 = workflows/op-scan-audit.js / op-patrol-audit.js に prose を合わせる
+       ドキュメント側訂正、runtime 挙動は不変)。CX-02 に伴い review 出力節を「controller が転写する field 定義」
+       と明示、CX-09 に伴い保持範囲宣言から 7 lens 手順 / 判定優先順位 / needs-fix 3 条件を外して
+       expert-review 側 pointer へ降格。prose 変更のみ・field schema 不変ゆえ schema_version 据置。
+       v16 (2026-07-29, corrective) — spawn 3 パターン template 内に残存していた質問禁止 fallback の縮約 variant
        (パターン1 = 2 択 / パターン2 = 3 択) を spawn-prompt-common.md §4 (5 択) 準拠の placeholder へ統一。
        パターン3 は文脈適応 (verdict 4 値に閉じる) を 1 行明示。関連ドキュメント節の planned expert stale 列挙から
        spec を除去し Utility Worker pointer を追記 (ADR-0017 W1b 追従。契約内容不変ゆえ schema_version 据置)。
@@ -87,8 +97,7 @@ Planned experts listed in `planned-experts.md` must be normalized before spawn.
 
 - spawn prompt 構造 (3 パターン: scan / apply / review)
 - spawn schema (canonical scan output schema および各 domain 拡張)
-- review-expert の invocation details / 7 lens 手順 / 出力ブロック
-- handoff mechanics (specialist review / Review Fix Loop / op-run 判定優先順位 1-8)
+- review-expert を spawn するための **prompt テンプレと最低限の field 定義のみ**
 - execution boundary (司令官と subagent の責務分担、並列 spawn 制約)
 - reclassification の **schema field** (`reclassified_from` / `reclassified_to` /
   `reclassification_reason`)。PR コメント側に reclassification を示す hidden marker が現れる場合、
@@ -97,6 +106,12 @@ Planned experts listed in `planned-experts.md` must be normalized before spawn.
 
 active / planned expert lifecycle の判定、planned expert ごとの normalization ルール、
 hidden marker / label 名の意味論は本ファイルでは正本定義しない。上記 4 ファイルを参照する。
+
+**review 契約は本ファイルの正本ではない (ADR-0030 CX-09)**。
+7 lens 監査手順 / `review_result` 判定軸 / needs-fix 3 条件 AND / lens → 再委任先 expert 対応は
+**`skills/expert-review/SKILL.md` (+ その `references/`) が唯一の正本**である。
+op-run 側の dispatch 判定優先順位 1-8 の正本は `skills/op-run/references/review-fix-loop.md` §4.5-2。
+本ファイルの該当節はいずれも pointer + 要約であり、両者が食い違った場合は正本側が勝つ。
 
 ---
 
@@ -279,7 +294,9 @@ Agent({
     You must not ask interactive questions.
     You must not modify code, commit, or push.
     Return one of: approve / needs-fix / needs-specialist-review / blocked.
-    Use <!-- op-review-meta --> and <!-- op-review-finding --> blocks.
+    Return the review as structured reviews[] using the <!-- op-review-meta --> /
+    <!-- op-review-finding --> field set. Do not post any PR comment yourself —
+    the ClusterOrchestrator posts a single meta + numbered findings (ADR-0011 決定6).
     Do not produce free-form question text.
   """
 })
@@ -341,15 +358,17 @@ degrade (Opus rate limit 等で Sonnet に降格された場合) の取り扱い
 8. 完了条件         — どうなったら終わりか
 ```
 
+prompt の冒頭に必ず「あなたはこのコードを <書いた / 書いていない>」を明記する。
+review の場合は「書いていない」と明言し、独立性を強調する。
+
+### op CLI helper 活用推奨例
+
 expert は scan / patrol / review で以下の op CLI helper を活用してよい (推奨例):
 
 - `op core fingerprint --plain --domain <d> --title <t> --file <f> [--symbol <s>]` — finding の `op-fingerprint` 値 (`<domain>:<normalized_title>:<primary_file>:<symbol>` 4-seg) を自前生成 (controller の事後計算に依存せず、手書きによる format drift を回避。全 expert 共通)。`--file` は `src/foo.py:42` 形式可 (`:LINE` は除去される)
 - `op core debt-key --plain --bulk-group <bg> --root-path <lca> [--symbol-or-boundary <s>]` — architecture_debt finding 起票時の `op-refactor-debt-key` を採番一意性を保証して生成 (refactor-expert 専用、手書き衝突を回避)
 - `op core extract-pr-markers --input-json - --plain` — merged PR 引用時に `pr_body` / `pr_comment_bodies` / `commit_message_bodies` を入力 JSON で渡し、決定論的に marker hit を抽出 (review-expert / refactor-expert。`--from-body` で `Fixes/Closes/Resolves` 9 活用形を case-insensitive 抽出。over-match / under-match と PR #161 snapshot bug を構造防止。ただし構造化 marker のみ抽出するため `## 残存リスク / follow-up` 節の自然文補完は agent 側で別途実施 — memory `feedback_extract_pr_markers_misses_natural_text`)
 - `op help envelope scan-dedup` — 自分の finding が dedup でどう処理されるかを self-describe (#229 で追加)
-
-prompt の冒頭に必ず「あなたはこのコードを <書いた / 書いていない>」を明記する。
-review の場合は「書いていない」と明言し、独立性を強調する。
 
 ### invocation_mode の必須行
 
@@ -373,8 +392,49 @@ review の場合は「書いていない」と明言し、独立性を強調す�
 **全 expert はこのスキーマで出力する。** これが scan / apply / review を貫く唯一の契約。
 op-scan は本スキーマを `_shared/pr-templates.md` の指示書テンプレに直接マッピングする。
 
+### scan 出力 envelope 契約
+
+> **本節が scan / patrol 出力の top-level 形状の唯一正本** (ADR-0030 決定3 (A)1 / CX-01)。
+> L1 (`agents/*.md`) / L2 (`skills/expert-*/`) / L3 (workflow spawn prompt) の該当記述は
+> 本節への pointer + expert 固有差分に留める。
+
+**1. 既定 envelope**: scan / patrol / detect モードの応答は
+**`{"findings": [ <scan-finding>, ... ]}` という JSON object** で返す
+(実際に走る spawn prompt = `workflows/op-scan-audit.js` / `op-patrol-audit.js` が要求する形状と一致する)。
+top-level を裸の JSON 配列にしてはならない。
+
+**2. 0 件表現**: 起票対象 (Critical / High の confirmed finding) が 1 件も無い場合は
+**`{"findings": []}`** を返す。「検出なし」等の自然文で代替してはならない。
+
+**3. JSON-only (禁止行)**: JSON 以外のテキスト — 説明文 / 前置き / Markdown 見出し / YAML /
+コードフェンス外の補足 — を前後に付けてはならない。controller は応答を機械的に parse する。
+investigation_candidates / ignored_noise を自然文で追記することも禁止する。
+
+**4. `candidate_report: true` (opt-in の代替 envelope)**: spawn 入力に `candidate_report: true` が
+**明示された場合のみ**、既定 envelope の代わりに以下の JSON object を返してよい。
+
 ```json
-[
+{
+  "confirmed_findings": [ /* <scan-finding> */ ],
+  "investigation_candidates": [ /* 昇格できなかった候補 */ ],
+  "ignored_noise": [ /* 意図的に無視した検出 */ ]
+}
+```
+
+指定が無い場合は **必ず `{"findings": [...]}` envelope のみ**を返す。
+confirmed が 0 件で investigation_candidates だけが残る場合も `{"findings": []}` を返し、
+candidates は報告しない。
+
+**5. `allow_text_tail` / `allow_level_1`**: いずれも spawn 入力の optional flag。
+`allow_text_tail: true` は JSON 末尾への補足テキストを例外的に許可する予約 flag、
+`allow_level_1: true` は Level 0 固定 (read-only) の例外許可 flag である
+(実行レベルの正本は `_shared/severity-rubric.md` の「scan 報告ルール (共通)」節)。
+**controller が明示注入しない限り、worker はいずれも false として扱う。**
+
+以下の JSON は `findings` 配列の **要素 (scan-finding)** の schema を示す。
+
+```json
+{"findings": [
   {
     "title": "<60 文字以内、症状の要約>",
     "severity": "critical | high",
@@ -407,6 +467,11 @@ op-scan は本スキーマを `_shared/pr-templates.md` の指示書テンプレ
     "confidence": "high | medium",
     "requires_dynamic_verification": true,
 
+    // ---- scope metadata (optional) ----
+    // どの scope mode 由来の finding かを記録する。値は "explicit_paths" | "changed_files" | "patrol_sample"。
+    // 定義と controller の注入義務は本ファイル「scan scope mode 契約 (3 モード)」節を参照。
+    "scope_origin": "explicit_paths | changed_files | patrol_sample",  // optional
+
     "recommended_runner": "debug-expert | refactor-expert | optimize-expert | security-expert | ux-ui-audit-expert | designer-expert | test-expert | feature-expert | env-expert",
     "post_check_expert": "ux-ui-audit-expert | security-expert | env-expert | null",
     // ↑ enum に planned expert (env-expert 等) が含まれるのは routing metadata としての記録目的。
@@ -431,7 +496,7 @@ op-scan は本スキーマを `_shared/pr-templates.md` の指示書テンプレ
     "confirmed_bypass_count": "<designer-expert 専用: 実際の design system bypass と確定した件数 (= candidate_count - excluded_count)。design domain 以外は省略>",
     "exclusion_summary": "<designer-expert 専用: どの allowlist で除外したかの 1 行説明 (例: `tokens.css / svg / snapshot / generated を除外`)。design domain 以外は省略>"
   }
-]
+]}
 ```
 
 ### フィールドの必須性
@@ -449,6 +514,7 @@ op-scan は本スキーマを `_shared/pr-templates.md` の指示書テンプレ
 | verification_steps / success_criteria / gotchas | ✓ | apply / review の合否判定基盤 |
 | excluded_hypotheses | 推奨 | 0 件でもよいが、検討した形跡があるほうが信頼度が高い |
 | bulk_group | 任意 | 5 件以上同 group ならバッチ Issue 化 |
+| scope_origin | optional | 由来 scope mode (`explicit_paths` / `changed_files` / `patrol_sample`)。`patrol_sample` 由来の finding では付与を推奨 (controller の巡回統計・severity 慎重判定の材料)。定義は「scan scope mode 契約 (3 モード)」節 |
 | recommended_runner | ✓ | apply 担当 expert の自己宣言。op-scan / op-patrol が hidden marker (`op-run-expert` 等) に転写する (marker 名の正本は `labels-and-markers.md`)。planned expert 値は op-run が spawn 前に正規化する (`runtime-contract.md` / `planned-experts.md` 参照)。security domain finding は **`security-expert` または `debug-expert`** (op-run の判定優先順位 1-8 で最終決定) |
 | post_check_expert | ✓ | 必須。post-check が不要なら明示的に `null` を入れる。op-scan / op-patrol が hidden marker (`op-post-check-expert` 等) に転写する (marker 名の正本は `labels-and-markers.md`)。security domain finding は **必ず `security-expert`** (apply 後の深掘り post-check で再監査)。`review-expert` は post-check expert として指定不可 (global review 専任)。planned expert 値の解決は `runtime-contract.md` / `planned-experts.md` 参照 |
 | reclassified_from / reclassified_to / reclassification_reason | optional (再分類時のみ) | canonical schema field として保持。PR コメントの reclassification marker は本 field の **mirror only** であり、second source ではない (canonical は本 field 側)。`from` / `to` / `reason` の 3 つは揃えて記録する (`from` だけ書いて `to` を省略しない)。`recommended_runner` / `recommended_fix_expert` は再分類後の値を入れる。再分類の policy 本体 (どの planned expert をどの active expert に倒すか等) は `runtime-contract.md` / `planned-experts.md` を参照 |
@@ -696,6 +762,58 @@ bulk_group の例:
 
 ---
 
+## scan scope mode 契約 (3 モード)
+
+> **本節が scan / patrol の scope mode の唯一正本** (ADR-0030 決定3 (A)2 / DUP-02 / MIS-02)。
+> L1 / L2 は本節への pointer + **`patrol_sample` の expert 固有優先順位**のみを保持する。
+
+scan / patrol モードの worker は、以下 3 つの scope mode のいずれかで動作する。
+mode が変わると **探索の起点・打ち切り条件・severity 判定の慎重さ**が変わるため、
+worker は「どの mode で呼ばれたか」を必ず確定させてから探索を始める。
+
+| mode | 起点 | 探索範囲 | 主な呼び出し元 |
+|---|---|---|---|
+| `explicit_paths` | 司令官 / controller が指定したファイル・ディレクトリ | 指定範囲とその直接の呼び出し境界 | op-scan (path 指定あり)、op-run の investigation |
+| `changed_files` | `git diff` / PR diff / staged files | 変更ファイル + 直接の呼び出し境界のみ | op-scan (差分 audit)、PR 起点の audit |
+| `patrol_sample` | repo 全体 (指定なし) | risk-weighted sampling で選んだ範囲、budget 内 | op-patrol、指定も差分も無い op-scan |
+
+### 優先順位と決定規則
+
+1. **`explicit_paths` が最優先**。指定がある場合は他の mode に落とさない。
+2. 指定が無く差分起点が与えられている場合は `changed_files`。
+3. どちらも無い場合のみ `patrol_sample`。
+4. **完全ランダム探索は禁止**。`patrol_sample` は必ず risk-weighted sampling とする。
+
+### controller の注入 (推奨) と worker 側 fallback
+
+- controller (op-scan / op-patrol / workflow) は spawn prompt に `scope_mode` を注入する
+  (**推奨。義務ではない**)。`explicit_paths` / `changed_files` の場合は対象 path 集合
+  (または diff 取得手段) も併せて渡し、`patrol_sample` の場合は **budget (最大 N ファイル)** も渡す。
+- **未注入の場合、worker は `explicit_paths` として扱う** (既定 fallback)。
+  ただし path 指定も差分起点も与えられていない場合は上記「優先順位と決定規則」に従って
+  `changed_files` / `patrol_sample` を自ら確定させる (推測で explicit を名乗らない)。
+- 注入があれば注入値が優先する。
+
+> **実装状況 (2026-07-29)**: L3 の named workflow (`workflows/op-scan-audit.js` /
+> `op-patrol-audit.js`) は現時点で `scope_mode` を注入していない。上記 fallback により
+> 現行動作は破綻しないが、`patrol_sample` 経路で本来意図した抑制が効かない可能性がある。
+> **L3 への注入実装は別 Issue 送り** (`$WS/b0/issue-drafts.md` MIS-02(L3) 案を参照)。
+> 本節は prose 側を fallback 前提へ弱めることで prose ⟷ 実装の矛盾を解消したものであり、
+> 注入実装が入った時点で「推奨」を「義務」へ戻してよい。
+
+### worker 側の義務
+
+- finding には由来 mode を `scope_origin` (canonical schema の optional field) として付与する。
+  特に `patrol_sample` 由来では付与を推奨する。
+- `patrol_sample` では **Medium / Low を報告しない**。静的証拠だけで Critical / High と断定できるものだけを
+  confirmed finding に入れ、昇格できないものは investigation candidate に留める
+  (出力可否は「scan 出力 envelope 契約」節に従う)。
+- `patrol_sample` の **サンプリング優先順位は expert ごとに異なる** (debug = Tauri invoke 境界 / file I/O、
+  feature = 新規 module / wrapper 未経由、optimize = hot path、等)。
+  これは各 expert の L1 / L2 側に残る唯一の scope 固有記述である。
+
+---
+
 ## investigation report schema (フェーズ 2-A)
 
 op-run フェーズ 2-A 探知フェーズで各 expert が司令官に返す investigation report のスキーマ。
@@ -786,7 +904,10 @@ op-run フェーズ 2-C 修正フェーズで各 expert が司令官に返す完
   "code_review_invoked": true,
   "code_review_result": "pass | warning | skip",
   "code_review_skip_reason": null,
-  "code_review_effort": "low | medium | high | xhigh | max | auto | null"
+  "code_review_effort": "low | medium | high | xhigh | max | auto | null",
+
+  "self_review_result": "pass | needs_fix | skip",
+  "self_check_blocked": false
 }
 ```
 
@@ -804,6 +925,8 @@ op-run フェーズ 2-C 修正フェーズで各 expert が司令官に返す完
 | `code_review_result` | `code_review_invoked: true` 時必須 | `"pass"` / `"warning"` / `"skip"` |
 | `code_review_skip_reason` | `code_review_result: "skip"` 時必須 | skip 理由を明記 (`"expert-review (read-only)"` / `"benchmark unstable revert"` / `"security finding 残置"` 等) |
 | `code_review_effort` | optional (v16 以降) | controller が spawn 時に渡した effort-level の転写 (`"low"` / `"medium"` / `"high"` / `"xhigh"` / `"max"` / `"auto"` / `null`)。effort 自動派生ルールは `_shared/model-selection.md (>=2)` §5.5 を参照 |
+| `self_review_result` | optional (v16 additive) | apply フェーズ3 の自己検証 (code-review) 結果。`"pass"` / `"needs_fix"` (再検証済) / `"skip"` (code-review 非該当)。op-run 経路では ClusterOrchestrator が完了 gate として参照する (`skills/op-run/cluster-orchestrator-directives.md` フェーズ3 節 / `skills/op-run/references/apply-prompt-directives.md`)。非 op-run 経路では省略可 |
+| `self_check_blocked` | optional (v16 additive) | 自己検証の再実行 (1 回まで) 後も Critical/High が残り、apply agent 側で解消できなかった場合に `true`。既定は `false`。`true` の場合 controller は完了扱いにせず人間 gate / 再委任へ回す |
 | `assumptions` | 推奨 | OP-managed Mode で推定した前提条件 |
 | `needs_human_decision` | 推奨 | 判断不能な設計判断を構造化返却 |
 | `blocked_actions` | `needs_human_decision.required: true` 時必須 | scope 内の安全な実装のみ進めた場合の保留 action 一覧 |
@@ -891,32 +1014,21 @@ needs-fix の修正は op-run が specialist expert に再委任する。
 5. 7 lens で検証 (詳細は `skills/expert-review/SKILL.md`):
    Security / Workflow-UX / Test / Compatibility / Release / Spec / Refactor
 6. review_result を決定: approve / needs-fix / needs-specialist-review / blocked
-7. needs-fix / needs-specialist-review / blocked のとき、各 finding を `<!-- op-review-finding -->` block 形式で残す
-   (pr-templates.md 参照)。全体 review_result は最重値で決定。
+7. needs-fix / needs-specialist-review / blocked のとき、各 finding を `<!-- op-review-finding -->` の
+   field 構成で **構造化返却する** (OP-managed では PR への投稿は controller が行う。pr-templates.md 参照)。
+   全体 review_result は最重値で決定。
 
 self-review にならないよう外部監査の立場を最後まで保つこと。
 ```
 
-### needs-fix の機械的判定 (3 条件 AND)
+### needs-fix の機械的判定 (3 条件 AND) — pointer
 
-review-expert は以下 3 条件をすべて満たす場合のみ `needs-fix` を返す。
-1 つでも欠けるなら `needs-specialist-review` に切り替える。
+> **正本は `skills/expert-review/references/result-decision.md`「needs-fix の条件 (3 条件 AND を機械的に確認)」節** (ADR-0030 CX-09)。
+> 本節は spawn 側が判定結果 enum を理解するための要約に留める。実体を本ファイルに書き戻さないこと。
 
-```text
-needs-fix:
-  same-pr 内で修正できる
-  AND 単一 expert で完結する
-  AND 既知パターンの修正である
-```
-
-`needs-specialist-review`:
-- same-pr 可否が不明
-- 担当 expert が一意に決まらない
-- 修正パターンが未知
-- 専門判断後でないと修正方針を決められない
-
-`blocked`:
-- scope_out / 人間判断必要 / loop 上限超過 / Issue 再設計が必要
+`needs-fix` = **same-pr 内で修正できる AND 単一 expert で完結する AND 既知パターンの修正である** (3 条件 AND)。
+1 つでも欠けるなら `needs-specialist-review`、scope_out / 人間判断必要 / loop 上限超過 / Issue 再設計が必要なら `blocked`。
+条件ごとのチェック項目と判定例は上記正本を参照する。
 
 ### review-expert の禁止事項
 
@@ -927,76 +1039,31 @@ needs-fix:
 | post-check expert としての振る舞い | review-expert は global review 専用、`<!-- op-post-check-expert: review-expert -->` 指定は禁止 |
 | PR 本文の typo 修正 | 軽微であっても push は禁止。typo は finding (Spec Lens / Refactor Lens) に残す |
 
-### op-run による Review Fix Loop と再委任
+### op-run による Review Fix Loop と再委任 — pointer
+
+> **dispatch 判定優先順位 1-8 の正本は `skills/op-run/references/review-fix-loop.md` §4.5-2**
+> (apply target 禁止 expert の固定ルール §4.5-2-guard、planned expert fallback、specialist handoff を含む)。
+> review-expert 側から見た責務境界 (何を finding として返し、誰を `recommended_fix_expert` に提案するか) の正本は
+> `skills/expert-review/references/handoff-boundaries.md`。ADR-0030 CX-09 により本節は pointer + 要約に降格した。
 
 review_result が `needs-fix` / `needs-specialist-review` の PR は op-run が制御する。
-`recommended_fix_expert` は提案にすぎず、最終判断は op-run が以下の優先順位で行う。
+`recommended_fix_expert` は **提案にすぎず**、最終判断は op-run が判定優先順位 1-8
+(scope → 変更ファイルのドメイン → lens → failure mode → required post-check →
+recommended_fix_expert → ownership → 不明なら needs-specialist-review / blocked) で行う。
+具体的な判定例と例外は上記 2 正本を参照する。
 
-```text
-1. Issue / PR の scope_in / scope_out
-2. 変更ファイルのドメイン (src-tauri/** / frontend/** / migrations/** / tests/** など)
-3. finding の lens (Security/Abuse, Workflow/UX, Test, Compatibility, Release, Spec, Refactor)
-4. failure mode / 失敗種別 (bug / regression / state recovery / IPC violation / token bypass など)
-5. required post-check (修正後に必要となる post-check expert と整合する apply expert を選ぶ)
-6. review-expert の recommended_fix_expert (参考情報として参照)
-7. ownership / 直前に修正した expert
-8. 不明な場合は needs-specialist-review または blocked
-```
+### lens / failure mode → 再委任先 expert の対応例 — pointer
 
-判定例:
+> **正本は `skills/expert-review/references/lens-catalog.md`「司令官 (op-run) への提案 — 同 lens 内 specialist の推奨」節**
+> (lens ごとの第一候補 / `requires_post_check` / 第二候補と条件を 1 表で持つ)。
+> planned expert の正規化・`release-expert` を fallback destination にしない規約は
+> `skills/expert-review/references/handoff-boundaries.md` §7 および `_shared/planned-experts.md` が正本。
+> ADR-0030 CX-09 により、本ファイルは lens → expert の実体表を保持しない。
 
-```text
-- review-expert が feature-expert を推奨していても、対象が src-tauri/** の
-  file IO / permission / IPC なら security-expert を優先する。
-- UI 表示崩れでも、design token / component aesthetics なら designer-expert、
-  状態復帰 / error flow / a11y 実装修正なら feature-expert を選ぶ
-  (ux-ui-audit-expert は apply target にしない。再 audit 担当として `requires_post_check: ux-ui-audit-expert` を別フィールドで指定する)。
-- テスト不足でも、仕様不明確なら test-expert ではなく spec-expert に先に回す。
-- 認可・capability・shell / file IO 副作用なら recommended_fix_expert に関わらず security-expert。
-```
-
-### lens / failure mode → 再委任先 expert の対応例
-
-```text
-implementation gap (Workflow/UX, Spec):
-  → feature-expert
-
-bug / regression (Workflow/UX, Refactor):
-  → debug-expert
-
-test gap (Test):
-  → test-expert (仕様不明確なら spec-expert へ先に handoff)
-
-UX / state recovery / a11y / error flow (Workflow/UX 実装修正):
-  → feature-expert (apply)
-  ※ ux-ui-audit-expert は apply target にしない。再 audit 担当として
-     finding 側の `requires_post_check: ux-ui-audit-expert` で指定する。
-
-visual / design token / component aesthetics (Workflow/UX):
-  → designer-expert
-
-refactor / structure / duplication (Refactor):
-  → refactor-expert
-
-performance regression (Refactor / Test):
-  → optimize-expert
-
-security / file IO / permission / IPC (Security/Abuse):
-  → security-expert (deep specialist, recommended_fix_expert を上書き可能)
-
-compatibility / migration / saved data (Compatibility):
-  → compatibility-expert (planned。op-run が spawn 前に正規化。詳細は planned-experts.md)
-
-release / installer / updater / artifact (Release):
-  → release-expert (planned。**runtime spawn / fallback destination 禁止**。
-                     reclassification policy の正本は planned-experts.md。
-                     再分類時は canonical schema field
-                     `reclassified_from` / `reclassified_to` / `reclassification_reason` に記録する)
-
-ambiguous requirement / scope issue (Spec):
-  → spec-expert (op-spec 専用 Utility Worker。op-run routing 対象外のため spawn 前に feature-expert へ正規化。
-                 仕様判断そのものは op-spec で正本照合する。詳細は active-expert-registry.md / planned-experts.md)
-```
+要点のみ: `recommended_fix_expert` は提案であり、`ux-ui-audit-expert` / `review-expert` は指定しない
+(前者は検出 + post-check 専任、後者は監査専任)。planned expert (`compatibility-expert` /
+`release-expert` / `env-expert`) は spawn 前に正規化し、`release-expert` は fallback destination にしない。
+再分類時は canonical schema field (`reclassified_from` / `reclassified_to` / `reclassification_reason`) に記録する。
 
 ### needs-specialist-review の handoff
 
@@ -1036,7 +1103,13 @@ specialist_result = blocked:
 
 ### review-expert の出力 (必須)
 
-review-expert は判定確定時に、`<!-- op-review-meta -->` ヘッダーで以下を必ず記録する。
+以下は **controller が転写する field 定義**である (ADR-0011 決定6 / ADR-0030 CX-02)。
+OP-managed (op-run) 経路では **ClusterOrchestrator が単一 `op-review-meta` + 連番 finding を 1 回だけ投稿**し、
+review-expert 自身は構造化 `reviews[]` を返すのみで **投稿しない**
+(投稿主体の正本は `skills/expert-review/SKILL.md` および `skills/op-run/cluster-orchestrator-directives.md`)。
+Direct Mode では従来どおり review-expert 自身がユーザー許可後に投稿してよい。
+
+review-expert は判定確定時に、`<!-- op-review-meta -->` ヘッダー相当の以下を必ず記録 (返却) する。
 フォーマットは `~/.claude/skills/_shared/pr-templates.md` の review コメントテンプレに従う。
 
 ```

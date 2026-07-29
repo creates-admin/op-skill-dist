@@ -25,6 +25,9 @@ SKILL.md の「既存資産探索 (silent fork 防止の最低充足条件)」�
 
 L1 → L2 → L3 の順で広げる。L3 まで到達できれば silent fork はほぼ防げる。
 
+L1 の段階で **同種ディレクトリを横並びに比較する** (`ls -la src/pages/case/ src/pages/project/ ...`)。
+構成・ファイル数・命名の食い違いはそれ自体が silent fork の兆候であり、最も安く早く見つかる。
+
 ### head -N で打ち切る時の注意 (大規模 repo)
 
 本辞典の grep / find 例では `| head -20` などで出力を切っているが、大規模 repo では重要資産を見落とす可能性がある。
@@ -48,100 +51,57 @@ head -20 /tmp/_files
 
 ## 共通: ドメイン横断の資産探索
 
-スタックに依存しない最初のステップ。
-
-### crate / module 構造の俯瞰
+スタックに依存しない最初のステップ。**workspace 俯瞰 → 共通 utility の所在 → 命名規則** の順に埋める。
 
 ```bash
-# Rust workspace の全 crate を列挙
-find . -name 'Cargo.toml' -not -path '*/target/*' | head -20
-
-# pnpm / npm workspace の全 package を列挙
-find . -name 'package.json' -not -path '*/node_modules/*' | head -20
-
-# Flutter の全パッケージ
-find . -name 'pubspec.yaml' | head -20
+# workspace / package の俯瞰 (該当する manifest だけ拾う)
+find . \( -name 'Cargo.toml' -o -name 'package.json' -o -name 'pubspec.yaml' \) -not -path '*/target/*' -not -path '*/node_modules/*' | head -20
 
 # 共通 utility ディレクトリの存在確認
-find . -type d \( -name 'utils' -o -name 'helpers' -o -name 'shared' -o -name 'common' -o -name 'lib' \) -not -path '*/node_modules/*' -not -path '*/target/*'
-```
+find . -type d \( -name 'utils' -o -name 'helpers' -o -name 'shared' -o -name 'common' \) -not -path '*/node_modules/*' -not -path '*/target/*'
 
-### 同種ファイルの存在確認
-
-```bash
-# ドメインキーワードで Glob (例: "case" 関連ファイル)
+# ドメインキーワードで同種ファイルを Glob (例: "case")
 find src/ src-tauri/src/ lib/ -type f -iname '*case*' 2>/dev/null | head -30
 
-# 同種ディレクトリの構成を比較 (silent fork 兆候の早期発見)
-ls -la src/pages/case/ src/pages/project/ src/pages/invoice/ 2>/dev/null
+# 類似機能の命名スタイル (動詞・ケース・サフィックス) を集める
+grep -rn "^pub fn\|^pub async fn\|^export function\|^export const" src-tauri/src/commands/ src/api/ 2>/dev/null | head -20
 ```
 
-### 命名規則の抽出
+3 つ以上の同種機能を見て命名規則を抽出する。1〜2 個だけで決めない (偏る)。
 
-```bash
-# 類似機能の関数命名スタイルを集める
-grep -rn "^pub fn\|^pub async fn" src-tauri/src/commands/ | head -20
-grep -rn "^export function\|^export async function\|^export const" src/api/ | head -20
-```
+### wrapper 直叩き検出の型 (全スタック共通)
 
-3 つ以上の同種機能を見て命名規則 (動詞・ケース・サフィックス) を抽出する。
+既存 wrapper があるのに生 API を直接呼んでいる箇所は、次の型ひとつで洗い出せる:
+
+> `<wrapper が包んでいる生 API の呼び出しパターン> | grep -v '<wrapper 配置ディレクトリ>'`
+
+スタックが変わるのは埋める 2 語だけ (Rust: `std::fs::` / `tokio::fs::` vs `src-tauri/src/io/`・`path/`、
+Vue: `invoke` の直 import vs `src/api/`、Flutter: `http.` vs `lib/core/network/`)。
+以降の各スタック節では、この型の代表例を 1 行だけ載せる。
 
 ---
 
 ## Rust / Tauri v2
 
-### crate / module 階層の特定
-
 ```bash
-# Cargo.toml で workspace 構造把握
-cat src-tauri/Cargo.toml | grep -A 50 "\[workspace\]"
-
-# crate 内 module 階層 (pub mod の連鎖)
+# module 階層 (pub mod の連鎖)。crate root の lib.rs と Cargo.toml [workspace] も併せて Read する
 grep -rn "^pub mod\|^mod " src-tauri/src/ --include='*.rs' | head -30
 
-# 公開 API の俯瞰 (crate root からの export)
-cat src-tauri/src/lib.rs
-```
-
-### error type / Result alias の特定
-
-```bash
-# プロジェクト共通 error type
+# 共通 error type / Result alias (期待 pattern: src-tauri/src/error.rs に AppError + AppResult<T>)
 grep -rn "^pub enum.*Error\|^pub struct.*Error\|^pub type.*Result" src-tauri/src/
 
-# 期待される pattern: src-tauri/src/error.rs に AppError + AppResult<T>
-cat src-tauri/src/error.rs 2>/dev/null
+# 既存 command の全列挙。同じ要領で capabilities/*.json と state 管理 (tauri::State / Mutex / RwLock) も確認する
+grep -rn "#\[tauri::command\]" src-tauri/src/ -A 3
+
+# file IO wrapper (PathManager / FsService 等) の直叩き検出 = 共通節「wrapper 直叩き検出の型」の Rust 版
+grep -rn "std::fs::\|tokio::fs::" src-tauri/src/ | grep -v "src-tauri/src/io/\|src-tauri/src/path/"
 ```
 
-確認項目:
+error type を見つけたら、以下まで踏み込んで確認する:
 
 - AppError variant の網羅 (どんな error が定義済みか)
 - AppResult<T> の使われ方 (commands は AppResult を返している前提か)
 - thiserror / anyhow / 独自 derive のどれを採用しているか
-
-### Tauri command パターンの特定
-
-```bash
-# 既存 command を全列挙
-grep -rn "#\[tauri::command\]" src-tauri/src/ -A 3
-
-# capability 設定の俯瞰
-ls -la src-tauri/capabilities/
-cat src-tauri/capabilities/default.json 2>/dev/null
-
-# state 管理パターン (Mutex / RwLock / once_cell)
-grep -rn "tauri::State\|Mutex<\|RwLock<" src-tauri/src/ | head -20
-```
-
-### file IO / path 管理の wrapper 特定
-
-```bash
-# PathManager / FsService 等の wrapper
-grep -rn "pub fn.*-> PathBuf\|pub struct.*Path\|pub fn read_\|pub fn write_" src-tauri/src/
-
-# 直叩き箇所を発見 (使うべき箇所で wrapper を使っていない)
-grep -rn "std::fs::\|tokio::fs::" src-tauri/src/ | grep -v "src-tauri/src/io/\|src-tauri/src/path/"
-```
 
 ### 探索チェックリスト (Rust / Tauri v2)
 
@@ -160,81 +120,23 @@ grep -rn "std::fs::\|tokio::fs::" src-tauri/src/ | grep -v "src-tauri/src/io/\|s
 
 ## Vue 3 + TypeScript
 
-### shared component の特定
-
 ```bash
-# components ディレクトリ俯瞰
-ls -la src/components/
-
-# 主要 shared component (loading / error / empty 系) の存在確認
+# shared component (loading / error / empty 系) の存在確認。利用箇所は grep -rn "<Skeleton\|<ErrorBanner" src/pages/ で追う
 find src/components/ -iname '*skeleton*' -o -iname '*spinner*' -o -iname '*error*' -o -iname '*empty*' -o -iname '*toast*'
 
-# どこで使われているか (利用パターン)
-grep -rn "<Skeleton\|<ErrorBanner\|<EmptyState" src/pages/ src/views/
-```
-
-### composable / hook の特定
-
-```bash
-# composables ディレクトリ
-ls -la src/composables/
-
-# 主要 composable (fetch / form / pagination 等)
+# composable 列挙。src/types/ の type alias / AppResult も同じ要領 (ls + grep '^export type') で押さえる
 find src/composables/ -name 'use*.ts' | head -20
 
-# 利用パターン
-grep -rn "useFetch\|useForm\|usePagination" src/pages/ | head -20
-```
-
-### Pinia store の特定
-
-```bash
-# stores ディレクトリ
-ls -la src/stores/
-
-# store 構造 (defineStore のパターン)
+# Pinia store の構造 (defineStore のパターン)
 grep -rn "defineStore" src/stores/ -A 3
 
-# どの store がどこで使われているか
-grep -rn "useUserStore\|useCaseStore" src/pages/ | head -20
-```
-
-### invoke wrapper / API client の特定
-
-```bash
-# src/api/ の全 wrapper
-ls -la src/api/
-
-# wrapper 関数の網羅
-grep -rn "^export async function\|^export const.*=.*async" src/api/
-
-# 直叩き (wrapper bypass) の発見
+# invoke wrapper (src/api/) の直叩き検出 = 共通節「wrapper 直叩き検出の型」の Vue 版
 grep -rn "import { invoke } from '@tauri-apps" src/ --include='*.vue' --include='*.ts' | grep -v "src/api/"
 ```
 
-### type / interface の特定
-
-```bash
-# 型定義の集約場所
-ls -la src/types/
-
-# 主要 type alias / interface
-grep -rn "^export type\|^export interface" src/types/ | head -30
-
-# AppResult / Result alias の存在確認
-grep -rn "^export type.*Result\|AppResult" src/
-```
-
-### loading / error / empty / success パターンの抽出
-
-```bash
-# 4 状態テンプレが揃っているページ (= 手本候補)
-grep -lrn "v-if=\"loading\"" src/pages/ | head -5
-grep -lrn "v-if=\"error\"" src/pages/ | head -5
-grep -lrn "v-if=\"empty\"\|v-if=\".*\\.length === 0\"" src/pages/ | head -5
-
-# 同じファイル全部に出てくれば手本として優秀
-```
+**手本ページの選び方**: `loading` / `error` / `empty` / `success` の 4 状態が **同一ファイルに揃っている**ページは
+手本として優秀。`grep -lrn 'v-if="loading"' src/pages/` を状態ごとに走らせ、**全条件に同じファイルが現れるか**で判定する
+(1 状態だけ揃っているページを手本にすると、欠けた状態ごと模倣してしまう)。
 
 ### 探索チェックリスト (Vue 3 + TypeScript)
 
@@ -270,66 +172,34 @@ grep -rn "invoke\(['\"]" src/api/ | sed -E "s/.*invoke\(['\"]([a-z_]+).*/\1/" | 
 # - 両方にある: 整合確認 (引数 / 戻り値 type 一致)
 ```
 
-### Result type の整合確認
+### 同じ「抽出 → sort -u → diff」を型と capability にも適用する
+
+上の command 名突き合わせは技法であり、対象を変えれば型契約と capability にもそのまま効く:
 
 ```bash
-# Rust 側: 戻り値の Result 型
-grep -rn "fn.*-> AppResult\|fn.*-> Result<" src-tauri/src/commands/ | head -20
+# Result type: Rust の戻り値と TS の受け取り型 (AppResult<Case> ⇔ invoke<Case> の整合が必要)
+grep -rn "fn.*-> AppResult\|fn.*-> Result<" src-tauri/src/commands/ | head -20; grep -rn "invoke<" src/api/ | head -20
 
-# TypeScript 側: 受け取り型
-grep -rn "invoke<" src/api/ | head -20
-
-# Rust が AppResult<Case> → TS が invoke<Case> という整合が必要
-```
-
-### capability scope の整合確認
-
-```bash
-# capability 定義
-cat src-tauri/capabilities/default.json 2>/dev/null
-
-# 新規 command を追加する時、capability に許可が必要か
-grep -rn "tauri::generate_handler" src-tauri/src/main.rs src-tauri/src/lib.rs
+# capability scope: 登録済み handler と capability 許可範囲 (新規 command 追加時に許可が要るか)
+grep -rn "tauri::generate_handler" src-tauri/src/main.rs src-tauri/src/lib.rs; cat src-tauri/capabilities/default.json 2>/dev/null
 ```
 
 ---
 
 ## Flutter / Dart
 
-### widget / state management の特定
-
 ```bash
-# 共通 widget
+# 共通 widget の俯瞰
 ls -la lib/core/widgets/ lib/shared/widgets/ lib/common/widgets/ 2>/dev/null
 
-# Riverpod / Provider / Bloc の採用確認
+# state 管理の採用確認 (Riverpod / Provider / Bloc)。sealed class / @freezed / enum State も同時に見る
 grep -rn "ConsumerWidget\|StatefulWidget\|BlocBuilder\|Provider" lib/ | head -20
 
-# state 管理パターン (sealed class / freezed / enum)
-grep -rn "sealed class\|@freezed\|enum.*State" lib/
-```
-
-### repository / api client の特定
-
-```bash
-# api client / repository 層
-ls -la lib/core/network/ lib/core/data/ lib/data/ 2>/dev/null
-
-# Dio / http パッケージの wrapper
-grep -rn "class.*ApiClient\|class.*Repository" lib/
-
-# 直叩き (wrapper bypass)
-grep -rn "http\.\(get\|post\|put\|delete\)" lib/ | grep -v "lib/core/network/"
-```
-
-### error handling パターンの特定
-
-```bash
-# Result type / Either / Failure pattern
+# error / Result type の特定。try-catch の既存作法も同じファイル群で確認する
 grep -rn "class.*Failure\|sealed class.*Result\|Either<" lib/
 
-# try-catch の既存パターン
-grep -rn "try {" lib/ -A 5 | grep "catch (e)" | head -10
+# ApiClient / Repository wrapper の直叩き検出 = 共通節「wrapper 直叩き検出の型」の Flutter 版
+grep -rn "http\.\(get\|post\|put\|delete\)" lib/ | grep -v "lib/core/network/"
 ```
 
 ### 探索チェックリスト (Flutter / Dart)

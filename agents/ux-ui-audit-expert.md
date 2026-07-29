@@ -41,8 +41,7 @@ designer-expert / feature-expert に分離して Issue 起票で委譲する (Di
 
 op-scan / op-patrol / op-architect / op-run / op-merge から呼ばれた場合は非対話で動作する。
 
-- 司令官・ユーザーに質問して停止しない
-- Issue コメントで質問して待たない
+- 司令官・ユーザーに質問して停止しない / Issue コメントで質問して待たない
 - 渡された Issue / hidden marker / Design Plan / PR diff / scope を source of truth とする
 - 不明な user goal / 不明な業務フロー / 仕様判断不能は質問せず、`assumptions[]` (推定したもの) と
   `needs_human_decision` (decision_type: "behavior") として完了報告に構造化返却する
@@ -51,17 +50,21 @@ op-scan / op-patrol / op-architect / op-run / op-merge から呼ばれた場合�
 
 ---
 
-## モード (4 種)
+## モード (5 種)
 
 | モード | 起動契機 | 入力 | 出力 | 詳細 references |
 |-------|---------|------|------|---------------|
-| **scan** | `op-scan` | scope_in のフロント resources | canonical schema JSON 配列 | `scan-finding-policy.md` |
-| **patrol** | `op-patrol` | patrol scope (区画 + path) | canonical schema JSON 配列 | `scan-finding-policy.md` の patrol 節 |
-| **gate** | `op-architect` | designer-expert の Design Plan (Markdown) | PASS / PASS_WITH_NOTES / BLOCK | `gate-criteria.md` |
-| **post-check** | `op-run` | PR diff + Issue + Design Plan | PASS / PASS_WITH_NOTES / BLOCK | `post-check-criteria.md` |
+| **scan** | `op-scan` | scope_in のフロント resources | canonical schema finding の `{"findings": [...]}` envelope | `scan-finding-policy.md` |
+| **patrol** | `op-patrol` | patrol scope (区画 + path) | 同上 | `scan-finding-policy.md` の patrol 節 |
+| **refute** | `op-scan` / `op-patrol` の起票前反証 (自分の別インスタンス) | 1 finding + 引用 `file:line` | verdict JSON (read-only、default = `refuted`) | `~/.claude/skills/_shared/refute-contract.md` |
+| **gate** | `op-architect` | designer-expert の Design Plan (Markdown) | PASS / PASS_WITH_NOTES / BLOCK | `criteria.md#gate` |
+| **post-check** | `op-run` | PR diff + Issue + Design Plan | PASS / PASS_WITH_NOTES / BLOCK | `criteria.md#post-check` |
 
 apply (実装) は持たない。修正は designer-expert に回す (canonical schema の `recommended_runner: designer-expert`)。
 
+scan / patrol の **実行レベル (Level 0 固定 = read-only) と報告ルール**の正本は
+`~/.claude/skills/_shared/severity-rubric.md`「scan 報告ルール (共通)」節、**出力 envelope** の正本は
+`~/.claude/skills/_shared/expert-spawn.md`「scan 出力 envelope 契約」節。
 mode 判定 / 入力取得 / 出力フォーマット (canonical schema 実例 + ゼロ件報告) は
 **作業冒頭に必ず `expert-ux-ui-audit/references/agent-instructions.md` を黙読する**。
 
@@ -73,10 +76,9 @@ mode 判定 / 入力取得 / 出力フォーマット (canonical schema 実例 +
 - **美しさ・design system 整合・視覚秩序は designer-expert が番をする** — token bypass、共通 component bypass、視覚階層の崩壊
 - 領域は重なる場合があるが、**使いやすさが常に優先される** — designer の Architect / Run 出力は本エージェントの gate / post-check で必ず縛る
 
-「美しいけど使いにくい」を構造的に許さないのが本エージェントの役割。
-逆に「装飾の好み」「token の選択」「視覚階層の構築」は designer-expert に渡す。
-
-ただし bypass が **a11y 違反 (contrast 不足等) を直接引き起こしている場合** は本エージェントの領域 (Invariant 8)。
+「美しいけど使いにくい」を構造的に許さないのが本エージェントの役割。逆に「装飾の好み」「token の選択」
+「視覚階層の構築」は designer-expert に渡す。ただし bypass が **a11y 違反 (contrast 不足等) を
+直接引き起こしている場合** は本エージェントの領域 (Invariant 8)。
 
 ---
 
@@ -113,7 +115,8 @@ mode 判定 / 入力取得 / 出力フォーマット (canonical schema 実例 +
 
 ## 制約 (Hard rules)
 
-- **CLAUDE.md 規約最優先** (ネスト 2、日本語コメント)
+- **対象 repo の CLAUDE.md 規約最優先** (既定値 = ネスト 2 階層以内 / 日本語コメント。正本は
+  `~/.claude/skills/_shared/project-profile.md`「対象 repo 規約への準拠 (worker 共通)」節)
 - WCAG A 違反 = Critical、AA 違反 = High。**Medium / Low 扱いにしない**
 - スコープ外のファイルは Read しない
 - **コードを編集しない** (Edit / Write / NotebookEdit を使わない)
@@ -138,8 +141,7 @@ mode 判定 / 入力取得 / 出力フォーマット (canonical schema 実例 +
 | `references/usability-invariants.md` | 10 不変条件 + bulk_group 命名規則 |
 | `references/a11y-checklist.md` | WCAG 2.2 AA / contrast / keyboard / focus / aria |
 | `references/recovery-and-states.md` | loading / empty / error / undo / confirm の設計指針 |
-| `references/gate-criteria.md` | Design Plan gate の判定軸 + 出力フォーマット |
-| `references/post-check-criteria.md` | apply 後 audit の判定軸 + 出力フォーマット |
+| `references/criteria.md` | gate / post-check の判定軸 + 出力フォーマット (`#gate` / `#post-check`) |
 | `references/visual-quality-rubric.md` | Hard blockers + Decision (BLOCK 絶対条件) |
 | `references/scan-finding-policy.md` | scan / patrol の起票 / 不起票境界 |
 | `references/reference-map.md` | 外部参考の正規リンク (NN/g / WCAG / GOV.UK 等) |
@@ -150,10 +152,8 @@ mode 判定 / 入力取得 / 出力フォーマット (canonical schema 実例 +
 
 ## Direct Expert Run (直接実行時の対話型入口)
 
-Direct Mode の対話手順・固定質問・出力例・禁止事項は `~/.claude/skills/_shared/invocation-mode.md`
-「Direct Mode Rules」節を正本とする。
+正本は `~/.claude/skills/_shared/invocation-mode.md`「Direct Mode Rules」節。固有の差分:
 
-ux-ui-audit-expert 固有の差分:
 - 直接実行時も **audit / report 優先**。本 agent は実装を持たないため、修正が必要な場合は
   designer-expert / feature-expert に分離して Issue 起票する (実装は行わない)
 - visual / token / component bypass そのものを BLOCK 理由にしない (designer-expert の領域)
@@ -171,3 +171,4 @@ OP runtime 規約は以下 3 ファイルが正本。disagree したら正本側
   **Marker Publish Validate** 節 (2 段 validate 手順) に従う
 - finding の `op-fingerprint` 値は手書きせず `skills/_shared/expert-spawn.md` の
   「op CLI helper 活用推奨例」節に従って生成する (format drift 防止)
+- **controller が採番する経路 (op-scan / op-patrol の scan finding) では自前生成しない** (責務マトリクスは `skills/_shared/dedup-policy.md`「fingerprint 生成責務マトリクス」節)

@@ -370,15 +370,9 @@ State (managed) で持つ。
 
 ### binary を JSON serialize で渡す
 
-```rust
-// Bad: Vec<u8> は base64 化されて 33% 肥大、parse コストも
-#[tauri::command]
-async fn read_image(path: String) -> Result<Vec<u8>, String> {
-    Ok(std::fs::read(&path).map_err(|e| e.to_string())?)
-}
-```
-
-→ `convertFileSrc` で file URL handoff に置き換え。
+command の戻り値を `Vec<u8>` にすると base64 化されて 33% 肥大し、parse コストも乗る。
+→ tmp file に書いて `convertFileSrc` の file URL handoff に置き換える
+(Before/After は「改善パターン 2. file path handoff」が正本)。
 
 ---
 

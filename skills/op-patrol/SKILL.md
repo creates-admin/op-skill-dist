@@ -82,7 +82,7 @@ marker の routing metadata 定義・runtime spawn 解決の正本は以下を�
 
 op-patrol 固有の注意点:
 - `review-expert` は active expert だが、patrol / scan / apply の `recommended_runner` 候補にしない (global review 専任)。
-- `security-expert` は active expert。op-patrol は security area 巡回時に `subagent_type: op-skill:security-expert` で正式 spawn し、canonical schema 拡張 (security / threat_model / usable_security / post_check) を必須出力とする (plugin scoped-name 規約、`_shared/expert-spawn.md` 正本)。
+- `security-expert` は active expert。op-patrol は security area 巡回時に `subagent_type: "op-skill:security-expert"` で正式 spawn し、canonical schema 拡張 (security / threat_model / usable_security / post_check) を必須出力とする (plugin scoped-name 規約、`_shared/expert-spawn.md` 正本)。
 - `env-expert` は planned expert (未実装)。env area の patrol が起票する Issue では `op-run-expert` marker は routing metadata に留め、runtime spawn 担当の決定は op-run の独立解決に委ねる (詳細手順は `_shared/runtime-contract.md` / `_shared/planned-experts.md`)。release / installer / distribution 方針判断が主題なら `needs_human_decision` (commander triage) に倒す。
 
 env-expert 実装時は本 Notice を削除する。

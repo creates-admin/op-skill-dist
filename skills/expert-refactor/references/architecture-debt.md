@@ -147,6 +147,30 @@ op-patrol:
   既存 Issue が無ければ新規起票する。
 ```
 
+#### tracking owner (field 単位の担当表)
+
+agent (refactor-expert) は **今回検出時点での暫定値のみ** を返す。累積値は **op-patrol が
+fingerprint で既存 Issue を検索して上書き** する責務を持つ (agent は GitHub Issue を
+読みに行かない)。
+
+| field | agent (refactor-expert) | op-patrol (再検出時) |
+|-------|------------------------|---------------------|
+| `first_detected_at` | 今日 (新規検出時) | 既存 Issue があれば上書きしない |
+| `last_seen_at` | 今日 | 今日に更新 |
+| `seen_count` | **必ず `1`** | +1 する |
+| `risk_trend` | **必ず `stable`** | affected_paths 比較で `worsening` / `spreading` に更新 |
+
+`needs:triage` ラベルの付与判定 (`seen_count >= 3` / `affected_paths` 増加 / risk_trend 悪化) も
+op-patrol の責務。agent 側で付与しない。
+
+#### agent 側に残る責務 (悪化検出のみ)
+
+累積値の更新は op-patrol に委ねる一方で、agent 側の責務は「新規変更 (今回の scan 対象 PR /
+変更ファイル) が既存 debt を悪化させた場合に `blocking: true` + `blocking_reason` を付与して
+返すこと」のみ。これは過去回数の推測ではなく、既存 affected_paths との突き合わせによる
+現在時点の判定なので agent が責任を持つ。それ以外 (`seen_count` の増減 / `risk_trend` の遷移 /
+`needs:triage` の付与) は **すべて op-patrol の責務**。
+
 ### op-patrol による seen_count / last_seen_at 更新フロー (controller 手順、pointer)
 
 既存 Issue 検索の優先順位・上書き手順・`risk_trend` 判定ルール・`needs:triage` 付与条件は
@@ -326,10 +350,7 @@ agent 出力の **絶対条件**。`seen_count` を 2 以上で返したり、`r
 
 ## Principle
 
-```text
-既存負債は staged
-新規悪化は block
-```
+(要約: 既存負債は staged / 新規悪化は block — 詳細は上記「新規実装による悪化の扱い」節を参照)
 
 巨大負債の存在を **観測** し続けることが第一目的。
 腐敗度 (seen_count / risk_trend / affected_paths) を計測することで、

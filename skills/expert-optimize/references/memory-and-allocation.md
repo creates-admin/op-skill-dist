@@ -165,33 +165,21 @@ fn process_pages(page_count: usize) {
 
 ### 5. mem::take / mem::replace で所有権移動
 
+`&mut self` 越しに大型 field を取り出したいとき、clone せず所有権ごと奪う (内部は空に戻る)。
+
 ```rust
-use std::mem;
-
-struct Pipeline {
-    buffer: Vec<u8>,
-}
-
-impl Pipeline {
-    fn flush(&mut self) -> Vec<u8> {
-        mem::take(&mut self.buffer)  // 所有権を移動、内部は空 Vec に
-    }
+fn flush(&mut self) -> Vec<u8> {
+    std::mem::take(&mut self.buffer)  // 所有権を移動、self.buffer は空 Vec に
 }
 ```
 
 ### 6. drop scope を狭める
 
-```rust
-// Bad: 全 scope で大型 buffer 保持
-fn process() -> Result<()> {
-    let huge = load_huge()?;
-    let summary = summarize(&huge);
-    // huge を以降使わないが scope 内で生き続ける
-    do_other_work(&summary);
-    Ok(())
-}
+使い終わった大型変数は block scope に閉じ込めて早期 drop させる。
+関数末尾まで生かすと、その間ずっと peak RSS に乗り続ける。
 
-// Good: block で scope 限定
+```rust
+// Good: block で scope 限定 (Bad = huge を関数末尾まで保持し続ける形)
 fn process() -> Result<()> {
     let summary = {
         let huge = load_huge()?;
@@ -222,15 +210,8 @@ impl OcrCache {
 }
 ```
 
-```rust
-// または TTL で自動 expire
-use moka::sync::Cache;
-
-let cache: Cache<Key, Arc<Value>> = Cache::builder()
-    .max_capacity(10_000)
-    .time_to_live(Duration::from_secs(600))
-    .build();
-```
+> 単純な capacity 上限なら `lru` crate で十分。TTL による自動 expire が要るなら `moka`
+> (`Cache::builder().max_capacity(n).time_to_live(d).build()`)。どちらも **bounded であることが本質**。
 
 ### 8. listener / watcher 解除
 

@@ -1,7 +1,12 @@
 <!--
 schema_version: 5
 last_breaking_change: 2026-07-29
-notes: v5 (2026-07-29) — code-review invoke 先を built-in `/code-review` から plugin 同梱の
+notes: v5 (2026-07-29, additive) — ADR-0030 CX-03: Section 2-A「op-run 経路の例外分岐 (commit 先行)」を新設。
+       ADR-0016 決定3 / cluster-orchestrator-directives.md / apply-prompt-directives.md の 3 面一致に prose を合わせ、
+       op-run 経路のみ commit → Skill(op-skill:op-code-review) → (Critical/High 時のみ) 追加 commit とする。
+       追加 commit 必須 / uncommitted 残置 = contract violation を Section 3・4 にも反映。
+       Direct apply の 5 段階順序 (Section 2) は不変 (節追加のみ・既存項目の削除なし)。
+       v5 (2026-07-29) — code-review invoke 先を built-in `/code-review` から plugin 同梱の
        `op-skill:op-code-review` (skills/op-code-review/SKILL.md) に差し替え。built-in は
        disable-model-invocation のため model (subagent 含む) から Skill invoke できないことが
        実測で確定した (headless 実測 2026-07-29)。旧 `simplify` fallback は廃止し、fallback は
@@ -57,7 +62,7 @@ notes: v5 (2026-07-29) — code-review invoke 先を built-in `/code-review` か
 
 | モード | 適用 |
 |--------|------|
-| apply Run Mode (`op-run` 経由 または Direct apply) | 適用する |
+| apply Run Mode (`op-run` 経由 または Direct apply) | 適用する (`op-run` 経由は Section 2-A の commit 先行分岐を併用) |
 | scan / detect モード | 適用しない (skip) |
 | review / post-check モード | 適用しない (skip) |
 | gate 判定モード | 適用しない (skip) |
@@ -85,6 +90,9 @@ commit までの 5 ステップを **この順序で** 実行する。
 >
 > commit は必ず code-review invoke **後** に行う。
 > code-review が修正を提案し実際に変更が発生した場合、その変更も含めて commit する。
+>
+> **例外**: `op-run` (ClusterOrchestrator) 経由の apply は commit を先に打つ (Section 2-A)。
+> 本 5 段階順序は Direct apply の正本として不変。
 
 ### code-review skill 名と effort-level (v5 改訂: invoke 先 = op-skill:op-code-review)
 
@@ -100,6 +108,44 @@ commit までの 5 ステップを **この順序で** 実行する。
   `auto` または未指定の場合は effort 引数なしで呼ぶ (skill 既定 = high)。
 - effort-level の自動派生ルールは `~/.claude/skills/_shared/model-selection.md (>=2)` §5.5 を参照。
 
+## 2-A. op-run 経路の例外分岐 (commit 先行、ADR-0016 決定3 / ADR-0030 CX-03)
+
+> **本節は additive な例外分岐**。Section 2 の 5 段階順序は **Direct apply (op-run 外) の正本のまま不変**である。
+
+`op-run` の ClusterOrchestrator 経由で spawn された apply-expert (`cluster-orchestrator-directives.md`
+フェーズ2-3 / `op-run/references/apply-prompt-directives.md`) は、**commit を先に打ってから**
+`Skill(op-skill:op-code-review)` を自己検証として実行する。
+
+```
+1. 実装完了 (スコープ内ファイルの変更 + 単体確認)
+2. Static 検証 pass 確認 (project-profile.md のスタック別コマンドを参照)
+3. unit test pass 確認 (該当する Level のみ)
+4. commit                          ← op-run 経路ではここが先
+5. Skill(op-skill:op-code-review) 自己検証 (effort は controller 由来の code_review_effort、§2「code-review skill 名と effort-level」)
+6. Critical / High が出た場合のみ: 自己修正 → **追加 commit** → 自己検証を 1 回だけ再実行
+   (2 回目も Critical/High が残るなら self_check_blocked: true を付けて controller に返す)
+   Medium / Low は自己修正せず formal review 工程に委ねる
+```
+
+**この分岐でのみ守るべき追加契約 (commit 先行に固有のリスクを塞ぐ)**:
+
+- 自己検証で Critical / High を修正した場合、**追加 commit は必須**。修正を commit せずに完了報告を返してはならない。
+- **worktree に uncommitted 変更を残したまま完了報告することは contract violation**。
+  push は ClusterOrchestrator が行うため、未 commit の変更は **失われる**。
+  完了報告の直前に `git status --porcelain` が空であることを必ず確認する。
+- `commits_added` には初回 commit と自己修正 commit の **両方**の SHA を含める (Section 3 の取得手順は共通)。
+
+**理由 (順序が逆でも checklist の目的が損なわれない根拠)**:
+
+1. checklist の導入意図は「code-review 実行後に commit を忘れる」= `commits_added: []` silent skip の防止である。
+   commit を先に打てば、code-review の可否に関わらず `commits_added` が空にならない。
+   残る窓は「自己修正後の追加 commit 忘れ」だけで、上記 2 契約がそれを塞ぐ。
+2. `Skill(op-skill:op-code-review)` は Cloud subagent で使用できない実測がある (ADR-0027 5a dogfood)。
+   commit 先行なら、code-review が使えなくても手動セルフレビュー fallback で apply を完走できる。
+
+Direct apply (op-run 外) は Cloud degrade 前提がなく、単一 commit にまとまる方が読みやすいため
+**Section 2 の 5 段階順序 (code-review → commit) を維持する**。
+
 ## 3. 完了前チェックリスト
 
 commit を打つ前に以下を **全項目 yes** にしてから進む。
@@ -111,7 +157,9 @@ commit を打つ前に以下を **全項目 yes** にしてから進む。
 - [ ] code-review skill invoke 完了、code_review_result 取得済
       (skip 時は code_review_skip_reason 確定済)
 - [ ] code-review による修正を含めて git add -A 実行済
+      (op-run 経路 = Section 2-A では、自己検証の修正を **追加 commit** として打ち済)
 - [ ] git commit 実行済
+- [ ] git status --porcelain が空 (uncommitted 変更を残していない)
 - [ ] git log --format='%H' "${OP_RUN_BASE_SHA}..HEAD" で commits_added の SHA 配列を取得済、
       完了報告の commits_added フィールドに記入済 (1 件以上であること)
 - [ ] git rev-list "${OP_RUN_BASE_SHA}..HEAD" --count が 1 以上であることを確認済
@@ -154,6 +202,11 @@ git log --format='%H' "${OP_RUN_BASE_SHA}..HEAD"
 > **v14 追加警告**: `commits_added: []` のまま apply 完了報告を返すことも contract violation。
 > apply spawn では必ず `commits_added: [SHA, ...]` (1 件以上) を完了報告に含めること。
 > exploration-only spawn (investigation / post-check / review) では `commits_added: []` が正解 (commit しないため)。
+>
+> **op-run 経路の追加警告 (Section 2-A)**: commit 先行分岐では、`Skill(op-skill:op-code-review)` の
+> Critical / High を自己修正したのに **追加 commit を打たない**、あるいは worktree に
+> uncommitted 変更を残したまま完了報告することが **contract violation** である
+> (push は ClusterOrchestrator が行うため、未 commit の変更は失われる)。
 >
 > **v4 追加警告 (Static 検証 contract violation)**: PR 本文に `Static: pass` と記録しながら
 > `cargo fmt --check` を実際には実行していない場合、これは **contract violation** として扱う。

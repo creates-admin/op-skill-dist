@@ -21,7 +21,19 @@ description: refactor-expert agent の方法論教科書。挙動非変更を絶
 refactor-expert agent (`~/.claude/agents/refactor-expert.md`) が `skills: [expert-refactor]` で本ファイルを自動プリロードする。
 
 agent はここに書かれた **判断基準・mode 別契約・canonical schema 出力契約・post-check 優先順位**
-に従って自走する。詳細は `references/*.md` を必要時に Read する。
+に従って自走する。本文は「references を 1 行も読まなくても事故らない層」に絞ってあり、
+mode / 状況で必要になる詳細は `references/*.md` を必要時に Read する。
+
+### mode 別必読 references
+
+| mode / 状況 | 必ず Read する references |
+|---|---|
+| scan (op-scan 経由) | `refactor-taxonomy.md` (bulk_group / subtype) + `scattered-tokens.md` |
+| patrol (op-patrol 経由) | `structure-health.md`「Patrol Sampling 優先度」節 (巡回対象選定) |
+| apply (op-run 経由) | `verification-ladder.md` + `report-schema.md` |
+| `architecture_debt` / `staged_refactor` を返す | `architecture-debt.md` |
+| canonical doc (markdown) の圧縮・再構成 refactor | `doc-refactor-guard.md` |
+| post_check_expert の選択に迷う | `post-check-policy.md` |
 
 ---
 
@@ -74,7 +86,10 @@ React / Go は `scope_in` に明示されている場合、または op-run の�
 
 ## Severity Policy (報告閾値)
 
-報告対象は **Critical / High のみ**。判定基準を以下に固定する。
+報告対象は **Critical / High のみ**。報告ルールの共通骨格 (静的証拠必須 / 可能性表現の原則禁止 /
+0 件表現 / 規約準拠は指摘しない) は `skills/_shared/severity-rubric.md` の
+「scan 報告ルール (共通)」節が正本 — **scan / patrol に入る前に Read する**。
+以下は refactor-expert 固有の判定基準。
 
 行数だけでは Issue 化しない:
 
@@ -152,13 +167,13 @@ op-run / op-merge は **解消されるまで進めない**。
 
 - Read / Grep / Glob のみ使用
 - コードを変更しない
-- machine-readable output は canonical schema JSON 配列のみ
+- 出力契約は Canonical Schema Contract 節を参照 (machine-readable output は canonical schema
+  `{"findings": [...]}` envelope のみ、`ignored_noise` は finding として返さない)
 - domain は `"refactor"` 固定
 - recommended_runner は `"refactor-expert"` 固定
 - post_check_expert は **原則 `null`** (検証リスクが高い場合のみ specialist 1 つを指定)
 - Critical / High のみ報告
 - Medium / Low / 好み / formatter 問題は finding として返さない
-- `ignored_noise` は JSON finding として返さない
 - `bulk_group` を必ず付与
 - subtype を必要に応じて付与
 - 一度で直せない巨大負債は捨てず、`architecture_debt` finding として記録する
@@ -167,33 +182,9 @@ op-run / op-merge は **解消されるまで進めない**。
 
 repo 全体を risk-weighted に巡回し、構造劣化・architecture_debt・新規悪化を検出する。
 
-主な patrol 対象:
-
-- 肥大化し続けているファイル
-- ゴッド関数 / 巨大 Tauri command / 巨大 Vue component / 巨大 Flutter Widget
-- utils / common / helpers のゴミ箱化
-- feature 間の依存逆流
-- path / key / command / status / token の散乱
-- ディレクトリ構造の一貫性崩壊
-- architecture_debt の再検出
-- 新規コードによる既存負債の悪化
-
-#### Patrol Sampling Policy
-
-op-patrol では repo 全体を均等に見ず、risk-weighted に巡回する。
-
-優先度高:
-
-- 最近変更されたファイル
-- 行数が増加傾向のファイル
-- import 数が多いファイル
-- public export が多いファイル
-- utils / common / helpers
-- src-tauri commands
-- feature boundary
-- path / config / IPC / storage / status を含むファイル
-- 過去に `architecture_debt` として検出された affected_paths
-- 新規実装によって触られた既存 debt 周辺
+**op-patrol から呼ばれた場合は、巡回対象を決める前に `references/structure-health.md` の
+「Patrol Sampling 優先度」節を必ず Read する** (何を探すか = patrol 対象リスト / どこから見るか =
+優先度高リストの正本)。repo 全体を均等に見ず risk-weighted に巡回すること。
 
 出力契約は scan モードと同じ。
 
@@ -236,41 +227,17 @@ file location の変更が避けられない場合は移動せず `staged_refact
 
 #### Doc 圧縮・再構成時の安全ガード (canonical doc refactor 専用)
 
-##### prose 論理保存ガード
-
-否定・列挙・閾値・条件分岐を含む命令文 (instructional prose) を圧縮・言い換えする場合は、
-**圧縮前後で論理が一致することを canonical ソース / 同一ファイルの未変更箇所と照合してから commit する**。
-
-具体的に確認すること:
-
-- 否定表現 (`しない` / `ではない` / `以外`) が残っているか、正否が反転していないか
-- 列挙の「全件」が保存されているか (途中省略による意味変更がないか)
-- 閾値・数値 (`>=3` / `100 LOC` 等) が変わっていないか
-- 条件分岐の「〜のとき」と「〜以外のとき」が入れ替わっていないか
-
-「圧縮するな」ではない。「圧縮しても**論理を保て**」が原則。
-
-##### inbound-ref grep スコープ拡張ガード
-
-節番号・anchor (HTML id)・見出し文字列・ファイルパスを変更・削除する前に、
-**repo 全体** (op-tools/ コードコメント・docs/specs・他 skill・agents/ 含む) を対象に grep し、
-検出した **全 inbound 参照を同 PR で追従更新する**。
-
-```bash
-# 例: §7 番号変更前の全 repo 確認
-grep -rn "§7\|section-7\|#7" . --include="*.md" --include="*.rs" --include="*.ts" --include="*.js"
-```
-
-- `files_allowed` 外ファイルで参照が見つかった場合は **全件を `blocked_actions[]` に網羅列挙**する
-  (自己申告の取りこぼし禁止。「把握した 2 件のみ列挙」は不可)
-- 節番号 renumber より **stable anchor の維持を優先**する
-  (`<!-- anchor: section-name -->` 等で番号に依存しない参照先を確立すると drift が起きにくい)
+**`skills/**/*.md` や `docs/**` など canonical doc を圧縮・再構成する refactor では、編集に入る前に
+`references/doc-refactor-guard.md` を必ず Read する** (prose 論理保存 4 点チェックと inbound-ref grep の
+repo 全体スコープはそちらが正本。節番号 / anchor / 見出しを変える前に必ず通す)。
 
 ---
 
 ## Canonical Schema Contract
 
-scan / patrol の出力は `_shared/expert-spawn.md` の canonical schema JSON 配列に従う。
+scan / patrol の出力は `_shared/expert-spawn.md` の canonical schema finding を envelope に入れて返す。
+envelope の形状 (`{"findings": [...]}` / 0 件表現 / JSON-only の禁止行 / `candidate_report` /
+`allow_text_tail`) の正本は同ファイルの「scan 出力 envelope 契約」節 — **JSON を組み立てる前に Read する**。
 
 ### refactor-expert の標準値
 
@@ -287,26 +254,22 @@ op-run フェーズ3.5 dispatcher / Issue marker の許容値に揃える。
 
 ### Machine-readable Output
 
-scan / patrol の machine-readable output は canonical schema JSON 配列のみとする。
+envelope と JSON-only の禁止行は上記「scan 出力 envelope 契約」節 (`_shared/expert-spawn.md`) が正本。
+refactor-expert 固有の差分のみ:
 
-- `ignored_noise` は JSON finding として返さない
-- 質問テキスト / free-form 文を JSON に混ぜない
-- 検出 0 件は `[]`
-- ただし、人間向け report mode が op-scan / op-patrol 側で `allow_text_tail: true` を
-  明示した場合のみ、非 blocking な観測を末尾にまとめてよい
+- `ignored_noise` は JSON finding として返さない (内部分類に留める)
+- 人間向け report mode で `allow_text_tail: true` が明示された場合のみ、
+  非 blocking な観測を末尾にまとめてよい
 
 ---
 
 ## Refactor Execution Control
 
 <!--
-機能概要: refactor Issue を apply するときに参照すべき実行制御の集約節。
-作成意図: op-run/SKILL.md の apply prompt が「expert-refactor/SKILL.md の
-         『Refactor Execution Control』節を Read」と参照するため、本節を
-         source of truth として明示する。Issue 本文の `## 🧱 Refactor Execution Control`
-         節 (`_shared/pr-templates.md` で展開) と対になる。
-注意点: 実装ルールが分散すると挙動非変更の絶対条件が破られやすい。本節は
-       op-run / refactor-expert / Issue 本文の 3 者を 1 か所で同期させる入口。
+機能概要 / 作成意図: refactor apply 時の実行制御の集約節。op-run の apply prompt が本節名で
+         参照するため source of truth として明示する (Issue 本文 `## 🧱 Refactor Execution Control`
+         節 = `_shared/pr-templates.md` で展開、と対になる)。
+注意点: op-run / refactor-expert / Issue 本文の 3 者を 1 か所で同期させる入口。分散させない。
 -->
 
 refactor Issue では、Issue 本文の `## 🧱 Refactor Execution Control` 節を
@@ -392,28 +355,12 @@ refactor-expert 固有フィールド:
 ### Phase 1: batch 全面禁止
 
 `domain: "refactor"` の finding は op-scan / op-patrol で **batch Issue 化しない**
-(1 finding = 1 Issue 原則)。
+(1 finding = 1 Issue 原則、例外なし)。`bulk_group` / subtype の付与は引き続き必須
+(finding 同士の関連性を示す情報であって、batch 起票の合図ではない)。
 
-理由:
-
-- refactor の `bulk_group` は粗く、異なる feature / layer / rollback unit が
-  同 bulk_group に集まりやすい
-- 「失敗時に 1 revert で安全に戻せる単位」が clustering の最低条件
-- public API / IPC contract / serialized format / file location 近接の refactor が
-  混入すると、1 PR 内の事故影響範囲が広がる
-
-### bulk_group の役割 (Phase 1)
-
-`bulk_group` は **finding 同士の関連性を示す情報** であって、batch 起票の合図ではない。
-Phase 1 では bulk_group / subtype の付与は引き続き必須 (将来 batch 化や dedup に使う)。
-
-### Phase 2 以降の検討 (現在は適用しない)
-
-Phase 2 で batch 化する場合は、finding schema に
-`root_path` / `rollback_unit` / `verification_key` を追加し、
-**すべて完全一致** する場合のみ batch を許可する設計を検討する。
-
-詳細は `references/clustering-policy.md` を参照。
+**batch 化の可否を判断する前に `references/clustering-policy.md` を必ず Read する**
+(全面禁止の理由・「失敗時に 1 revert で安全に戻せる単位」原則・Phase 2 以降の検討条件は
+そちらが正本)。
 
 ---
 
@@ -435,34 +382,14 @@ Phase 2 で batch 化する場合は、finding schema に
 > `root_path` (LCA) 計算に使うため、debt 系 finding はこれが無いと安定した dedup
 > ができない。`immediate_refactor` では任意。
 
-`architecture_debt` には以下を必ず含める:
+**`architecture_debt` / `staged_refactor` finding を返す前に `references/architecture-debt.md` を
+必ず Read する** (必須フィールド一覧と累積値の更新責務 = tracking owner はそちらが正本)。
 
-- `direct_apply_safe: false`
-- `why_not_direct_apply`
-- `affected_paths`
-- `first_detected_at`
-- `last_seen_at`
-- `seen_count`
-- `risk_trend` (`stable` / `worsening` / `spreading`)
-- `proposed_stages`
-- `safe_first_step`
-- `needs_human_decision` (構造化 block。判断不要なら `required: false` で省略可。
-  `required: true` の場合は `_shared/invocation-mode.md` の必須項目をすべて埋める)
-- `human_decision_points` (refactor 固有。判断点の自然文配列。`needs_human_decision.options[]`
-  と並べて記載してよい)
+agent が返してよい累積値は以下の固定値と、今回の変更による悪化判定 (`blocking`) のみ:
 
-#### tracking owner (重要)
-
-agent (refactor-expert) は **今回検出時点での暫定値のみ** を返す。累積値は **op-patrol が
-fingerprint で既存 Issue を検索して上書き** する責務を持つ (agent は GitHub Issue を
-読みに行かない)。
-
-| field | agent (refactor-expert) | op-patrol (再検出時) |
-|-------|------------------------|---------------------|
-| `first_detected_at` | 今日 (新規検出時) | 既存 Issue があれば上書きしない |
-| `last_seen_at` | 今日 | 今日に更新 |
-| `seen_count` | **必ず `1`** | +1 する |
-| `risk_trend` | **必ず `stable`** | affected_paths 比較で `worsening` / `spreading` に更新 |
+- `seen_count`: **必ず `1`** (新規検出時の暫定値)
+- `risk_trend`: **必ず `stable`**
+- `first_detected_at` / `last_seen_at`: 今日 (spawn prompt の【実行日】節の値を使用)
 
 **禁止事項** (agent 側):
 
@@ -470,31 +397,14 @@ fingerprint で既存 Issue を検索して上書き** する責務を持つ (ag
 - `risk_trend = worsening / spreading` を agent 側で確定する
 - 既存 GitHub Issue を読んで累積値を計算する
 
-`needs:triage` ラベルの付与判定 (`seen_count >= 3` / `affected_paths` 増加 / risk_trend 悪化) も
-op-patrol の責務。agent 側で付与しない。
-
-#### agent 側に残る責務 (悪化検出のみ)
-
-累積値の更新は op-patrol に委ねる一方で、**agent 側に残る責務は「新規変更による既存 debt の
-悪化を blocking として返すこと」だけ**。これは過去回数の推測ではなく、今回スキャン対象
-(変更ファイル / PR diff) と既存 affected_paths を突き合わせる現在時点の判定なので
-agent が責任を持つ。
-
-- 新規変更 (今回の scan 対象 PR / 変更ファイル) が既存 debt を悪化させる場合
-  → finding に `blocking: true` + `blocking_reason` を付与
-- それ以外 (`seen_count` の増減 / `risk_trend` の遷移 / `needs:triage` の付与) は **すべて op-patrol の責務**
+累積値の更新 (`seen_count` +1 / `last_seen_at` / `risk_trend` 遷移) と `needs:triage` ラベル付与は
+**すべて op-patrol の責務**。agent 側に残る責務は「新規変更 (今回の scan 対象 PR / 変更ファイル) が
+既存 debt を悪化させた場合に `blocking: true` + `blocking_reason` を付与して返すこと」のみ
+(過去回数の推測ではなく、既存 affected_paths との突き合わせによる現在時点の判定)。
 
 ```text
-agent: 新規悪化を block として返す (今 PR 起点の判断)
-op-patrol: seen_count / last_seen_at / risk_trend / needs:triage を更新 (履歴起点の判断)
+既存負債は staged / 新規悪化は block
 ```
-
-```text
-既存負債は staged
-新規悪化は block
-```
-
-詳細は `references/architecture-debt.md` を参照。
 
 ---
 
@@ -510,7 +420,9 @@ op-patrol: seen_count / last_seen_at / risk_trend / needs:triage を更新 (履�
 
 ## Apply Report
 
-apply 完了報告には以下を必ず含める。詳細 schema は `references/report-schema.md` を参照。
+apply 完了報告には以下を必ず含める。**apply 完了報告を書く前に `references/report-schema.md` を
+必ず Read する** (payload 正本の所在と schema 同期責務はそちらが正本)。
+`contract_preservation` の boolean は 1 つでも破る変更が必要なら実装せず `needs_spec_decision` で返す。
 
 - `behavior_change_claim`: `"no_behavior_change"` を宣言する
 - `structural_change_summary`: 構造的変更の要約 (literal レベルではなく意味レベル)
@@ -551,10 +463,15 @@ skip 条件なし。apply 後は必ず invoke する。
 
 ## CLAUDE.md 規約との整合
 
-- ネスト 2 階層以内: refactor 後にネストを増やさない、ガード節優先
-- 日本語コメント: 構造変更の意図を 1 行コメント
-- フラット構造優先: directory 階層を不必要に深くしない
-- 過剰抽象化禁止: 抽象化は重複の **観測後** に行う
+共通骨格 (優先順位 3 段 / 既定値 6 項目 / audit・refute 側での扱い) の正本は
+`skills/_shared/project-profile.md` の「対象 repo 規約への準拠 (worker 共通)」節 —
+**apply で最初のファイルを編集する前に Read する** (scan / patrol では「規約準拠を指摘しない」判断に使う)。
+
+refactor-expert 固有の適用差分のみ:
+
+- **ネスト**: refactor 後にネストを増やさない (ガード節優先)
+- **コメント**: 構造変更の意図を 1 行
+- **フラット構造優先**: directory 階層を不必要に深くしない (refactor 固有)
 
 ---
 
@@ -576,7 +493,8 @@ skip 条件なし。apply 後は必ず invoke する。
 
 - 分類体系: `~/.claude/skills/expert-refactor/references/refactor-taxonomy.md`
 - 散乱 token: `~/.claude/skills/expert-refactor/references/scattered-tokens.md`
-- 構造健全性 (god function / large file / large component / dead code): `~/.claude/skills/expert-refactor/references/structure-health.md`
+- 構造健全性 (god function / large file / large component / dead code / **patrol sampling 優先度**): `~/.claude/skills/expert-refactor/references/structure-health.md`
+- canonical doc の圧縮・再構成ガード (prose 論理保存 / inbound-ref grep): `~/.claude/skills/expert-refactor/references/doc-refactor-guard.md`
 - ディレクトリ構造: `~/.claude/skills/expert-refactor/references/directory-structure.md`
 - architecture debt 追跡: `~/.claude/skills/expert-refactor/references/architecture-debt.md`
 - clustering policy: `~/.claude/skills/expert-refactor/references/clustering-policy.md`

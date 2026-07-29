@@ -4,8 +4,8 @@
          「呼ばれた瞬間に動き出すための最小手順 + canonical schema 実例」
          だけに圧縮する。長文は他 references に逃がす。
 注意点: ここに本文を増やさない。観点が増えたら usability-invariants.md /
-       a11y-checklist.md / recovery-and-states.md / gate-criteria.md /
-       post-check-criteria.md / scan-finding-policy.md 側に追加すること。
+       a11y-checklist.md / recovery-and-states.md / criteria.md /
+       scan-finding-policy.md 側に追加すること。
 -->
 
 # Agent Instructions (ux-ui-audit-expert 動作スニペット)
@@ -24,10 +24,10 @@ prompt 内のキーワードから、以下 4 モードのどれで呼ばれた�
 
 | mode | prompt に現れるシグナル | 出力 |
 |------|----------------------|------|
-| **scan** | `op-scan` / `description: scan: ux-ui` / 「コードベースを audit」 | canonical schema JSON 配列 |
-| **patrol** | `op-patrol` / 「patrol」「巡回」「区画」「ledger」 | canonical schema JSON 配列 (patrol policy 厳守) |
-| **gate** | `op-architect` / 「Design Plan を検証」「PASS / BLOCK」 | gate-criteria.md の Markdown フォーマット |
-| **post-check** | `op-run` / 「PR 差分を検証」「apply 後監査」 | post-check-criteria.md の Markdown フォーマット |
+| **scan** | `op-scan` / `description: scan: ux-ui` / 「コードベースを audit」 | canonical schema finding の `{"findings": [...]}` envelope |
+| **patrol** | `op-patrol` / 「patrol」「巡回」「区画」「ledger」 | canonical schema finding の `{"findings": [...]}` envelope (patrol policy 厳守) |
+| **gate** | `op-architect` / 「Design Plan を検証」「PASS / BLOCK」 | `criteria.md#gate` の Markdown フォーマット |
+| **post-check** | `op-run` / 「PR 差分を検証」「apply 後監査」 | `criteria.md#post-check` の Markdown フォーマット |
 
 判定不能なら、prompt 内の入力種別 (Design Plan か PR diff か対象ファイル群か) で再判定する。
 それでも不明なら **scan として扱う** (最も保守的)。
@@ -65,7 +65,7 @@ project 固有の design system 所在 (例: `Share/design-system/`、`packages/
 
 ### scan / patrol — canonical schema (最小実例)
 
-`_shared/expert-spawn.md` の canonical schema に従う JSON 配列。`domain` は **`ux-ui`** 固定。
+`_shared/expert-spawn.md` の canonical schema に従う finding を `{"findings": [...]}` envelope に入れた JSON object。`domain` は **`ux-ui`** 固定。
 
 canonical 必須フィールド (`_shared/expert-spawn.md` v14 正本):
 
@@ -88,7 +88,7 @@ ux 固有フィールド (canonical の後に併存維持):
 最小例:
 
 ```json
-[
+{"findings": [
   {
     "title": "削除ボタンに確認導線がなく誤操作で復帰不能",
     "severity": "critical",
@@ -123,22 +123,22 @@ ux 固有フィールド (canonical の後に併存維持):
     "bulk_group": "ux-ui:missing-confirmation",
     "confidence": "high"
   }
-]
+]}
 ```
 
 ### scan / patrol — ゼロ件報告
 
-警備員は「異常なし」を報告できる。検出 0 件のときは **空配列** を返す。
+警備員は「異常なし」を報告できる。検出 0 件のときは **空 envelope** を返す。
 
 ```json
-[]
+{"findings": []}
 ```
 
-`{ "status": "no_findings" }` 等の独自形式は使わない。op-scan 側のパーサが空配列を正常終了として扱う。
+`{ "status": "no_findings" }` 等の独自形式は使わない。op-scan 側のパーサが空 findings を正常終了として扱う。
 
 ### gate / post-check — Markdown 判定
 
-それぞれ `gate-criteria.md` / `post-check-criteria.md` の出力フォーマット節に従う。
+`criteria.md` の「共通: 出力フォーマット規約」節と、各モード節 (`#gate` / `#post-check`) に従う。
 PASS / PASS_WITH_NOTES / BLOCK の 3 値で必ず判定する。
 `visual-quality-rubric.md` の Hard blockers が 1 つでも残るなら **score を問わず BLOCK**。
 
@@ -164,8 +164,8 @@ PASS / PASS_WITH_NOTES / BLOCK の 3 値で必ず判定する。
 | 10 不変条件 / bulk_group 命名 | `usability-invariants.md` |
 | WCAG / a11y チェック | `a11y-checklist.md` |
 | 必須 6 状態 / 復帰設計 | `recovery-and-states.md` |
-| gate 判定軸 | `gate-criteria.md` |
-| post-check 判定軸 | `post-check-criteria.md` |
+| gate 判定軸 | `criteria.md#gate` |
+| post-check 判定軸 | `criteria.md#post-check` |
 | 起票 / 不起票の境界 | `scan-finding-policy.md` |
 | BLOCK 絶対条件 (Hard blockers) | `visual-quality-rubric.md` |
 | 外部教養 (NN/g / WCAG / GOV.UK 等) | `reference-map.md` |

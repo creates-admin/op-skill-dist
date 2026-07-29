@@ -1023,7 +1023,7 @@ Issue 本文に埋め込む場合は、`## 🎨 Design Plan` 節として `## �
 ## op-architect: UX/UI Audit Gate Result (ux-ui-audit-expert 出力)
 
 `ux-ui-audit-expert` が op-architect の Design Plan を gate した結果のテンプレ。
-判定は PASS / PASS_WITH_NOTES / BLOCK の 3 択。詳細は `~/.claude/agents/ux-ui-audit-expert.md` の gate モード節参照。
+判定は PASS / PASS_WITH_NOTES / BLOCK の 3 択。詳細は `~/.claude/skills/expert-ux-ui-audit/references/criteria.md#gate` 参照。
 
 > **本節は markdown / bash テンプレ (出力本文) の正本**。`<!-- op-ux-ui-gate -->` block の field 単位 schema /
 > enum 値 / 6 観点 (+ motion 時 観点7) の判定基準 / Design Plan gate 段階の制約は **`skills/_shared/markers/ux-ui-markers.md` を SSoT とする**。
@@ -1072,7 +1072,7 @@ PASS | PASS_WITH_NOTES | BLOCK
 ```
 
 > **観点7 (motion) は conditional**: Design Plan に `### Motion Strategy` 節がある場合のみ評価する additive 観点 (ADR-0012 Wave4)。
-> motion 節が無ければ N/A (行ごと省略可)。判定基準は `ux-ui-markers.md` / `gate-criteria.md` の観点7 を参照。
+> motion 節が無ければ N/A (行ごと省略可)。判定基準は `ux-ui-markers.md` / `criteria.md#gate` の観点7 を参照。
 
 > **Applicable States の判定**: UI 種別 (フォーム / 一覧 / modal / 静的表示等) ごとに必要な state は異なる。
 > 機械的に loading/success/failure/empty/disabled/focus すべてを必須とすると、過剰実装で BLOCK されやすくなる。

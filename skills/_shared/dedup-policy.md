@@ -174,6 +174,29 @@ bulk Issue の起票テンプレは `pr-templates.md`「op-scan: バッチ Issue
 
 ---
 
+## fingerprint 生成責務マトリクス (誰が採番するか)
+
+fingerprint の **文字列仕様は本ファイルが唯一正本**だが、**誰が生成するか** は経路で異なる。
+agent が自前生成すべき経路と、controller が採番するため agent は生成しない経路を取り違えると、
+同一 finding に 2 つの fingerprint が付いて dedup が silent に外れる (ADR-0030 CX-06)。
+
+| 経路 | 生成主体 | 根拠 / 備考 |
+|---|---|---|
+| **op-scan の scan finding** | **controller** (`workflows/op-scan-audit.js` フェーズ2-2 が採番) | expert は finding を返すだけ。**自前生成しない** |
+| **op-patrol の scan finding** | **controller** (`workflows/op-patrol-audit.js` フェーズ5 が採番) | 同上 |
+| **op-report (scout) の起票** | scout agent | 起票主体が agent 自身のため自前生成する |
+| **review finding / post-check finding** | agent (review-expert / post-check expert) | marker を自分の返却に埋めるため自前生成する |
+| **op-patrol の Patrol Ledger / architecture_debt 追跡** | agent (refactor-expert 等) | `op-refactor-debt-key` を含め自前生成する |
+| **op-plan / op-architect の起票前 dedup** | controller | 起票主体が controller のため |
+
+生成する場合は手書きせず **`op core fingerprint`** を使う
+(`_shared/expert-spawn.md`「prompt 規約 (共通)」内「op CLI helper 活用推奨例」節)。
+
+> **表記の正本**: 4-seg は `<domain>:<normalized_title>:<primary_file>:<symbol>`。
+> `<domain>:<short-id>:...` 等の別表記は誤りであり、本ファイルの仕様に合わせる。
+
+---
+
 ## 既存 Issue との重複除外
 
 ```bash

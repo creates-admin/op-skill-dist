@@ -252,7 +252,7 @@ canonical source of truth であり、本ファイルでは表を二重管理し
 - `pro-review-stale` / `pro-review-fix-in-progress` の中間状態をどこで剥がすか
 - 排他制御の bash 実装 (`apply_review_labels` 関数)
 
-review-expert がコメント本文で言及してよい label は次の 4 つに留める:
+review-expert がコメント本文で言及してよい label は次の 3 つに留める:
 
 - `pro-reviewed` (approve 時)
 - `pro-review-needs-fix` (needs-fix / needs-specialist-review 時)

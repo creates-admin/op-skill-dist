@@ -308,25 +308,11 @@ scan finding の `recommendation.steps` は mitigation ladder に従って書く
 - import / export 機能を削除しない
 ```
 
-### 例: log で絶対 path 漏洩 (config → disclose)
-
-```markdown
-## 修正手順
-
-1. **audit**: log 出力箇所で path を sanitize
-   - `Path::display()` の戻り値をそのまま log::error! に渡さない
-   - user 名を含む部分を `~/` 等で置換するヘルパー関数を導入
-   - log には relative path / sanitized path のみ出力
-
-2. **audit (log permission)**: log file の権限を確認
-   - production build で log を `0600` (Windows なら現ユーザーのみ Read)
-   - log directory も other ユーザーから listing できないように
-
-## 触ってはいけない範囲
-
-- log 機能そのものを削除しない (debug / 障害解析に必要)
-- recent files 機能を削除しない (UX 必須)
-```
+他シナリオの mitigation ladder 具体例は `secrets-and-logs.md` の「log permission」節
+(log file 0600 / log directory 0700) および `forbidden_shortcuts` 節
+(log 機能そのものは削除しない / sanitize + permission で対処) を参照。
+attack_path 側の対応シナリオは `source-sink-analysis.md` 末尾「判定例」の 例 2 (zip-slip) / 例 3 (log 漏洩)
+(そちらは `security:` schema の attack_path であって `recommendation.steps` ではない点に注意)。
 
 ---
 

@@ -55,7 +55,7 @@ PR comment / bash gh HEREDOC 形式の実テンプレートは `skills/_shared/p
 |---|---|
 | marker 名 / owner / consumer / 基本 meaning | `skills/_shared/markers/labels-and-markers.md` |
 | 共通 post-check metadata block (`audit_result` canonical schema 含む) | `skills/_shared/markers/post-check-markers.md (>=2)` |
-| ux-ui-audit-expert の Design Plan gate / post-check 方法論 / Applicable States 判定 | `skills/expert-ux-ui-audit/SKILL.md` および `skills/expert-ux-ui-audit/references/gate-criteria.md` / `post-check-criteria.md` / `recovery-and-states.md` |
+| ux-ui-audit-expert の Design Plan gate / post-check 方法論 / Applicable States 判定 | `skills/expert-ux-ui-audit/SKILL.md` および `skills/expert-ux-ui-audit/references/criteria.md` (`#gate` / `#post-check`) / `recovery-and-states.md` |
 | op-merge gate 11〜13 / 18 (UX/UI 影響 PR の post-check 通過判定) | `skills/op-merge/SKILL.md` |
 | op-run フェーズ 3.5 (apply 後 UX/UI post-check spawn) | `skills/op-run/SKILL.md` |
 | op-architect Design Plan gate | `skills/op-architect/SKILL.md` |
@@ -105,7 +105,7 @@ notes_count: <PASS_WITH_NOTES 時に挙げた Notes の件数 (0 なら 0)>
 - PR が存在しない (Issue 段階) のため、`post_checked_head_sha` 等の post-check meta は付けない。
 - op-merge gate には直接効かない (PR 段階の merge gate には apply 後 post-check で再判定する)。
 - 詳細な Design Plan gate 観点 (User Goal / Components / Tokens / Applicable States / Layout 等の
-  必須要素) は `skills/expert-ux-ui-audit/references/gate-criteria.md` を参照。
+  必須要素) は `skills/expert-ux-ui-audit/references/criteria.md#gate` を参照。
 
 ---
 
@@ -190,7 +190,7 @@ UX/UI post-check は以下 7 観点を必ず確認する (PR comment 本文の�
 | 7 | style 変更による UX / a11y 退化 | focus / contrast / keyboard / state visibility 破壊 (hard-coded style / token bypass そのものは designer-expert の post-check 領域) |
 
 詳細な判定基準と各観点で見るべき具体項目は `skills/expert-ux-ui-audit/SKILL.md` および
-`skills/expert-ux-ui-audit/references/post-check-criteria.md` を正本とする。
+`skills/expert-ux-ui-audit/references/criteria.md#post-check` を正本とする。
 
 ---
 
@@ -213,7 +213,7 @@ Design Plan gate は post-check の 7 観点とは別に、Plan の妥当性を 
 > (marker block schema `audit_result` / `blocking_count` は不変、6 観点 consumer は forward-compatible)。motion の質的検証
 > (timing の自然さ等) は完全静的 gate では検証不能 (`requires_runtime`)。gate が見るのは Static Hard blocker の「有無」のみ。
 
-詳細な判定基準は `skills/expert-ux-ui-audit/references/gate-criteria.md` を参照。
+詳細な判定基準は `skills/expert-ux-ui-audit/references/criteria.md#gate` を参照。
 
 ---
 

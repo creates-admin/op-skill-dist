@@ -260,15 +260,15 @@ duration / easing は CSS custom property (= motion token) を参照し、生値
 
 ## 禁止 (motion アンチパターン)
 
-| 禁止 | 影響 |
-|------|------|
-| duration / easing の生値直書き (token bypass) | foundation の motion token が形骸化、将来一括変更不能 |
-| `width`/`height`/`top`/`left`/`margin` の animate | 毎フレーム reflow で frame drop (カクつき) |
-| 常時 `will-change` | GPU メモリ浪費、かえって遅くなる |
-| prefers-reduced-motion fallback なし | 前庭障害ユーザーに有害 (WCAG 2.3.3 違反) |
-| 停止できない自動再生 / 無限ループ | WCAG 2.2.2 違反、注意を奪い続ける |
-| ページ読み込みごとの大げさな entrance | 反復で邪魔・体感が遅くなる |
-| 多数要素の同時アニメ | 視線誘導が崩れ、frame drop |
-| 物理 spring を AI 生成のまま無調整出荷 (④) | 振動・不自然さが残る (human 調整 or preset 必須) |
-| 情報出現を遅延させるだけの transition | ユーザーを待たせる (動きが UX を悪化) |
-| 動き優先で意味のないアニメ | motion = フィードバックの原則違反 |
+理由 / 影響は上記各節 (性能ガード・prefers-reduced-motion・AI 到達ライン・「動かさない」) を参照。
+
+- duration / easing の生値直書き (token bypass)
+- `width`/`height`/`top`/`left`/`margin` の animate
+- 常時 `will-change`
+- prefers-reduced-motion fallback なし
+- 停止できない自動再生 / 無限ループ
+- ページ読み込みごとの大げさな entrance
+- 多数要素の同時アニメ
+- 物理 spring を AI 生成のまま無調整出荷 (④)
+- 情報出現を遅延させるだけの transition
+- 動き優先で意味のないアニメ

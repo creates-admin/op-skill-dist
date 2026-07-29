@@ -1,13 +1,38 @@
 # expert-test ゴミテスト全集
 
 <!--
-機能概要: SKILL.md の top 14 catalog を言語別具体例 + 検出 grep で深掘りした辞典
+機能概要: ゴミテスト top 14 の catalog 索引 (兆候表) + 言語別具体例 + 検出 grep を持つ辞典
+         (索引は SKILL.md 本文から移設。本ファイルが catalog の正本)
 作成意図: 削除前に読む証拠集。安易な削除を防ぎ、判定根拠を持って処理するための補助資料
 注意点: agent は必要時のみ Read。SKILL.md の安全弁 (git blame / coverage diff / 段階削除) を必ず通す
 -->
 
 ゴミテスト 14 カテゴリの言語別具体例と検出 grep。
 **削除前に SKILL.md の「テスト削除の 3 段階モデル」と `safety_gate` を必ず通す**。
+
+---
+
+## catalog 索引 (top 14)
+
+scan モードで検出する主要パターンの一覧。各カテゴリの言語別具体例・検出 grep・判定は
+以下の対応する番号の節を Read する。
+
+| # | カテゴリ | 検出兆候 |
+|---|---------|---------|
+| 1 | 死んだテスト | import エラーで collect 失敗、削除されたコードを参照 |
+| 2 | 重複カバレッジ | 同じ関数を 3 回以上テスト、parametrize で統合可能 |
+| 3 | 自明なテスト | getter/setter の値返し、フレームワーク機能テスト |
+| 4 | 実装詳細依存 | private メソッド直テスト、内部フィールド検証 |
+| 5 | 脆弱セレクタ | 深い CSS / XPath、絶対座標、index ベース選択 |
+| 6 | 非決定的 | `Date.now()` / `Math.random()` 凍結なし、order-dependent |
+| 7 | 環境依存 | 実 HTTP 呼び出し、`/tmp` 書込放置、locale 依存 |
+| 8 | モック過多 | 全部 mock で本体コード未経由 |
+| 9 | アサーション弱 | snapshot のみ、意味検証なし、常時 true |
+| 10 | 放置スキップ | `.skip` / `xit` がチケット参照なし |
+| 11 | 長 setup / 短 assert | fixture 30 行 + assert 1 行 |
+| 12 | 命名不良 | `test1`, `it('works')`, 振る舞い説明なし |
+| 13 | タイミング依存 | `sleep(100)` ハードコード、CI で flaky |
+| 14 | TODO 放置 | `TODO: implement` のまま skip |
 
 ---
 

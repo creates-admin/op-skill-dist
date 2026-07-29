@@ -13,7 +13,7 @@
 
 1. **アルゴリズム** (`algorithmic-optimization.md`)
 2. **不要 I/O 削減** (`io-and-batching.md`)
-3. **不要 allocation / clone 削減** (本ファイル)
+3. **不要 allocation / clone 削減** (判断基準は本ファイル、コード例は `memory-and-allocation.md`)
 4. **regex / parse / sort の回数削減** (本ファイル)
 5. **iterator / loop の明確化** (本ファイル)
 6. **Rayon 並列化** (`rayon-playbook.md`)
@@ -23,150 +23,33 @@
 
 ## clone / borrow
 
-### 大型データの clone を borrow に置き換える
-
-**Before**:
-
-```rust
-fn process_jobs(jobs: Vec<Job>) -> Result<Vec<Output>> {
-    for j in jobs.clone() {  // 巨大 Vec の clone
-        // ...
-    }
-}
-```
-
-**After**:
-
-```rust
-fn process_jobs(jobs: &[Job]) -> Result<Vec<Output>> {
-    for j in jobs {
-        // ...
-    }
-}
-```
-
 **判断基準**: clone 対象が `> 1KB` または要素数 `> 1000`、かつホットパス。
+これを外れるものは ignored_noise (clone を全部消しにいくと借用地獄で可読性が壊れる)。
 
-### `String` clone を `&str` / `Cow` に
+見るべき形と置き換え先:
 
-**Before**:
+- 大型 `Vec` / `HashMap` の clone → 引数を `&[T]` / `&T` の borrow にする
+- `String` 引数 → `&str` (`fn label(s: &str)` にすれば呼び側の `.to_string()` も消える)。
+  条件付きで書き換えるだけなら `Cow<'_, str>` で「変えたいときだけ alloc」
+- 複数 async task / thread に渡す read-only 大型データ → `Arc<T>`。
+  `Arc::clone` は cheap (atomic refcount 増減) だが、`(*x).clone()` と書くと中身が deep clone される
+- `iter().map(|u| u.name.clone()).collect()` して再走査するだけなら collect ごと不要
+- HashMap key の `.to_string()` 毎回 alloc は key 型を `&str` 等の borrow ベースにできることがある。
+  **ただし borrow 寿命が元データに縛られる**ため、寿命が合う場合のみ
 
-```rust
-fn label(s: String) -> String { format!("[{}]", s) }
-let msg = label("hello".to_string());
-```
-
-**After**:
-
-```rust
-fn label(s: &str) -> String { format!("[{}]", s) }
-let msg = label("hello");
-
-// あるいは Cow で「変えたいときだけ alloc」
-fn maybe_normalize(s: &str) -> Cow<'_, str> {
-    if s.contains(' ') {
-        Cow::Owned(s.replace(' ', "_"))
-    } else {
-        Cow::Borrowed(s)
-    }
-}
-```
-
-### `Arc<T>` での共有 (read-only な大型データ)
-
-複数の async task / thread に同じ大型 read-only データを渡すなら `Arc<T>`:
-
-```rust
-let manifest = Arc::new(load_manifest()?);
-
-for task in tasks {
-    let m = Arc::clone(&manifest);  // pointer copy のみ
-    tokio::spawn(async move {
-        process(&m, task).await
-    });
-}
-```
-
-> `Arc::clone` は cheap (atomic refcount 増減)。`(*manifest).clone()` で中身を deep clone してはいけない。
-
-### `iter().cloned().collect()` を借用に
-
-**Before**:
-
-```rust
-let names: Vec<String> = users.iter().map(|u| u.name.clone()).collect();
-for n in &names {
-    // ...
-}
-```
-
-**After** (collect 不要):
-
-```rust
-for u in &users {
-    let n = &u.name;
-    // ...
-}
-```
-
-### `.to_string()` / `.to_owned()` を避ける
-
-```rust
-// Bad: HashMap key を毎回 alloc
-for u in &users {
-    cache.insert(u.id.to_string(), u.score);
-}
-
-// Good: key 型を borrow ベースに
-let cache: HashMap<&str, f64> = users.iter().map(|u| (u.id.as_str(), u.score)).collect();
-// borrow 寿命が users の寿命に縛られる場合のみ
-```
+> Before/After のコード例は `memory-and-allocation.md` の「改善パターン 2. borrow / Cow で clone を避ける」
+> 「3. Arc で大型 read-only データを共有」「10. iterator で collect を遅延」が正本。ここでは重複させない。
 
 ---
 
-## Vec の容量制御
+## Vec / String の容量制御
 
-### `with_capacity` で再 alloc を排除
+既知サイズ・ホットパスの `Vec` / `String` 構築は `with_capacity` で再 alloc を排除する。
+**n が数十なら不要** (`Vec` の指数 grow で十分速く、ignored_noise)。目安は `> 1,000` かつホットパス。
+`(0..n).map(transform).collect()` のように size_hint が効く形なら、collect 側が再 alloc を内部で抑える。
 
-**Before**:
-
-```rust
-let mut out = Vec::new();
-for i in 0..n {
-    out.push(transform(i));
-}
-```
-
-**After**:
-
-```rust
-let mut out = Vec::with_capacity(n);
-for i in 0..n {
-    out.push(transform(i));
-}
-```
-
-> n が大きい (> 1,000) かつホットパスのみ意味がある。
-> 数十要素なら ignored_noise (Vec の指数 grow で十分速い)。
-
-### `String::with_capacity` で realloc 排除
-
-```rust
-let mut buf = String::with_capacity(estimated_size);
-for line in lines {
-    buf.push_str(line);
-    buf.push('\n');
-}
-```
-
-### `iter().collect::<Vec<_>>()` の代替
-
-```rust
-// 既知サイズなら map → collect が realloc を内部最適化する
-let out: Vec<_> = (0..n).map(transform).collect();
-
-// `collect_into` (nightly) や FromIterator の size_hint 経由で再 alloc 抑制
-```
+> コード例は `memory-and-allocation.md` の「改善パターン 1. with_capacity で再 alloc 排除」が正本
+> (`Vec::with_capacity` / `String::with_capacity` の両方を含む)。
 
 ---
 
@@ -179,18 +62,9 @@ Rust 1.80+ は `std::sync::LazyLock`、それ以前は `once_cell::sync::Lazy`�
 
 ### serde roundtrip の排除
 
-```rust
-// Bad: parse → 加工 → serialize → parse
-let m: Manifest = serde_json::from_str(&json)?;
-let updated = update(m);
-let json2 = serde_json::to_string(&updated)?;
-let m2: Manifest = serde_json::from_str(&json2)?;
-
-// Good: typed のまま扱う
-let m: Manifest = serde_json::from_str(&json)?;
-let updated = update(m);
-// 必要時に serialize するだけ
-```
+parse → 加工 → serialize → 再 parse の往復は、typed のまま扱えば丸ごと排除できる
+(serialize は本当に外へ出すときだけ)。コード例は `memory-and-allocation.md` の
+「9. typed intermediate で serde roundtrip 排除」が正本。
 
 ### parser の使い分け
 
@@ -220,27 +94,8 @@ let updated = update(m);
 
 ## collect の使い所
 
-### `.collect()` してから再走査を避ける
-
-**Before**:
-
-```rust
-let scores: Vec<f64> = users.iter().map(|u| compute(u)).collect();
-let total: f64 = scores.iter().sum();
-let max = scores.iter().fold(f64::MIN, |a, b| a.max(*b));
-```
-
-**After**:
-
-```rust
-let mut total = 0.0;
-let mut max = f64::MIN;
-for u in &users {
-    let s = compute(u);
-    total += s;
-    max = max.max(s);
-}
-```
+`.collect()` した Vec を何度も再走査する形は、1 回の loop に畳めば中間 `Vec` ごと消せる
+(コード例は `memory-and-allocation.md` の「10. iterator で collect を遅延」が正本)。
 
 ### `Result<Vec<_>>` の collect
 
@@ -253,30 +108,10 @@ let parsed: Result<Vec<_>, _> = lines.iter().map(parse).collect();
 
 ## sort / binary_search
 
-### sort once + binary_search
+クエリごとに sort し直す形 (O(m * n log n)) は、sort 1 回 + `binary_search_by_key` に畳める。
+コード例は `algorithmic-optimization.md` の「repeated sort → sort once + binary_search」が正本。
 
-```rust
-// Bad: 毎クエリで sort
-for q in queries {
-    let mut s = items.clone();
-    s.sort_by_key(|x| x.priority);
-    let pos = s.binary_search_by_key(&q.priority, |x| x.priority);
-}
-
-// Good: sort once
-let mut sorted = items.clone();
-sorted.sort_by_key(|x| x.priority);
-for q in queries {
-    let pos = sorted.binary_search_by_key(&q.priority, |x| x.priority);
-}
-```
-
-### `sort_unstable` で十分な場合
-
-```rust
-// 同値の順序保持が不要なら unstable の方が速い
-items.sort_unstable_by_key(|x| x.id);
-```
+同値の順序保持が不要なら `sort_unstable_by_key` の方が速い (安定性を要求しない分だけ)。
 
 ---
 
@@ -395,7 +230,7 @@ SIMD を入れる前に必ず scalar 版で benchmark を取り、SIMD 化で何
 2. 計算量改善が可能か? → Yes → algorithmic-optimization.md
 3. I/O 削減が可能か? → Yes → io-and-batching.md
 4. clone / allocation を削減できるか?
-   - 対象が大きい (> 1KB / > 1000 要素) か? → Yes → このファイル
+   - 対象が大きい (> 1KB / > 1000 要素) か? → Yes → memory-and-allocation.md
    - 小さい? → 触らない
 5. regex / parse / sort を 1 回化できるか? → Yes → このファイル
 6. 並列化を検討するか? → rayon-playbook.md
