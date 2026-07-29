@@ -10,6 +10,8 @@ notes: v3 (2026-05-24 + 2026-05-30 整合) — gate 2 / gate 3 を `op apply ver
        ADR-0016 (2026-06-15): op-run の apply 完了確認は ClusterOrchestrator
        (cluster-orchestrator-directives.md フェーズ2-3) が担う = commits_added 非空 (空は contract violation)
        + apply-expert の Skill(code-review,--high) 自己検証 (フェーズ3)。op-run-fanout workflow は ADR-0016 で削除済み。
+       2026-07-29: 自己検証 skill の invoke 先は op-skill:op-code-review へ差し替え (正本 = apply-completion-checklist.md v5 /
+       skills/op-code-review/SKILL.md。built-in code-review は disable-model-invocation で invoke 不可のため)。契約不変・据置。
        本ファイル §2 の `op apply verify-commit` primitive (SHA 実在 + membership) は
        op-run 以外の caller / レガシー経路用として引き続き維持。schema_version は据置 (executor 移動のみ・契約不変)。
        旧 gate は commits_added を件数照合 (ACTUAL_COUNT vs REPORTED_COUNT) のみで判定し、
@@ -47,7 +49,7 @@ notes: v3 (2026-05-24 + 2026-05-30 整合) — gate 2 / gate 3 を `op apply ver
 
 | caller | verify の実 git 検証 (`op apply verify-commit`) を誰が実行するか | controller が受領するもの |
 |--------|--------------------------------------------------------------|--------------------------|
-| **op-run (ADR-0016 以降)** | ClusterOrchestrator (directives.md フェーズ2-3) が commits_added 非空 + apply-expert の Skill(code-review,--high) 自己検証で apply 完了を確認する。§2 の `op apply verify-commit` インライン手順は op-run 以外の caller / レガシー経路用 | ClusterOrchestrator は ClusterSummary を controller に返す (`op-run-fanout` は ADR-0016 で削除済み) |
+| **op-run (ADR-0016 以降)** | ClusterOrchestrator (directives.md フェーズ2-3) が commits_added 非空 + apply-expert の Skill(op-skill:op-code-review) 自己検証で apply 完了を確認する。§2 の `op apply verify-commit` インライン手順は op-run 以外の caller / レガシー経路用 | ClusterOrchestrator は ClusterSummary を controller に返す (`op-run-fanout` は ADR-0016 で削除済み) |
 | **op-run 以外の caller / レガシー経路** (本ファイルを参照する他 skill / インライン verify を行う経路) | **controller がインラインで** §2 の `op apply verify-commit` を実行する (従来どおり) | primitive の `decision` / `blocking_reasons` / exit code を controller が直接読む |
 
 **op-run 以外の caller / レガシー経路における verdict ↔ blocking_reasons の写像** (controller が §2 の手順をインライン実行する場合。`op-run-fanout.js` は ADR-0016 で削除済み):

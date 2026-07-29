@@ -1,7 +1,11 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-05-30
-notes: v1 (2026-05-30): ADR-0009 Phase C C1 で新設。op-run apply フェーズの expert 別
+notes: v1.1 相当 (2026-07-29): 自己検証節の invoke 先を built-in `code-review` (disable-model-invocation
+       のため subagent から呼べず実測で不成立) から plugin 同梱の自前 skill `op-skill:op-code-review`
+       (skills/op-code-review/SKILL.md、correctness 専任・single-pass) へ差し替え。手動 fallback を明記し、
+       checklist 正本は新 skill に置く。self_review_result enum 等の contract 不変のため schema_version 据置。
+       v1 (2026-05-30): ADR-0009 Phase C C1 で新設。op-run apply フェーズの expert 別
        load-bearing 指示を SKILL.md 2-C prompt (旧 L843-1016) から verbatim 抽出した canonical 正本。
        controller がフェーズ2-C で本ファイルの「common」節 + 各 cluster.expert の節を読み、
        ClusterOrchestrator (cluster-orchestrator-directives.md フェーズ2) が apply-expert spawn 時の prompt に注入する。
@@ -85,13 +89,20 @@ Issue 本文に指示書節がない場合、apply agent は質問で停止し�
 Issue コメント化は op-run / commander 側が後段で必要に応じて行う。
 ```
 
-### 自己検証 (Skill code-review)
+### 自己検証 (Skill op-code-review)
 
-実装・commit が完了したら、PR 作成前に以下を実行すること (ClusterOrchestrator フェーズ3、push は ClusterOrchestrator がフェーズ4 で行う):
+実装・commit が完了したら、PR 作成前に以下を実行すること (ClusterOrchestrator フェーズ3、push は ClusterOrchestrator がフェーズ4 で行う)。
+自己検証の手順・angle・verify 判定・出力形式の正本は `skills/op-code-review/SKILL.md` (plugin 同梱の自前 correctness review skill)。
+built-in `code-review` は disable-model-invocation のため subagent から invoke できない — 使わないこと。
 
 ```
-1. Skill(code-review, --high) を worktree の変更差分に対して実行する
-   (scope: apply-expert が変更した diff のみ、PR 全体ではない)
+1. Skill(op-skill:op-code-review) を worktree の変更差分に対して実行する
+   (scope: apply-expert が変更した diff のみ、PR 全体ではない。
+    引数例: args: "diff: ${BASE_SHA}...HEAD effort: high"。
+    controller が code_review_effort を渡した場合はその値を effort に転写する
+    — 派生ルールの正本は _shared/model-selection.md §5.5)
+   - skill 解決に失敗した場合の fallback: op-code-review/SKILL.md の Angle A〜E +
+     3 値 verify を同一 context で手動一巡する (checklist 正本は同 SKILL.md、ここに複製しない)
 2. Critical または High が検出された場合: 自己修正して再 commit し、自己検証を再実行する
    (再実行は 1 回まで。2 回目の Critical/High は self_check_blocked: true を含めて ClusterOrchestrator に返す)
    - 修正不可能な場合は ClusterOrchestrator に self_check_blocked: true を含めて返す
@@ -117,7 +128,7 @@ commits_added が空のまま完了報告を返すことは contract violation�
 該当する検証レベルがすべて pass または正当な skipped であること。
 fail を含むまま完了報告してはいけない (PR は draft のまま)。
 完了後、変更ファイル一覧と検証レベル一覧を報告。
-- [ ] Skill(code-review, --high) を実行し、Critical/High を解消した (Medium/Low は formal review に委ねる)
+- [ ] Skill(op-skill:op-code-review) を実行し (解決不可時は手動 fallback)、Critical/High を解消した (Medium/Low は formal review に委ねる)
 ```
 
 ---

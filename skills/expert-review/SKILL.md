@@ -119,6 +119,20 @@ review-expert は merge 前 global review 専任。以下とは責務が分か�
 
 詳細な境界と禁止事項は `references/handoff-boundaries.md` を参照。
 
+### correctness 候補列挙の下請け invoke (optional)
+
+7 lens 監査の補助として、`Skill(op-skill:op-code-review)` を **correctness 候補列挙の下請け** として
+invoke してよい (diff 範囲を args で渡す。例: `args: "diff: origin/main...HEAD effort: high"`。
+手順・angle・verify 判定の正本は `skills/op-code-review/SKILL.md`)。使い方の契約:
+
+- 返却された findings は **candidate 入力** として扱う。最終判定・severity 確定・
+  `op-review-finding` block への変換・lens への割り当ては review-expert 自身が行う
+  (skill の JSON を verbatim 転記しない)。
+- apply-expert が自己検証で同 skill を既に走らせている前提を踏まえ、重複 finding は
+  独立再確認の意味を持つ (自己検証と formal review の独立性は保たれる — 別 context・別視点)。
+- 修正・commit・push 禁止 (本 expert の不変) は下請け invoke を使っても変わらない。
+- skill が解決できない環境では invoke せず、従来どおり 7 lens のみで監査する (skip 可、必須ではない)。
+
 ---
 
 ## scan canonical schema との関係 (review-expert は scan を持たない)

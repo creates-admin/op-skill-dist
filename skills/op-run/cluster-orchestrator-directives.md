@@ -176,7 +176,7 @@ compact summary に記録して ClusterOrchestrator のライフサイクルを�
 
 ## フェーズ2: apply-expert spawn
 
-> 決定3 (前半): apply-expert は実装・commit・push を完了し、その後 Skill(code-review) 自己検証を行う。
+> 決定3 (前半): apply-expert は実装・commit・push を完了し、その後 Skill(op-skill:op-code-review) 自己検証を行う。
 > apply 指示書の詳細は `references/apply-prompt-directives.md` の common 節 +
 > 当該 expert 節を pointer 参照する (#739 で自己検証節が追記される前提)。
 
@@ -211,7 +211,7 @@ ${ISSUE_DIRECTIVES_TEXT}
 
 【完了条件】
 - 実装が完了したら commit する (push は ClusterOrchestrator が行う)
-- commit 後、Skill(code-review, --high) で自己検証を実施する (フェーズ3 参照)
+- commit 後、Skill(op-skill:op-code-review) で自己検証を実施する (フェーズ3 参照)
 - 完了報告に commits_added (SHA 配列) を必ず含める
 ```
 
@@ -231,11 +231,13 @@ apply-expert の完了報告から以下を抽出して保持する。
 
 ---
 
-## フェーズ3: apply-expert 自己検証 (Skill(code-review, --high))
+## フェーズ3: apply-expert 自己検証 (Skill(op-skill:op-code-review))
 
-> 決定3: apply-expert は実装・commit 完了後に Skill(code-review, --high) を自己検証として走らせる。
+> 決定3: apply-expert は実装・commit 完了後に Skill(op-skill:op-code-review) を自己検証として走らせる。
 > Critical/High が出た場合は apply-expert 自身が修正してから ClusterOrchestrator に返す。
 > Medium/Low は review 工程に委ねる (自己検証での過剰ブロックを防ぐ)。
+> 手順・angle・verify 判定・出力形式の正本は `skills/op-code-review/SKILL.md`、
+> apply prompt への注入文言の正本は `references/apply-prompt-directives.md` の「自己検証」節 (ここは pointer)。
 
 ### 入力
 
@@ -250,8 +252,9 @@ apply-expert spawn 時の prompt に自己検証指示を含める (フェーズ
 【自己検証指示 (apply-expert prompt に含める)】
 実装・commit が完了したら、以下を実行する:
 
-1. Skill(code-review, --high) を起動する
+1. Skill(op-skill:op-code-review) を起動する
    - scope: commit で変更したファイルの diff のみ
+   - skill 解決に失敗した場合は skills/op-code-review/SKILL.md の手動 fallback に従う
 2. 結果を確認する:
    - Critical / High が出た場合: 自力で修正して追加 commit し、自己検証を再実行する
      (再実行は 1 回まで。2 回目の Critical/High は ClusterOrchestrator に戻す)

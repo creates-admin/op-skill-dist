@@ -1,7 +1,14 @@
 <!--
-schema_version: 4
-last_breaking_change: 2026-05-24
-notes: v4 (2026-05-24) — apply 完了前に Static 検証 (cargo fmt --check / clippy 等) を必須ゲートとして追加。
+schema_version: 5
+last_breaking_change: 2026-07-29
+notes: v5 (2026-07-29) — code-review invoke 先を built-in `/code-review` から plugin 同梱の
+       `op-skill:op-code-review` (skills/op-code-review/SKILL.md) に差し替え。built-in は
+       disable-model-invocation のため model (subagent 含む) から Skill invoke できないことが
+       実測で確定した (headless 実測 2026-07-29)。旧 `simplify` fallback は廃止し、fallback は
+       新 skill の Angle A〜E + 3 値 verify の手動一巡に変更 (checklist の手順正本は新 skill)。
+       effort-level は新 skill の args (`effort: <level>`) として渡す。完了報告 field 名
+       (`code_review_*`) と v16 schema は不変 (正本 = expert-spawn.md、field rename なし)。
+       v4 (2026-05-24) — apply 完了前に Static 検証 (cargo fmt --check / clippy 等) を必須ゲートとして追加。
        Section 2 の 4 段階順序に Static 検証ステップを挿入 (unit test の前)。
        Section 3 チェックリストに Static 検証 pass 確認項目を追加。
        Section 4 強警告に「PR 本文に Static: pass と書きながら fmt --check 未実行は contract violation」を
@@ -79,14 +86,18 @@ commit までの 5 ステップを **この順序で** 実行する。
 > commit は必ず code-review invoke **後** に行う。
 > code-review が修正を提案し実際に変更が発生した場合、その変更も含めて commit する。
 
-### code-review skill 名と effort-level
+### code-review skill 名と effort-level (v5 改訂: invoke 先 = op-skill:op-code-review)
 
-- Claude Code v2.1.146 (2026-05-21) で `/simplify` は `/code-review` に **rename** された (廃止ではなく改名)。
-  agent は `Skill({skill: "code-review"})` で呼ぶ。skill 名 transition で兼用が成立している間は
-  `Skill({skill: "simplify"})` への fallback も許容する。
-- optional な `effort-level` 引数を取れる (`/code-review high` 等)。controller が `code_review_effort` field
-  として spawn 時に渡してくる場合、agent は `Skill({skill: "code-review", args: "<effort>"})` で呼ぶ。
-  `auto` または未指定の場合は引数なしで `Skill({skill: "code-review"})`。
+- **invoke 先は plugin 同梱の `op-skill:op-code-review`** (手順・angle・verify 判定・出力形式の正本は
+  `skills/op-code-review/SKILL.md`)。agent は `Skill({skill: "op-skill:op-code-review"})` で呼ぶ
+  (plugin 未経由の直配置 repo では `Skill({skill: "op-code-review"})`)。
+- built-in `/code-review` (旧 `/simplify`) は **disable-model-invocation のため model から
+  Skill invoke できない** (2026-07-29 実測確定)。built-in および旧 `simplify` への fallback は廃止。
+  skill 解決に失敗した場合の fallback は、`skills/op-code-review/SKILL.md` の Angle A〜E +
+  3 値 verify を同一 context で **手動一巡** すること (本ファイルには手順を複製しない)。
+- controller が `code_review_effort` field として effort を渡してくる場合、agent は
+  `Skill({skill: "op-skill:op-code-review", args: "effort: <effort>"})` で呼ぶ。
+  `auto` または未指定の場合は effort 引数なしで呼ぶ (skill 既定 = high)。
 - effort-level の自動派生ルールは `~/.claude/skills/_shared/model-selection.md (>=2)` §5.5 を参照。
 
 ## 3. 完了前チェックリスト

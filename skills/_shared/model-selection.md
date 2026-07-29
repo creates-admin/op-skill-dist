@@ -1,7 +1,11 @@
 <!--
 schema_version: 4
 last_breaking_change: 2026-06-14
-notes: v4 (2026-06-14, Refs #720) — §7.1.3 に「investigate-phase 例外 (doc-only small)」を追加。
+notes: v4.1 相当 (2026-07-29) — §5.5 の invoke 先を built-in `/code-review` から plugin 同梱の
+       `op-skill:op-code-review` へ差し替え (built-in は disable-model-invocation で model から
+       invoke 不可と実測確定したため。apply-completion-checklist.md v5 と対)。effort 派生 mapping
+       (§5.5.1 以降) と `code_review_effort` field は不変のため schema_version 据置。
+       v4 (2026-06-14, Refs #720) — §7.1.3 に「investigate-phase 例外 (doc-only small)」を追加。
        **破壊的変更の所在**: 「sensitive glob 該当 = 全 phase Opus 強制」という既存 behavioral invariant を
        investigate (lens-audit) phase に限り意図的に解除する (§7.1.4 と同型の invariant 解除)。
        sensitive ∩ doc-only (CUMULATIVE_NONDOC==0) ∩ small (LOC≤OP_REVIEW_SMALL_MAX_LOC) ∩ --quality≠high
@@ -293,8 +297,12 @@ optional な `effort-level` 引数 (`/code-review low|medium|high|xhigh|max`) �
 定義する (Single Canonical Source Rule、scope creep を避ける)。
 
 派生値は `expert-spawn.md (>=16)` 修正完了報告 schema の `code_review_effort` field に格納され、
-agent は `Skill({skill: "code-review", args: "<effort>"})` で呼ぶ。`auto` または `null` の場合は
-引数なしで `Skill({skill: "code-review"})`。
+agent は `Skill({skill: "op-skill:op-code-review", args: "effort: <effort>"})` で呼ぶ。`auto` または
+`null` の場合は effort 引数なしで呼ぶ (skill 既定 = high)。
+invoke 先は 2026-07-29 に built-in `/code-review` から plugin 同梱の `op-skill:op-code-review` へ
+差し替えた (built-in は disable-model-invocation で model から invoke 不可のため。invoke 手順の正本は
+`apply-completion-checklist.md (>=5)` §2、skill 本体の正本は `skills/op-code-review/SKILL.md`)。
+effort-level の値集合と本節の派生 mapping は据置 (新 skill が同じ ladder を解釈する)。
 
 ### §5.5.1 派生表 (canonical mapping)
 
@@ -341,7 +349,7 @@ agent は `Skill({skill: "code-review", args: "<effort>"})` で呼ぶ。`auto` �
 ### §5.5.5 関連 schema
 
 - `expert-spawn.md (>=16)` 修正完了報告 schema: `code_review_effort` field
-- `apply-completion-checklist.md (>=3)` §2「code-review skill 名と effort-level」節
+- `apply-completion-checklist.md (>=5)` §2「code-review skill 名と effort-level」節 (invoke 先 = op-skill:op-code-review)
 - `op-tools/op-core` への `op model decide --effort` 拡張は **本 PR scope_out** (Phase 1 follow-up Issue
   で別途、`op-tools/docs/implementation-order.md` を参照)
 

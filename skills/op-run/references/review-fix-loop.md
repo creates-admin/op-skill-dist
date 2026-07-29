@@ -467,7 +467,7 @@ specialist は finding 単位で 1 block を出す。複数 finding を一度に
    # apply_review_labels wrapper 経由で stale 状態に遷移 (直接 gh pr edit + 握り潰し禁止)
    apply_review_labels "$PR_NUMBER" stale
    ```
-4. 再 verification は ClusterOrchestrator が apply-expert の commits_added 非空 + 自己検証 (Skill(code-review,--high))
+4. 再 verification は ClusterOrchestrator が apply-expert の commits_added 非空 + 自己検証 (Skill(op-skill:op-code-review))
    で apply 完了を確認する (cluster-orchestrator-directives.md フェーズ2-3)。ClusterOrchestrator は
    project-profile.md の検証コマンド整合を確認する (`op-run-fanout` は ADR-0016 で削除済み)
 5. required post-check 担当 expert を再 spawn (フェーズ3.5 を再実行)
