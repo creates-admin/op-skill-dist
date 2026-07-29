@@ -8,6 +8,8 @@ notes: v1 (2026-05-06) — agent / skill 対応の derived registry を新設。
        v3 (2026-05-08) — Active Experts 表に `Issue post-check` / `Global review` の 2 列を分離し、Runtime Spawn Categories 表と意味を完全一致させた。`refactor-expert` の Issue post-check を `conditional` → `no` に固定 (架構 debt の追跡は marker で個別指定する設計に整理)。`review-expert` の Issue post-check 列を `no` に固定 (Global review 専任の宣言を強化、`<!-- op-post-check-expert: review-expert -->` 禁止を再確認)。
        v3 末尾 (2026-06-15) — Utility Workers 節を additive 追加 (scout を op-report 専用 worker として記録)。schema_version は 3 のまま (新節追加のみ、既存節無変更)。
        v3 末尾 (2026-06-20) — Utility Workers 節に spec-expert を additive 追加 (ADR-0017 W1b、op-spec worker)。schema_version は 3 のまま (Active Experts 表は無変更、scout 追加と同型)。
+       v3 末尾 (2026-07-29) — Utility Workers 節に「直接 spawn の根拠」小節を additive 追加 (op-spec/op-report に分散していた説明を正本化。spawn 可否契約は無変更)。schema_version は 3 のまま。
+       v3 末尾 (2026-07-29) — review-expert 行の「OP-managed mode で常に Opus」を model-selection.md §5.1/§7.1 への pointer に修正 (§7.1 narrow opt-down (v3, Refs #493) 導入後も残っていた stale 断定の corrective。registry は spawn 可否の正本であり model の正本ではない)。schema_version は 3 のまま。
 -->
 
 # Active Expert Registry
@@ -131,6 +133,19 @@ Active / Planned lifecycle 管理外。op-scan / op-patrol / op-run の cluster 
 | scout | `agents/scout.md` | expert-scout | `skills/expert-scout/` | op-report |
 | spec-expert | agents/spec-expert.md | expert-spec | skills/expert-spec/ | op-spec |
 
+### 直接 spawn の根拠 (本節が正本)
+
+Utility Worker は Active Experts 表 (registry-driven routing の対象) には載らないが、
+**`agents/<name>.md` 実体が存在する**ため、上表の「呼び出し元」に挙げた専用 OP skill の
+controller に限り `subagent_type` へ直接渡して spawn してよい。op-codev が `feature-expert` を
+直接 subagent_type に渡すのと同じ「controller 直指定」の扱いであり、Active Experts への昇格
+(registry 表追加) とは独立の contract である。plugin 実行時の `subagent_type` は scoped 名
+`op-skill:<name>` を渡す (bare 名は spawn 失敗。正本: `_shared/expert-spawn.md`「Plugin scoped-name 規約」)。
+
+> **runtime scoped-name / marker 正規化ノート**: marker / routing 値には bare 名を使う (Active Experts と同じ)。
+> Utility Worker は op-run routing 対象外のため、`op-run-expert: spec-expert` marker は op-run が
+> spawn 前に `feature-expert` へ正規化する (op-run/SKILL.md 1-2-d)。
+
 ---
 
 ## 複雑度感度 (model selection summary)
@@ -155,7 +170,7 @@ OP-managed mode で spawn する際の model (Opus / Sonnet / Haiku、具体 ver
 | test-expert | 低 | 中 | rubric 中心 (audit) / 設計戦略 (apply) |
 | designer-expert | 高 | 高 | 全体調和 / 空間認識 — **Haiku 不可** |
 | ux-ui-audit-expert | 高 | — | workflow 認知負荷 — **Haiku 不可** |
-| review-expert | — | — | global review 専任 (OP-managed mode で常に Opus / Direct Mode は frontmatter)。詳細は `model-selection.md` §6 |
+| review-expert | — | — | global review 専任。model は `model-selection.md` §5.1 / §7.1 に従う (OP-managed は Opus 基調、§7.1 narrow opt-down 例外あり / Direct Mode は frontmatter)。本 registry は model の正本ではない |
 | security-expert | 高 | 高 | attack chain 仮説 |
 
 - 「audit 感度 = 高」の expert は `complex` / `critical` 区画で Opus を推奨

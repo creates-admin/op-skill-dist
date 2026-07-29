@@ -219,7 +219,7 @@ security-expert は以下を破ってはならない。
 詳細は `references/post-check-policy.md` および `references/report-schema.md` を参照。
 post-check meta block の共通 schema 正本は `_shared/markers/post-check-markers.md (>=2)`、
 security 固有 field (`security_result` / `workflow_preservation_result` / `aux_post_check_*` 等) の
-detailed schema 正本は `_shared/markers/security-markers.md (>=1)` を参照。
+detailed schema 正本は `_shared/markers/security-markers.md (>=2)` を参照。
 
 ---
 

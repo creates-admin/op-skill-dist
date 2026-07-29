@@ -167,16 +167,13 @@ escalation 後は PR open しない。cluster の Status を `blocked` に更新
 SendMessage retry に応答がない / 2 回目の commits_added: [] が返った場合、worktree を隔離して
 **op claim release を best-effort で実行**する (TTL 残存防止)。
 
-```bash
-# 失敗 worktree を隔離する
-FAIL_DIR="${HOME}/cwork/worktrees-failed/${REPO_NAME}/${TASK_ID}-$(date +%s)"
-mkdir -p "$(dirname "${FAIL_DIR}")"
-mv "${WT_PATH}" "${FAIL_DIR}"
-git worktree prune
-echo "apply 完了 verify 失敗: worktree を ${FAIL_DIR} に隔離しました。手動確認してください。"
+隔離コマンド本体 (`FAIL_DIR` 算出 / `mv` / `git worktree prune`) は `worktree-ops.md (>=3)`
+「cleanup コマンド」節の「失敗時の隔離」snippet が正本 (Single Canonical Source Rule)。本 gate は
+それに **`op claim release` の呼び出しを追加**する差分のみ持つ:
 
-# claim release (best-effort — 失敗は op claim sweep が回収)
-op claim release "${TASK_ID}" 2>/dev/null || true
+```bash
+# (worktree-ops.md「失敗時の隔離」snippet を実行した後に追加で実行する)
+op claim release "${TASK_ID}" 2>/dev/null || true  # best-effort — 失敗は op claim sweep が回収
 ```
 
 ## 4. SendMessage retry 文面テンプレート

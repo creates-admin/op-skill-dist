@@ -1,7 +1,11 @@
 <!--
 schema_version: 3
 last_breaking_change: 2026-05-16
-notes: 参照先変更メモ (2026-06-14): model-selection.md が v3 → v4 に bump (Refs #720)。
+notes: 改訂メモ (2026-07-29): 「参照側 pin 規約 (Issue #382)」の pin 禁止規定 (expert-spawn /
+       apply-completion-checklist) を撤去 — CLAUDE.md 不変則 2 (「SKILL.md 側は (>=N) 形式の最低版を指定」)
+       と実態 (op-spec / op-report / expert-scout 等が pin 済み) に矛盾する死文だったため。旧根拠
+       (bump 追従コスト) は「pin 更新の運用注意」として存置。規約矛盾解消の corrective のため schema_version 据置。
+       参照先変更メモ (2026-06-14): model-selection.md が v3 → v4 に bump (Refs #720)。
        §7.1.3 に「sensitive ∩ doc-only small → investigate-phase のみ Sonnet」例外を追加。
        「sensitive glob 該当 = 全 phase Opus 強制」という既存 behavioral invariant を investigate phase に
        限り意図的に解除する破壊的変更 (§7.1.4 と同型の invariant 解除、§10 該当)。
@@ -373,7 +377,7 @@ mismatch を検出しても、subagent は質問で停止しない。以下の�
 |---------|-----------------|----------------------|
 | `expert-spawn.md` | 16 | 2026-05-21 |
 | `pr-templates.md` | 13 | 2026-05-17 |
-| `labels-and-markers.md` (markers/) | 8 | 2026-05-22 |
+| `labels-and-markers.md` (markers/) | 9 | 2026-05-22 |
 | `active-expert-registry.md` | 3 | 2026-05-08 |
 | `clustering.md` | 6 | 2026-05-21 |
 | `runtime-contract.md` | 2 | 2026-05-07 |
@@ -393,22 +397,35 @@ mismatch を検出しても、subagent は質問で停止しない。以下の�
 | `invocation-mode.md` | 1 | 2026-05-04 |
 | `model-selection.md` | 4 | 2026-06-14 |
 | `op-config-schema.md` | 1 | 2026-05-13 |
-| `pr-meta-helpers.md` | 1 | 2026-05-17 |
+| `pr-meta-helpers.md` | 2 | 2026-05-23 |
 | `project-profile.md` | 1 | 2026-05-03 |
 | `runtime-verification.md` | 1 | 2026-05-03 |
 | `github-channel.md` | 2 | 2026-07-22 |
 | `claim-markers.md` (markers/) | 1 | 2026-05-17 |
 | `patrol-markers.md` (markers/) | 2 | 2026-07-23 |
 | `review-markers.md` (markers/) | 2 | 2026-07-23 |
-| `security-markers.md` (markers/) | 1 | 2026-05-06 |
+| `security-markers.md` (markers/) | 2 | 2026-07-29 |
+| `spawn-prompt-common.md` | 1 | 2026-05-21 |
+| `read-economy.md` | 1 | 2026-05-24 |
+| `issue-health-policy.md` | 1 | 2026-05-21 |
+| `workflow-calling.md` | 1 | 2026-07-29 |
+| `bash-fence-convention.md` | 1 | 2026-07-29 |
 | `version-check.md` | 3 | 2026-05-16 |
 
 > **additive-only policy**: 上記テーブルの更新と新行追加は schema_version の bump を要しない。
 > schema_version が変わるのは breaking change (既存フィールドの削除 / 型変更 / marker 仕様変更 / 必須化) のみ。
 > 詳細は `expert-spawn.md` の `additive_only_policy` 節を参照。
 
-> **参照側 pin 規約 (Issue #382)**: 参照側 SKILL.md / references / agents は `expert-spawn.md` /
-> `apply-completion-checklist.md` の version 数値を `(>=N)` 形式で pin しない。これらは非 blocking warning で
-> 低価値かつ、pin すると bump のたびに ~28 ファイルを sync する追従コストが残るため。両ファイルの現行版は
-> 本集約節 (上記 current_version テーブル) が唯一の正本であり、参照側は純粋な pointer (ファイル参照のみ) とする。
-> これにより将来の bump で参照側が再 drift しない。
+> **参照側 pin 規約 (Issue #382、2026-07-29 改訂)**: 参照側 SKILL.md / references / agents は、
+> CLAUDE.md 不変則 2 に従い `_shared/*.md` 参照へ `(>=N)` 形式の最低版 pin を付けることを推奨する
+> (`expert-spawn.md` / `apply-completion-checklist.md` も例外にしない)。旧規約の「この 2 ファイルは
+> pin しない (純粋 pointer とする)」は、CLAUDE.md 不変則 2 および実態 (op-spec / op-report /
+> expert-scout / model-selection.md 等が既に pin 済み、本ファイル上部の requires pin 例も pin を例示)
+> と矛盾するため撤去した。
+>
+> **pin 更新の運用注意 (旧規約の根拠を継承)**: bump 頻度の高い `expert-spawn.md` /
+> `apply-completion-checklist.md` は、bump のたびに ~28 参照ファイルの `(>=N)` を一斉同期すると
+> 追従コストが大きい。pin mismatch は非 blocking warning に留まり (起動時チェック手順 / CI schema-check
+> は `--strict` 不使用、`R-SKILL-PIN-AHEAD` = info)、bump PR で全参照側 pin の同時更新を必須としない。
+> 各参照側は **自身が前提とする最低版が実際に上がったときにのみ** pin を更新すればよい。
+> 現行版の一覧参照には本集約節 (上記 current_version テーブル) を使う。

@@ -123,6 +123,11 @@ record で seed する** = L318-319 の context 非継承規約に穴を開け�
 - `~/.claude/skills/_shared/clustering.md` (>=5) — expert label 完全形式
 - `~/.claude/skills/_shared/version-check.md` (>=2) — schema_version 整合性チェック手順 + Invocation Mode 上の責務分離
 - `~/.claude/skills/_shared/model-selection.md` (>=1) — expert spawn 時の model (Opus / Sonnet / Haiku、具体 version は §1) 選択 / task_complexity / 区画 complexity の canonical 正本。op-architect は ADR 起草・初期 Issue 生成・enrichment の Design Plan で Opus を使う
+- `references/project-type-checklists.md` (>=1) — フェーズ2 種別ごとの論点チェックリスト (2-A〜2-E)。フェーズ1 の種別判定直後に該当種別のみ参照
+- `references/adr-template.md` (>=1) — フェーズ3-2 の ADR ドラフトテンプレート (MADR ベース)。ADR を書き出す直前に参照
+- `references/scaffold-mode.md` (>=1) — フェーズ4.5 スケルトン雛形生成の全手順。`--scaffold` 指定時のみ参照
+- `references/issue-templates-and-markers.md` (>=1) — フェーズ5 の Issue 本文テンプレ + apply_expert 別 hidden marker パターン。Issue body 生成の都度参照
+- `references/issue-md-and-recovery.md` (>=1) — フェーズ4-1-fallback (feature-expert 不在時分解) / フェーズ5-5 (`--issue-md` モード) / フェーズ5-6 (部分成功時レポート) の fallback・リカバリ経路 3 種。該当分岐に入った場合のみ参照
 
 ---
 
@@ -135,23 +140,14 @@ record で seed する** = L318-319 の context 非継承規約に穴を開け�
 加えて、`_shared/version-check.md` の「installed op binary 鮮度確認」節 (Issue #249) に従い、`op version --json` の `details.git_sha` と `git log --format='%h' -n1 -- op-tools/crates/` の最新 SHA を比較する (比較元 path は binary 挙動に影響する範囲に絞る。docs-only commit の false-drift 回避 = Issue #641)。不一致時は warning + `cargo install --path op-tools/crates/op` を案内 (hard fail なし)。
 
 さらに、`op core schema-check` で _shared prose / Rust types / SKILL.md pin の drift を確認する。
-`stats.errors_total >= 1` または `stats.warnings_total` が 5 以上の場合は warning を表示し、ユーザーに続行可否を確認する (`--auto` 系モードでも一旦停止する)。
-CI (CLAUDE.md ### 10) と異なり runtime では hard fail しない (CLAUDE.md 不変則2)。
+`stats.errors_total >= 1` または `stats.warnings_total >= 5` の場合は warning を表示し、
+**ユーザーに続行可否を確認する (`--auto` モードでも一旦停止)**。
+runtime では CI (CLAUDE.md「schema-check process 規約」節) と異なり hard fail しない (CLAUDE.md 不変則2)。
+閾値判定 bash は `skills/op-plan/SKILL.md` フェーズ0 の schema-check fence と同型 (そちらを正本とする)。
 
 ```bash
-# schema-check: drift 可視化 (runtime hard fail なし、warning のみ)
-if command -v op >/dev/null 2>&1; then
-  SCHEMA_RESULT=$(op core schema-check --repo-root . 2>/dev/null) || true
-  SCHEMA_ERRORS=$(echo "${SCHEMA_RESULT}" | jq -r '.stats.errors_total // 0' 2>/dev/null || echo "0")
-  SCHEMA_WARNINGS=$(echo "${SCHEMA_RESULT}" | jq -r '.stats.warnings_total // 0' 2>/dev/null || echo "0")
-  if [ "${SCHEMA_ERRORS}" -ge 1 ] 2>/dev/null; then
-    echo "[schema-check] warning: errors_total=${SCHEMA_ERRORS} — drift を修正するか、続行可否を確認してください"
-  elif [ "${SCHEMA_WARNINGS}" -ge 5 ] 2>/dev/null; then
-    echo "[schema-check] warning: warnings_total=${SCHEMA_WARNINGS} (drift が蓄積しています。修正を検討してください)"
-  fi
-else
-  echo "[schema-check] op binary が見つかりません。cargo install --path op-tools/crates/op を実行してください (hard fail なし)"
-fi
+# schema-check: drift 可視化 (閾値判定は op-plan フェーズ0 の fence と同型、正本はそちら)
+op core schema-check --repo-root . 2>/dev/null || echo "[schema-check] op binary が見つかりません (cargo install --path op-tools/crates/op)"
 ```
 
 ### 0-cap. Dynamic Workflows capability preflight (ADR-0009 Phase C / C4)
@@ -230,8 +226,8 @@ op repo init --dry-run
   5. その他 (汎用テンプレで進める)
 ```
 
-> 既存プロジェクトへの新領域追加は `--extend` ではなく `/op-plan` を使用してください。
-> 移行ガイドは `skills/op-plan/SKILL.md` 末尾「op-architect --extend からの移行ガイド」節を参照。
+> 既存プロジェクトへの新領域追加は `--extend` ではなく `/op-plan` を使用してください
+> (使い分け基準は `skills/op-plan/SKILL.md`「このスキルの位置づけ」節を参照)。
 
 ### 1-2. ヒアリング (シート方式 + 未回答項目の深掘り)
 
@@ -276,77 +272,9 @@ op repo init --dry-run
 
 ヒアリング結果から、**ユーザーと議論する必要がある論点**を列挙してチェックリストで提示する。種別ごとのテンプレは下記の通り。
 
-### 2-A. Tauri v2 + Vue 3
-
-| # | 論点 | 主な選択肢 |
-|---|------|-----------|
-| 1 | フロント FW 構成 | Vite 素 / Quasar / Naive UI 等 |
-| 2 | 状態管理 | Pinia / 不要 |
-| 3 | ルーティング | vue-router (履歴あり) / 単一画面 |
-| 4 | Tauri command 設計 | ファイル分割粒度・命名規則 |
-| 5 | 永続化 | SQLite (sqlx / rusqlite) / file / OS keychain |
-| 6 | 認証 | あり/なし、ローカル / リモート |
-| 7 | アップデート | tauri-updater / 手動配布 |
-| 8 | ロギング | tracing + log file / println |
-| 9 | パッケージング対象 | Windows-only / macOS / Linux |
-| 10 | テスト戦略 | Rust unit / Vitest / 手動 QA のみ |
-
-### 2-B. Vue 3 SPA / Nuxt
-
-| # | 論点 | 主な選択肢 |
-|---|------|-----------|
-| 1 | ベース | Nuxt / Vite + Vue Router |
-| 2 | レンダリング | SPA / SSR / SSG / Hybrid |
-| 3 | 状態管理 | Pinia / 不要 |
-| 4 | API 通信 | ofetch / fetch / axios |
-| 5 | 認証 | JWT / Session / Auth0 / Clerk / 自前 |
-| 6 | スタイル | Tailwind / UnoCSS / Vuetify / Naive UI |
-| 7 | フォーム検証 | VeeValidate / Zod / 自前 |
-| 8 | テスト | Vitest / Playwright |
-| 9 | デプロイ先 | Vercel / Netlify / 自社サーバ |
-| 10 | i18n | あり/なし、@nuxtjs/i18n / vue-i18n |
-
-### 2-C. Flutter
-
-| # | 論点 | 主な選択肢 |
-|---|------|-----------|
-| 1 | 状態管理 | Riverpod / BLoC / Provider / GetX |
-| 2 | ルーティング | go_router / auto_route |
-| 3 | 永続化 | Hive / Drift / SharedPreferences / SQLite |
-| 4 | HTTP | dio / http |
-| 5 | 認証 | Firebase Auth / Auth0 / 自前 / なし |
-| 6 | プラットフォーム | iOS / Android / Web / macOS / Windows |
-| 7 | デザインシステム | Material 3 / Cupertino / カスタム |
-| 8 | i18n | あり/なし、flutter_localizations |
-| 9 | テスト | widget / integration / golden |
-| 10 | リリース | TestFlight / Play Console / 内製配布 |
-
-### 2-D. Rust CLI / サーバ
-
-| # | 論点 | 主な選択肢 |
-|---|------|-----------|
-| 1 | エントリ | CLI (clap) / サーバ (axum/actix/poem) / 両方 |
-| 2 | 非同期ランタイム | tokio / async-std / 同期のみ |
-| 3 | DB | sqlx / diesel / sea-orm / なし |
-| 4 | ロギング | tracing / log + env_logger |
-| 5 | エラー | anyhow / thiserror / 両方 |
-| 6 | 設定 | config / figment / 環境変数のみ |
-| 7 | 認証 (サーバ) | JWT / API key / OAuth |
-| 8 | テスト | cargo test / criterion / integration |
-| 9 | 配布 | crates.io / バイナリ配布 / Docker |
-| 10 | 観測 | metrics / OpenTelemetry / なし |
-
-### 2-E. その他 (汎用)
-
-技術選定が定まっていない / 上記4種に当てはまらない場合:
-
-1. 主言語・主 FW
-2. 実行環境 (デスクトップ / Web / モバイル / サーバ / CLI)
-3. データ層
-4. 認証
-5. ロギング・観測
-6. テスト戦略
-7. パッケージング・デプロイ
+**種別ごとの論点チェックリスト (2-A〜2-E)**: フェーズ1 で判定した種別に対応する 1 表のみを参照する。
+詳細は `references/project-type-checklists.md` — **フェーズ1 の種別判定直後、論点抽出の都度**読む
+(判定された種別の表 1 つだけでよく、他 4 種別は読まない)。
 
 論点リストはユーザーに見せ、**順番に議論したい順序を確認する**。優先度の高いものから 1 つずつ進める。
 
@@ -429,7 +357,7 @@ per-論点 でなく **whole-architecture** にする理由 (user 確定): 各�
 **workflow 呼出**:
 
 ```javascript
-const archJudge = Workflow({
+const archJudgeRaw = Workflow({
   name: 'op-architect-judge',
   args: {
     project_context,                          // フェーズ1 種別判定 + ヒアリング (N angle 共通入力)
@@ -439,8 +367,11 @@ const archJudge = Workflow({
     models: { generate: PJP_GEN_MODEL, evaluate: PJP_EVAL_MODEL },  // model-selection §5.1: generate=Sonnet / evaluate=Opus
   },
 })
+const archJudge = archJudgeRaw.result ?? archJudgeRaw;  // chat-controller は `.result` にラップ (_shared/workflow-calling.md §2)
 // = { ok, topics[], recommended:{angle, architecture:{decisions[]}, corrected}, candidates:[{angle, architecture_summary, coherence_note, decisions[], score}], js_ranking, evaluator:{recommended_angle, rationale, ranking, graft_proposals[], synthesis_notes}, dropped }
 ```
+
+呼び出し規約 (preflight / `.result.*` unwrap / args 渡し) は `_shared/workflow-calling.md` に従う。
 
 各 candidate の `decisions[]` = 全 ADR-worthy 論点への決定 (`{ topic, decision, rationale, tradeoffs, consequences:{positive[], negative[]}, alternatives_rejected[] }`)。1 decision → 1 ADR の前駆。
 
@@ -509,46 +440,9 @@ batch でも **ADR は 1 本ずつ `git add` + commit** する (下記ゲート�
 - 既存 ADR の最大番号 + 1 (ゼロパディング 4 桁)
 - ファイル名: `NNNN-<kebab-case-title>.md`
 
-テンプレ (MADR ベース):
-
-```markdown
-# ADR-NNNN: <タイトル>
-
-- Status: Accepted
-- Date: <YYYY-MM-DD>
-- Deciders: <ユーザー名 / チーム名>
-
-## Context
-
-<なぜこの意思決定が必要になったか。背景・制約・前提を 3〜6 行>
-
-## Decision
-
-<決めたこと。1〜3 文で明確に>
-
-## Consequences
-
-### Positive
-- <得られる効果>
-
-### Negative / Trade-offs
-- <受け入れる制約 / 代償>
-
-## Alternatives Considered
-
-### <案 A> (採用)
-- 採用理由: ...
-
-### <案 B>
-- 不採用理由: ...
-
-### <案 C>
-- 不採用理由: ...
-
-## References
-
-- <参考 URL / 関連 ADR>
-```
+**ADR ドラフトテンプレート (MADR ベース)**: 詳細は `references/adr-template.md` —
+**論点の決定が出て ADR を書き出す直前**に読む (テンプレの節構成は毎回同じだが、fill-in 対象の
+成果物サンプルであり手順そのものではないため参照側に置く)。
 
 ADR は Write tool で `<ADR_DIR>/NNNN-*.md` に書き出す。**1 ADR 書くごとに `git add` + commit する** (粒度を細かく)。ただし **既存の staged 変更を絶対に巻き込まない** よう、commit 前にゲートを通す:
 
@@ -665,14 +559,8 @@ Agent({
 
 ### 4-1-fallback. feature-expert が利用できない場合
 
-`feature-expert` agent が未配置 / spawn 失敗 / 出力が不完全の場合は、司令官が**直接**以下の基準で分解する:
-
-- 1 マイルストーン = 1 Issue = 1 PR = 1〜3 日分の作業
-- 1 番目は必ず**スケルトン Issue** (デフォルトモード時)
-- 2 番目以降は **DB / API / UI / 検証 / 配布 / ドキュメント** の領域別に分離
-- ADR と対応しない Issue は原則作らない (作る場合は理由を Issue 本文に明記)
-- 並列実行のため、`depends_on` 連鎖は最大 2 段まで (3 段以上は粒度分割を再検討)
-- 司令官分解の場合も、出力フォーマットは feature-expert 依頼時と同じ JSON 構造に揃える
+`feature-expert` agent が未配置 / spawn 失敗 / 出力が不完全の場合の司令官直接分解の基準は
+`references/issue-md-and-recovery.md`「4-1-fallback」節 — **feature-expert の spawn に失敗した場合のみ**読む。
 
 ### 4-2. ユーザー承認
 
@@ -697,97 +585,9 @@ Agent({
 
 ## フェーズ4.5: スケルトン雛形生成 (`--scaffold` モード時のみ)
 
-`--scaffold` 指定時は、Issue 起票の前に**プロジェクト雛形 (1 番目のマイルストーン相当)** を司令官が `feature-expert` に委譲して直接生成する。`op-run` の起動・PR レビューサイクルを 1 周省略でき、ゼロイチで「とにかく動く骨格」が必要なケース向け。
+`--scaffold` 指定時は、Issue 起票の前に**プロジェクト雛形 (1 番目のマイルストーン相当)** を司令官が `feature-expert` に委譲して直接生成する。`op-run` の起動・PR レビューサイクルを 1 周省略でき、ゼロイチで「とにかく動く骨格」が必要なケース向け。**`--scaffold` 未指定ならこのフェーズは完全にスキップ**してフェーズ4.6 (または UI 影響なしならフェーズ5) へ進む。
 
-### 4.5-1. 雛形生成の判断
-
-司令官は以下のチェックを通過した場合のみ進む:
-
-- フェーズ4 で **1 番目のマイルストーンがスケルトン系**であること (`scope_in` がプロジェクト全体構成・Cargo.toml / package.json / pubspec.yaml 等)
-- 関連 ADR が確定済みであること (技術スタック・主要ライブラリ・ディレクトリ方針)
-- ユーザーが対話の中で `--scaffold` を改めて承認していること
-
-### 4.5-2. feature-expert への委譲
-
-```
-Agent({
-  subagent_type: "op-skill:feature-expert",
-  description: "scaffold initial project skeleton",
-  prompt: """
-    invocation_mode: op_managed
-
-    op-architect から呼ばれた OP-managed Mode 起動です。
-    新規プロジェクトの**最小スケルトン**を生成してください。
-
-    共通宣言 (invocation_mode / 質問禁止 / 必読 checklist / commits_added):
-    `~/.claude/skills/_shared/spawn-prompt-common.md (>=1)` §1〜§4 を参照。
-    本フェーズは scaffold apply のため commits_added: [SHA, ...] (1 件以上) を完了報告に必ず含める。
-
-    【プロジェクト種別】
-    <Tauri v2 + Vue 3 等>
-
-    【確定 ADR (要旨)】
-    - ADR-0001: <タイトル> → <要旨>
-    - ADR-0002: <タイトル> → <要旨>
-    ...
-
-    【スケルトンの範囲】
-    - プロジェクトルートの構成ファイル (Cargo.toml / package.json / pubspec.yaml / vite.config.ts 等)
-    - 最小限のエントリポイント (main.rs / main.dart / src/main.ts / App.vue 等)
-    - ディレクトリ骨組み (空または README.md だけのディレクトリ)
-    - .gitignore / README.md (1 ページ程度)
-    - ロギング・エラーハンドリングの最小設定 (ADR で決まっていれば)
-
-    【含めないもの】
-    - 業務ロジック (それは後続マイルストーンで実装)
-    - DB スキーマ (別マイルストーン)
-    - 認証実装 (別マイルストーン)
-    - 詳細 UI (別マイルストーン)
-
-    【検証】
-    `_shared/project-profile.md` の Static / Build レベルが pass すること:
-    - cargo check / cargo fmt / cargo clippy
-    - pnpm install && pnpm typecheck && pnpm build
-    - flutter analyze
-    で構文エラーが出ない最小状態を作る。
-
-    【手順】
-    1. 雛形ファイルを作成
-    2. 検証コマンドを実行し、pass を確認
-    3. `git add` + commit (メッセージ: `chore(skeleton): プロジェクト雛形を生成 (op-architect)`)
-    4. 生成ファイル一覧と検証結果を報告
-
-    【完了条件】
-    - 検証コマンドが pass
-    - 残マイルストーン (#2 以降) が依拠できる骨格になっていること
-    - CLAUDE.md 規約 (ネスト・コメント方針) に準拠
-  """
-})
-```
-
-### 4.5-3. 残マイルストーンの依存関係更新
-
-雛形が commit されたら、フェーズ5 で起票する残 Issue (#2 以降) の `depends_on` から「スケルトン Issue」を外し、`## 関連` 節に**「スケルトンは commit `<sha>` で完了済み」** と注記する。スケルトン Issue 自体はフェーズ5 でも起票せず、ADR 文書とコミットログに記録を残すのみ。
-
-### 4.5-4. 失敗時の扱い
-
-検証コマンドが fail したら司令官は雛形生成を **rollback せず**、生成済み差分を残したまま:
-
-- ユーザーに失敗内容と feature-expert の出力を提示
-- 続行 (差分を残したまま手動修正へ) / Issue 化 (op-run へ移譲) のいずれかをユーザーが選択
-
-`--scaffold` を選んだ意図は速度なので、雛形 fail でも自動 rollback で振り出しに戻すのは望ましくない。
-
-### 4.5-5. feature-expert が利用できない場合
-
-`feature-expert` agent が未配置 / spawn 失敗の場合は、`--scaffold` を **自動的に取り下げ** (デフォルトモードに格下げ) てユーザーに通知する。司令官が直接スケルトンを書くことは禁止 (司令官はコードを書かない原則を守る):
-
-```
-⚠️ feature-expert が利用できないため、--scaffold を取り下げました。
-スケルトンはマイルストーン #1 として Issue 化します (フェーズ5 へ進みます)。
-```
-
-ユーザーが「司令官が直接書いてよい」と明示承認した場合のみ、司令官が雛形を書く例外を許可する。
+判断基準・feature-expert 委譲 prompt・残マイルストーンの依存更新・失敗時の扱い・feature-expert 不在時の取り下げ手順の全詳細は `references/scaffold-mode.md` (4.5-1〜4.5-5) — **`--scaffold` 指定時のみ**読む。
 
 ---
 
@@ -981,9 +781,10 @@ declare -A TITLE MODULE HAS_UI_IMPACT APPLY_EXPERT   # フェーズ4.1〜4.6 の
 declare -A DEPENDS_ON  # フェーズ4 対話で確定したマイルストーン間依存 (DEPENDS_ON[M2]="M1 M3" のようにスペース区切りで仮 key を列挙)
                        # 依存なし工程は未設定のままでよい (Pass 2 で空チェックして marker 行ごと省略)
 
-# CLAUDE.md bash fence convention: fence をまたぐ変数は一時ファイル経由で渡す。
+# bash fence convention (正本: skills/_shared/bash-fence-convention.md): export の fence 間持続は
+# 環境依存で保証されないため、確実性が要る受け渡しは一時ファイル経由を優先する。
 # Pass 1 → Pass 2 で ISSUE_MAP / DEPENDS_ON を受け渡すための一時ファイルを確保する。
-# (export だけでは subshell drift が起きるため declare -p serialize を採用)
+# (連想配列は export では渡せないこともあり declare -p serialize を採用)
 export MAP_TMP
 MAP_TMP=$(mktemp)  # 一時ファイルは export しておき次 fence の :? guard で受け取る
 
@@ -1053,7 +854,7 @@ for M in M1 M2 M3 ...; do
 done
 
 # Pass 1 → Pass 2 受け渡し: 両連想配列を一時ファイルに serialize する。
-# CLAUDE.md bash convention「fence をまたぐ変数は一時ファイル経由」に従う。
+# bash fence convention (_shared/bash-fence-convention.md)「確実性が要る値は一時ファイル経由を優先」に従う。
 # (declare -p は "declare -A VAR=([ key ]="value" ...)" 形式で export; 次 fence で source して復元)
 # 既存 subshell drift バグ (Pass 2 が別 fence で ISSUE_MAP が空になる問題) もここで同時に解消する。
 : "${MAP_TMP:?MAP_TMP must be set — Pass 1 開始前の mktemp で生成済み}"
@@ -1077,7 +878,7 @@ declare -p ISSUE_MAP DEPENDS_ON > "$MAP_TMP"
 
 ```bash
 # Pass 1 → Pass 2 受け渡し: 一時ファイルから両連想配列を復元する。
-# (CLAUDE.md bash convention: fence をまたぐ変数は一時ファイル経由)
+# (_shared/bash-fence-convention.md: fence をまたぐ変数は一時ファイル経由)
 # このガードにより、Pass 1 の declare -p serialize が実行されていない場合を早期に検出できる。
 : "${MAP_TMP:?MAP_TMP must be set — Pass 1 の mktemp + declare -p serialize が完了しているか確認}"
 # shellcheck source=/dev/null
@@ -1139,7 +940,7 @@ for M in "${!ISSUE_MAP[@]}"; do
   fi
 
   # lint pass のときだけ Issue body を更新する。
-  # 直列実行厳守 (並列化は重複更新事故の原因、CLAUDE.md bash convention)。
+  # 直列実行厳守 (並列化は重複更新事故の原因、_shared/bash-fence-convention.md)。
   EDIT_RESULT=$(op issue edit-body --number "$NUM" --body-file "$FINAL_FILE" 2>&1) \
     || FAILED+=("$M edit: $EDIT_RESULT")
 done
@@ -1151,162 +952,22 @@ UI 影響マイルストーンは冒頭に hidden marker を埋め込み、フ�
 Design Plan を `## 🎨 Design Plan` 節として `## 🤖 apply agent への指示書` の直後に挟む。
 hidden marker は op-run / op-merge が expert 解決と post-check 解決に使う。
 
-#### hidden marker のパターン (apply_expert に応じて分岐)
-
-```markdown
-# UI 影響なし (DB / API / CI 等) — 依存なし工程の例
-<!-- op-source: op-architect -->
-<!-- op-domain: feature -->
-<!-- op-architect-expert: feature-expert -->
-<!-- op-run-expert: feature-expert -->
-<!-- op-post-check-expert: null -->
-<!-- 依存なし工程の例: op-depends-on marker は出さない (依存ありの工程のみ Pass 2 で op-post-check-expert 行の直後に追加する。空 value は lint error)。 -->
-
-# UI 影響あり (apply_expert = feature-expert) — 業務機能・データ接続が中心 — 依存あり工程の例
-<!-- op-source: op-architect -->
-<!-- op-domain: feature -->
-<!-- op-architect-expert: designer-expert -->
-<!-- op-design-plan-by: designer-expert -->
-<!-- op-run-expert: feature-expert -->
-<!-- op-post-check-expert: ux-ui-audit-expert -->
-<!-- op-depends-on: #806, #807 -->
-<!-- ↑ op-depends-on は依存ありの工程のみ Pass 2 で追加する。依存なし工程は行ごと省略 (空 value は lint error)。 -->
-
-# UI 影響あり (apply_expert = designer-expert) — visual / token / component 中心
-<!-- op-source: op-architect -->
-<!-- op-domain: design -->
-<!-- op-architect-expert: designer-expert -->
-<!-- op-design-plan-by: designer-expert -->
-<!-- op-run-expert: designer-expert -->
-<!-- op-post-check-expert: ux-ui-audit-expert -->
-```
-
-UI 影響なしマイルストーンでは Design Plan 節を省略し、上記の最小 marker セットのみを埋め込む。
-post-check が不要なケースでも `op-post-check-expert` marker は **必須** で、値を `null` にして明示的に出力する (値の省略は op-run dispatcher が「未解決」と「明示 skip」を区別できなくなるため不可)。
-UI 影響あり (apply_expert = feature-expert) の場合は `op-architect-expert: designer-expert` を指定する (Design Plan は designer-expert が作るため)。
-
-```markdown
-<!-- 以下は UI 影響あり (apply_expert = designer-expert) の例。
-     apply_expert / domain は上表に従い、対応する marker セットに置き換える。 -->
-<!-- op-source: op-architect -->
-<!-- op-domain: design -->
-<!-- op-architect-expert: designer-expert -->
-<!-- op-design-plan-by: designer-expert -->
-<!-- op-run-expert: designer-expert -->
-<!-- op-post-check-expert: ux-ui-audit-expert -->
-
-## 概要
-<マイルストーンの 1〜2 文要約>
-
-## 検出根拠
-- 起点: op-architect 対話による初期設計
-- 関連 ADR: ADR-NNNN, ADR-MMMM
-- 依存マイルストーン: #<N> (先に完了が必要)
-
-## 観測された挙動 / Evidence
-新規構築のため既存挙動なし。下記 ADR の決定に基づき新規実装する。
-
----
-
-## 🤖 apply agent への指示書
-
-### scan が立てた仮説
-op-architect が ADR-NNNN (<タイトル>) に基づき、<方針> で実装すべきと設計した。
-
-### 除外した仮説 (ADR で検討済み)
-- <案 B>: ADR-NNNN の Alternatives で <理由> により不採用
-- <案 C>: ADR-NNNN の Alternatives で <理由> により不採用
-
-<!-- UI 影響マイルストーンのみ。フェーズ4.6 で確定した Design Plan をそのまま埋め込む。 -->
-<!-- op-run の designer-expert はこの節を Issue 本文から読み取って実装する。 -->
-## 🎨 Design Plan
-<designer-expert (Architect Mode) が出力し、ux-ui-audit-expert (gate) で PASS / PASS_WITH_NOTES 判定を受けた
-Design Plan 本文をそのまま貼り付ける。Audit Notes があれば末尾に「### Audit Notes」として追加済み。>
-
-### 触ってよいファイル (新規作成)
-- `<path/to/new/file>`
-- `<path/to/another/new/file>`
-
-### 触ってはいけないファイル / 領域
-- <他マイルストーンが扱う領域>
-- <ADR で別案件と決めた領域>
-
-### 必須検証項目
-- [ ] <project-profile.md の Static 検証 — fmt / clippy / typecheck>
-- [ ] <Unit 検証 — cargo test / vitest / flutter test>
-- [ ] <Build 検証 — cargo check / pnpm build>
-- [ ] <Integration / Manual — 必要に応じ>
-
-### 成功条件
-<マイルストーンの success_criteria を転記>
-
-### 既知の落とし穴 / 注意点
-- <初期構築で踏みやすい罠>
-
----
-
-## 関連 ADR
-- ADR-NNNN: <タイトル>
-- ADR-MMMM: <タイトル>
-
-## 依存
-- depends on #<N> (先に完了が必要)   <!-- Pass 2 で実 issue number を埋める。依存なし工程はこのセクションごと省略する -->
-
----
-🤖 op-architect による自動起票
-```
+Issue 本文の全文テンプレ + apply_expert 別 hidden marker パターン (3 分岐の具体例) は
+`references/issue-templates-and-markers.md` — **フェーズ5-1 / フェーズ5-4 で BODY_FILE / FINAL_FILE
+を Write tool で生成する都度**読む。marker 名 / label 名そのものの正規定義は
+`~/.claude/skills/_shared/markers/labels-and-markers.md` を見る (このファイルは具体パターン例のみ)。
 
 ### 5-5. `--issue-md` モード (gh が使えない環境向け)
 
-`--issue-md` 指定時、または gh 認証 / 権限 / ネットワークが原因で `op issue create` が失敗した場合は、起票せずに **Markdown ファイルとして書き出す** モードに切り替える (ユーザー確認後):
-
-```
-docs/issues/initial/
-├── 001-skeleton-tauri-vue.md
-├── 002-db-sqlite-schema.md
-├── 003-ui-login.md
-└── ...
-```
-
-各ファイルは「5-4 の Issue 本文テンプレ」と同じ構造で、先頭に YAML フロントマターでラベルとタイトルを保持:
-
-```markdown
----
-title: "スケルトン: Tauri + Vue プロジェクト雛形作成 (initial)"
-labels: [auto-report, op-architect, pro-feature-expert, milestone:initial, module:bootstrap]
-depends_on: []   # ファイル名で参照 (例: ["001-skeleton-tauri-vue"])
----
-
-## 概要
-...
-```
-
-利用者は後から手動で GitHub Issue に貼るか、別エージェントに起票させる。`--issue-md` でも 5-3-b の起票プレビューと同等の表をユーザーに提示する。
+`--issue-md` 指定時、または gh 認証 / 権限 / ネットワークが原因で `op issue create` が失敗した場合の
+Markdown 書き出しモードの詳細は `references/issue-md-and-recovery.md`「5-5」節 —
+**`--issue-md` 指定時、または `op issue create` が失敗した場合のみ**読む。
 
 ### 5-6. 部分成功時の集約レポート
 
-Pass 1 / Pass 2 で失敗があった場合、必ず**作成済み / 未作成 / body 更新失敗**を分けて報告する:
-
-```
-## op-architect 起票結果
-
-### 作成成功 (3 件)
-- M1 → #42 https://github.com/owner/repo/issues/42
-- M2 → #43 https://github.com/owner/repo/issues/43
-- M3 → #44 https://github.com/owner/repo/issues/44
-
-### 作成失敗 (1 件)
-- M4: HTTP 422 (body too long) — トリミングして再実行が必要
-
-### body 更新失敗 (depends_on 解決) (0 件)
-- なし
-
-### 推奨アクション
-- M4 の body を短縮し、`op issue create --body-file <new> --ensure-labels` で再実行
-- 残 Issue の depends_on は Pass 2 で正常に解決済み
-```
-
-`op issue create` の失敗で部分成功となった場合、**rollback (作成済み Issue の close) は自動では行わない**。ユーザー判断に委ねる (Issue close は op-merge / 手動の責務)。
+Pass 1 / Pass 2 で 1 件でも失敗した場合の報告フォーマットは `references/issue-md-and-recovery.md`
+「5-6」節 — **起票 (Pass 1) または body 更新 (Pass 2) で 1 件以上失敗した場合のみ**読む。
+全件成功時はこのファイルを読まずフェーズ5-7 の完了レポートへ進む。
 
 依存関係 (`depends_on`) は Issue 番号確定後 (Pass 2) に各 Issue の `## 依存` セクションへ反映する。
 

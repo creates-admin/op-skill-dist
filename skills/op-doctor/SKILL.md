@@ -185,6 +185,8 @@ Report の構成 (人間可読):
 - open Issue と重複するものは起票しない (dedup-policy.md)。
 - `--auto` は auto-policy.md の 8 条件 AND を満たすもののみ自動起票。
 - `requires_runtime` / `inferred` / `low confidence` は `manual_review_bucket` に保持する (起票しない)。
+- Cloud 環境での Issue 起票 (gh 操作) は `skills/_shared/github-channel.md` (`OP_GITHUB_CHANNEL`)
+  の channel 判定に従う (本節に channel 分岐ロジックを再定義しない)。
 
 ### op-source marker の扱い (依存: 配線 Issue で正本登録)
 
@@ -237,9 +239,7 @@ op doctor env [--dir <path>]   # toolchains[] / lockfiles[] / commands[] を JSO
 
 | 診断項目 (`--check` 名) | inventory ソース | 導出方法 |
 |------------------------|------------------|---------|
-| `env` (toolchain version / 必須コマンド存在) | `op doctor env` の `toolchains[]` (name/present/version) | そのまま |
-| `commands` (build・test・lint・audit の存在) | `op doctor env` の `commands[]` (name/category/present) | そのまま |
-| `lockfile` (lockfile 存在) | `op doctor env` の `lockfiles[]` (name/present) | そのまま |
+| `env` / `commands` / `lockfile` (toolchain version / 必須コマンド存在 / lockfile 存在) | `op doctor env --help` の出力フィールド (`toolchains[]` / `commands[]` / `lockfiles[]`) をそのまま使う | そのまま |
 | `toolchain` (drift: 宣言 vs 実体の version 乖離) | `toolchains[].version` + repo の version 宣言 (rust-toolchain / .nvmrc 等) | controller が突き合わせ (深い互換推論は debug-expert) |
 | `ci-local` (CI で使うコマンド vs local で使えるコマンドの差) | `commands[].present` (PATH 存在確認) + CI 定義 (`.github/workflows`) のコマンド | controller が command matrix を比較 (失敗 RCA は debug-expert) |
 | `deps` (依存 + OSV summary) | — (決定論 primitive 対象外) | フェーズ2 で security-expert が担当 |

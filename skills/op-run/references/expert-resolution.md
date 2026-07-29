@@ -1,7 +1,11 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-05-23
-notes: v1 (2026-05-23): op-run フェーズ1-2-c (expert 解決ロジック) +
+notes: v1 (2026-07-29, Wave A2 F06): 1-2-d の「planned expert ごとの判定軸」bullet と release-expert
+       再分類テーブルを `_shared/planned-experts.md` (Current substitutes / Hard rule 節) への pointer に
+       圧縮 (基準リストの再掲を撤去)。op-run 固有の Resolved → Runtime 正規化表・再分類機構・疑似コードは
+       不変のため schema_version 据置。
+       v1 (2026-05-23): op-run フェーズ1-2-c (expert 解決ロジック) +
        1-2-d (Active Apply Expert Normalization) の詳細仕様。SKILL.md god file 抑制のため
        本ファイルへ物理切り出し (Issue #467 Stage 6)。切り出し前後で表現・判定軸・
        テーブル・疑似コードを byte-identical 維持。
@@ -188,27 +192,15 @@ GitHub label (colon, applied via `gh pr edit --add-label` / `--remove-label`)
 > registry と agent frontmatter が矛盾した場合は contract error として停止する (op-run は自動補正しない)。
 > registry を canonical として扱い、人間が registry / frontmatter のどちらを直すか判断する。
 
-#### planned expert ごとの判定軸 (op-run 固有の解決ロジック)
+#### planned expert の substitute 判定基準 (pointer)
 
-planned expert lifecycle / 取り扱い方針の正本は `~/.claude/skills/_shared/planned-experts.md`。
-本節は op-run が apply / fix runtime spawn を解決するときに適用する **判定軸の早見** であり、
-正本ではない。`planned-experts.md` と矛盾した場合は正本側を優先する。
-
-- `env-expert`:
-  - OSV / dependency vulnerability / supply-chain risk / secret leak / credential exposure /
-    permission risk → `security-expert` (`planned-experts.md` の env substitute 一覧に列挙された
-    security 領域。dependency 由来でも実体が脆弱性 / 供給網リスク / 機密漏洩のときは
-    debug-expert ではなく security-expert に倒す)
-  - dependency / package / toolchain / build environment / local setup failure → `debug-expert`
-  - config 構造整理 / 重複 setup logic / 保守性悪化の解消 → `refactor-expert`
-  - release / installer / updater / distribution 方針判断 → `needs_human_decision`
-- `release-expert`: **fallback destination 禁止**。`needs_human_decision` に倒す。build / packaging /
-  artifact / config 構造が主題の場合は「release-expert の fallback」ではなく **誤分類の再分類** として
-  `debug-expert` / `refactor-expert` に付け直す (下記「誤分類の再分類」節参照)
-- `compatibility-expert`: 互換性 / 退行検証が主題 → `debug-expert`、API surface / module 構造の整理が
-  主題 → `refactor-expert`、互換ポリシー判断が主題 → `needs_human_decision`
-- `spec-expert`: 仕様確定済みの実装が主目的 → `feature-expert`、仕様 ambiguity が主題 →
-  `needs_human_decision` / `blocked`
+planned expert (env / release / compatibility) ごとの substitute 判定基準 (どの active expert /
+`needs_human_decision` に倒すか) の正本は `~/.claude/skills/_shared/planned-experts.md` の各
+**Current substitutes / Hard rule 節**。本ファイルでは基準リストを再掲しない (drift 防止)。
+op-run 固有の解決ロジックとして本ファイルが持つのは、下記の
+「release-expert と誤分類された finding の再分類」節・「Resolved → Runtime 正規化表」
+(条件付き対応表)・疑似コード (security signal keyword 検出) のみ。
+`spec-expert` (Utility Worker、planned ではない) の op-run 正規化 (→ `feature-expert`) も正規化表に従う。
 
 active fallback 先が決定できない / Issue 主題が方針判断主体の場合は `needs_human_decision` とし、
 Task spawn を行わない。司令官は当該 Issue / PR にコメントを残し、人間レビューに回す。
@@ -220,12 +212,10 @@ review-expert / specialist が `recommended_fix_expert: release-expert` を返�
 構造問題である場合は、`release-expert` の fallback としてではなく **そもそもの分類が誤っている** ものとして
 spawn 前に domain を再分類する。
 
-| 主題 | 再分類先 |
-|------|---------|
-| build / packaging failure | `debug-expert` |
-| artifact / release script / config 構造整理 | `refactor-expert` |
-| release / installer / updater / distribution / signing / versioning policy / release strategy | `needs_human_decision` |
-| 判断不能 | `needs_human_decision` |
+主題 → 再分類先の対応 (build/packaging failure → `debug-expert`、artifact / release script /
+config 構造整理 → `refactor-expert`、release/installer/updater/distribution/signing/versioning policy →
+`needs_human_decision`) は `planned-experts.md` release-expert の **Hard rule 節が正本** (再掲しない)。
+判断不能な場合も `needs_human_decision` に倒す。
 
 「fallback」と「再分類」は別物として扱う:
 

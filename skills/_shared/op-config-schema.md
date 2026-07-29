@@ -220,7 +220,7 @@ review_opt_down_sensitive_paths:        # additive: 内蔵 default glob を上�
 - narrow opt-down を project 全体で完全停止したい場合は本 key ではなく
   `model_overrides.review-expert: opus` (§5) を使う (§6 step 3 explicit override で確実に Opus 固定)。
 
-> **注記**: 新規 field 追加のため schema_version bump 不要 (§8 schema_version 運用 参照)。
+> **注記**: 新規 field 追加のため schema_version bump 不要 (§14 schema_version 運用 参照)。
 
 ---
 
@@ -266,7 +266,7 @@ review:
 - tier 閾値は暫定初期値。実装 PR の **Ladder4 recall 実測 (7-lens フル vs proportional の見落とし差)** で校正する。
 - 差分 lens 化 (Fix Loop 2 round 目以降) の手順は `review-fix-loop.md` を参照 (本設定は lens 構成のみ)。
 
-> **注記**: 新規 field 追加のため schema_version bump 不要 (§8 schema_version 運用 参照)。
+> **注記**: 新規 field 追加のため schema_version bump 不要 (§14 schema_version 運用 参照)。
 > **実装状況** (RVW-005 / RVW-003 解消): lens 選択ロジックは controller (`global-review-spawn.md` §4-2-a) 保持。
 > 本 config (`review.proportional_lens.enabled` / `tiers`) を読む **YAML→env bridge は配線済** (Issue #723、
 > op-tools `op model decide-review` primitive)。controller は §4-2-a-pre2 で `op model decide-review --emit-env`
@@ -291,7 +291,7 @@ bulk_group:                             # §7 op scan bulk-group の設定
 |---|---|---|---|
 | `threshold` | int | 5 | 同一 `bulk_group` が何件以上あればバッチ Issue 化するか。`expert-spawn.md` 準拠のデフォルト 5 を変更したい場合に設定する |
 
-> **注記**: schema_version は field 追加のため bump 不要。(§8 schema_version 運用 参照)
+> **注記**: schema_version は field 追加のため bump 不要。(§14 schema_version 運用 参照)
 >
 > **実装状況**: Phase 2-B 先行実装として `--threshold` CLI flag で対応済み。
 > `op-config.yaml` の `bulk_group.threshold` への parse は Phase 1 CLI 化波で実施予定。
@@ -314,7 +314,7 @@ design 多役 orchestration (`op-enrichment.js` design-plan phase) の depth 閾
 | `motion_enabled` | bool | `false` | `motion-spec` 役を full pipeline に追加 (`true` ∩ `full` ∩ motion-patterns.md 着地で `roles.full` 末尾に追加。`motion 使用画面` の判定は designer 役へ委譲) |
 | `auto_full_downgrade_to_light` | bool | `true` | op-scan/op-patrol `--auto` で full を light に丸める throughput ガード (ADR-0012 決定8-7) |
 
-> 新規 field 追加のため schema_version bump 不要 (§8 schema_version 運用、「新規 field 追加 = 不要」)。
+> 新規 field 追加のため schema_version bump 不要 (§14 schema_version 運用、「新規 field 追加 = 不要」)。
 
 ---
 
@@ -334,7 +334,7 @@ design 多役 orchestration (`op-enrichment.js` design-plan phase) の depth 閾
 > 対象 surface: **op-run clustering** (Wave A) / **op-plan 計画分解** (Wave B、angle: mvp-first/risk-first/asset-reuse-first) / **op-architect アーキ提案** (Wave C、whole-architecture = ADR-worthy 論点をまとめて 1 panel、angle: simplicity/extensibility/robustness-biased)。
 > surface 別 angle は各 workflow が default を持つ (op-run=標準/risk-first/throughput-first、op-plan=mvp-first/risk-first/asset-reuse-first、op-architect=simplicity/extensibility/robustness-biased)。
 > surface 別 angle の op-config 上書き (`planning_judge_panel.<surface>.angles`) は将来拡張 (additive)。`enabled` / `candidate_count` / `models` は全 surface 共通。
-> 新規 field 追加のため schema_version bump 不要 (§8 schema_version 運用)。
+> 新規 field 追加のため schema_version bump 不要 (§14 schema_version 運用)。
 
 ---
 
@@ -355,7 +355,7 @@ philosophy 原則12 (流行に寄せない) を裏切るため、**閾値・候�
 | `max_accent_colors` | int | `3` | accent 色種類数の上限。超過は Hard blocker。**未設定なら warning 扱い** (BLOCK しない) |
 
 > 値は **生成 prompt / ux-ui-audit gate / 卒業 gate が読む** (op-explore SKILL.md / `visual-quality-rubric.md` から pointer)。
-> 新規 field 追加のため schema_version bump 不要 (§8 schema_version 運用)。
+> 新規 field 追加のため schema_version bump 不要 (§14 schema_version 運用)。
 
 ---
 
@@ -371,7 +371,7 @@ op-explore の N パターン視覚比較 (`workflows/op-explore-render.js`) の
 | `pattern_count` | int | `1` | 未注入時の安全側 default。none/thin は 1 |
 
 > spawn cost 上限 (worst-case 16 spawn / hard cap) の正本は `issue-enrichment.md §11` (Single Cost Ledger)。
-> 新規 field 追加のため schema_version bump 不要 (§8 schema_version 運用)。
+> 新規 field 追加のため schema_version bump 不要 (§14 schema_version 運用)。
 
 ---
 
@@ -403,14 +403,14 @@ op_survey:                    # op-plan フェーズ2.5 前段 discovery
 - `auto_detect: false` + `--no-survey` → survey を skip (明示 skip は常に勝つ)。
 - survey 未実行 / `Workflow` 失敗時は silent fallback (機能停止しない)。
 
-> 新規 field 追加のため schema_version bump 不要 (§8 schema_version 運用 参照)。
+> 新規 field 追加のため schema_version bump 不要 (§14 schema_version 運用 参照)。
 > **実装状況**: フェーズ2.5 controller logic は `skills/op-plan/SKILL.md` §2.5 に記述。
 > `op-config.yaml` の `op_survey` セクションを読む **YAML→env bridge は op-tools Phase 1 で配線予定**。
 > それまで `op_survey.enabled` / `auto_detect` は SKILL.md のデフォルト値 (true) で動作する (bridge 不在は非 block)。
 
 ---
 
-## §8 schema_version 運用
+## §14 schema_version 運用
 
 | 変更種別 | bump 要否 |
 |---|---|
@@ -424,7 +424,7 @@ op_survey:                    # op-plan フェーズ2.5 前段 discovery
 
 ---
 
-## §8 関連
+## §15 関連
 
 - 複雑度シグナル定義 → `model-selection.md` §4
 - 区画 complexity / task_complexity 区分 → `model-selection.md` §2 / §3

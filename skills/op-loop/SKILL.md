@@ -23,7 +23,8 @@ notes: v1 (2026-06-21): 初版。ADR-0019 op-loop 本体 (D1〜D10)。
 <!--
 機能概要: op-architect の depends_on 工程 issue を CO 共有で **depends_on DAG 層順に直列駆動**し、
          層間に人間 gate (align→dispatch + op-merge) を挟んで完遂まで回す監督ループ skill。
-作成意図: op-run は depends_on を消費できず (labels-and-markers.md L1207)、ファイル競合ベースでしか
+作成意図: op-run は depends_on を消費できず (labels-and-markers.md 「## 2. Active Issue Routing Labels」の
+         `op:foundation-precondition` 行、Meaning 列)、ファイル競合ベースでしか
          直列化しない。皮肉なことに op-architect は milestone を「並列実行可能になるよう わざと
          ファイル非結合」に設計するため、工程依存はファイル競合に現れない論理依存となり、op-run の
          競合ベース直列化では構造的に見えない。op-loop はこの穴を、CO 内部・worktree 規約・marker を
@@ -413,9 +414,8 @@ fi
 # この後、フェーズ2-0 の外側ループが LAYER_IDX を進めて次層 (2-1) へ戻る。
 ```
 
-> **整合性の責務 (worktree-ops.md 外部 base 注入節)**: `OP_RUN_BASE_SHA` と `OP_RUN_BASE_REF` の整合は
-> op-loop の責務。次層の op-run フェーズ0-base はこの注入値を尊重して SHA 再計算を skip する。
-> 1 層内では全 cluster が同一 base を共有する (rebase 地獄回避の既存契約を維持)。
+> **整合性契約**: `worktree-ops.md`「外部 base 注入」節 (`## 作成手順` 配下、op-loop 等の上位
+> orchestrator による層ごとの base 前進を扱う節) を参照。
 
 ---
 
@@ -457,10 +457,10 @@ op-loop は **専用 state marker を持たない** (ADR-0019 D9)。中断後に
 - **`--relay` 無しの既定**: 層内 CO は op-run と完全同一に振る舞い (relay 契約を spawn prompt に足さない)、
   controller は層完了 `ClusterSummary` を terse に受けるだけ。
 
-> **配線範囲 (ADR-0019 D5 純 composition 厳守)**: relay は層内 CO への **「追加契約」** として配線する。
-> CO の入力契約 (`cluster-orchestrator-directives.md` の `ClusterOrchestratorInput`) や op-run の clustering /
-> Stage 2 / CO spawn 手順は **改変しない**。relay 用の報告チャネル契約と controller 側 idle 検知ループだけを additive に足す。
-> stall して回復しない場合は relay に固執せず **層間 gate の既定挙動に倒す** (手動 fallback、`references/relay-protocol.md`)。
+> **配線範囲 (D5、詳細は3原則②)**: relay は層内 CO への追加契約として配線するのみ (CO 入力契約
+> `ClusterOrchestratorInput` や op-run の clustering / Stage 2 / CO spawn 手順は改変しない)。追加するのは
+> 報告チャネル契約と controller 側 idle 検知ループのみ。stall して回復しない場合は relay に固執せず
+> **層間 gate の既定挙動に倒す** (手動 fallback、`references/relay-protocol.md`)。
 
 ---
 
@@ -522,5 +522,4 @@ CO / expert の model は op-run と同一 (`model-selection.md` 継承)。op-lo
 1. **align→dispatch (フェーズ 3-2) で推奨付き選択肢を提示** し、人間に確認する (未定点を 1 問ずつ)
 2. **設計が op-architect レベルの場合** (新アーキ / データモデル / 工程の depends_on 構造変更):
    「この判断は ADR / 工程再設計が必要そうです。`/op-architect` を推奨します」と伝えて gate で停止する
-3. **op-loop は新しい設計判断・新パターンを独自に起こさない** — 層内実装の判断は CO / apply-expert に委ね、
-   op-loop は DAG 層順の駆動と層間監督に徹する (純 composition)
+3. **op-loop は新しい設計判断・新パターンを独自に起こさない** (D5、3原則② 参照) — 層内実装の判断は CO / apply-expert に委ねる

@@ -1,7 +1,13 @@
 <!--
-schema_version: 1
-last_breaking_change: 2026-05-06
-notes: v1 (2026-05-06) — Marker schema 分割 (followup #20) で `pr-templates.md` から
+schema_version: 2
+last_breaking_change: 2026-07-29
+notes: v2 (2026-07-29) — audit_result の正本主張を post-check-markers.md (>=2) に委譲し、
+       本ファイルは security 固有フィールド (threat_model 系 / usable_security 系 / aux post-check 連携)
+       のみを canonical 管理する責務に絞る (SSoT 違反解消。ux-ui-markers.md v2 の RVW-001 解消と同型)。
+       audit_result 関連記述 (header field 定義 / audit_result↔post_check_result 対応表) は pointer に降格。
+       schema_version bump は breaking change として扱う (audit_result を正本として参照していた読者は
+       post-check-markers.md (>=2) に切り替える)。
+       v1 (2026-05-06) — Marker schema 分割 (followup #20) で `pr-templates.md` から
        security 系 marker (`op-security-post-check` / `op-security-requires-aux-post-check`) の
        detailed schema を切り出した正本ファイル。共通 post-check meta (`op-post-check-meta`) は
        `post-check-markers.md` を参照。
@@ -19,8 +25,10 @@ notes: v1 (2026-05-06) — Marker schema 分割 (followup #20) で `pr-templates
 
 注意点:
   - marker 名 / core semantics は `labels-and-markers.md` の Post-check / Gate Markers 節が正本。
-  - 共通 metadata (post_check_expert / post_check_result / post_checked_head_sha / post_check_round)
-    は `post-check-markers.md` を参照。本ファイルは security 固有フィールドのみを定義する。
+  - 共通 post-check metadata (audit_result / post_check_expert / post_check_result /
+    post_checked_head_sha / post_check_round) は `post-check-markers.md (>=2)` を参照。
+    本ファイルは security 固有フィールドのみを canonical 定義。audit_result は共通必須フィールドのため
+    `post-check-markers.md (>=2)` が正本 (本ファイルは pointer のみ)。
   - bash gh コマンドや PR comment 本文の具体例は `pr-templates.md` を参照する。
 -->
 
@@ -34,6 +42,7 @@ marker 名・所有者・consumer・基本 meaning・runtime spawn effect・merg
 共通 post-check metadata (`post_check_expert` / `post_check_result` / `post_checked_head_sha` /
 `post_check_round`) の schema は `skills/_shared/markers/post-check-markers.md` を参照。本ファイルは
 **security 固有フィールド** (usable_security / threat_model / aux post-check 連携) の正本。
+`audit_result` は共通必須フィールドのため `post-check-markers.md (>=2)` が canonical (本ファイルは pointer のみ)。
 
 PR comment / bash gh HEREDOC 形式の実テンプレートは `skills/_shared/pr-templates.md` の
 「op-run: Security Post-check Result」節を参照する。
@@ -45,7 +54,7 @@ PR comment / bash gh HEREDOC 形式の実テンプレートは `skills/_shared/p
 | 概念 | 正本 |
 |---|---|
 | marker 名 / owner / consumer / 基本 meaning | `skills/_shared/markers/labels-and-markers.md` |
-| 共通 post-check metadata block | `skills/_shared/markers/post-check-markers.md` |
+| 共通 post-check metadata block (`audit_result` canonical schema 含む) | `skills/_shared/markers/post-check-markers.md (>=2)` |
 | security-expert の post-check 8 観点 / threat_model / usable_security 方法論 | `skills/expert-security/SKILL.md` および `skills/expert-security/references/post-check-policy.md` / `report-schema.md` |
 | op-merge gate 14〜18 (security 影響 PR の post-check 通過判定) | `skills/op-merge/SKILL.md` |
 | op-run フェーズ 3.5-B (apply 後 security post-check spawn) | `skills/op-run/SKILL.md` |
@@ -97,11 +106,15 @@ aux_post_check_status: not_required | required_pending | pass | block | skipped 
 `post_check_expert` / `post_check_result` / `post_checked_head_sha` / `post_check_round` の semantics は
 `skills/_shared/markers/post-check-markers.md` を参照。本ファイルでは **security 固有値** のみ追加で説明する。
 
-### header 系フィールド
+### Security 固有 header フィールド
+
+> **`audit_result` の canonical schema は `skills/_shared/markers/post-check-markers.md (>=2)` を参照。**
+> 本ファイルは security 固有フィールドのみを canonical 定義し、`audit_result` は共通必須フィールドのため
+> `post-check-markers.md` が正本 (ここでは参照のみ)。
 
 | フィールド | 型 | 必須 | 説明 |
 |---|---|---|---|
-| `audit_result` | enum | ✓ | `PASS` / `PASS_WITH_NOTES` / `BLOCK` (UPPER CASE)。`post_check_result` (lower_case) と意味的に整合させる |
+| `audit_result` | enum | ✓ | 共通必須フィールド。canonical schema は `post-check-markers.md (>=2)` 参照。security でも `PASS` / `PASS_WITH_NOTES` / `BLOCK` (UPPER CASE) を使用 |
 | `audited_at` | string | ✓ | ISO8601 (判定確定時刻) |
 | `auditor` | string | ✓ | 必ず `security-expert` |
 | `blocking_count` | integer | ✓ | `BLOCK` 時の Required Changes 件数 (0 なら 0) |
@@ -109,15 +122,13 @@ aux_post_check_status: not_required | required_pending | pass | block | skipped 
 
 ### `audit_result` ↔ `post_check_result` の対応
 
-| `audit_result` | `post_check_result` |
-|---|---|
-| `PASS` | `pass` |
-| `PASS_WITH_NOTES` | `pass_with_notes` |
-| `BLOCK` | `block` |
-| (NEEDS_HUMAN_DECISION 表記は本文側のみ) | `needs_human_decision` |
+`audit_result` と `post_check_result` の許容対応表 (canonical) および矛盾 marker 検出ルールは
+**`skills/_shared/markers/post-check-markers.md (>=2)`** を参照 (本ファイルは pointer のみ)。
 
-`post_check_result == needs_human_decision` の場合、`audit_result` は `BLOCK` を入れ、判定本文 +
-`needs_human_decision` YAML block で人間判断要素を構造化する (詳細は `invocation-mode.md`)。
+security domain 固有の補足:
+- `BLOCK` ↔ `needs_human_decision` の組は security domain のみ許可 (許容対応表参照)。
+- `post_check_result == needs_human_decision` の場合、`audit_result` は `BLOCK` を入れ、判定本文 +
+  `needs_human_decision` YAML block で人間判断要素を構造化する (詳細は `invocation-mode.md`)。
 
 ---
 
@@ -271,6 +282,15 @@ Issue 本文の hidden marker block 内に、`op-domain == security` の Issue �
 
 `op-tools/crates/op-core/tests/prose_examples.rs` が parse + lint clean を assert する canonical。
 Rust struct schema 変更時に同期する (silent fork 防止、ADR-0003)。
+
+> **注 (prose 2-tag vs example 1-tag)**: runtime の canonical 出力は「出力構造」節の通り
+> `<!-- op-security-post-check -->` 直後に `<!-- op-post-check-meta -->` を並べる **2 marker 併記**
+> である (共通 meta block の正本と単体 example は `post-check-markers.md (>=2)` 参照)。
+> 本 example がドメイン marker 1 tag のみなのは意図的: 抽出 harness
+> (`op-core/src/schema_check/prose_example.rs` の `extract_yaml_blocks`) は `<!--` で始まる行で
+> YAML block を打ち切るため、ここに meta tag 行を挿入すると example が空 block 化して
+> `prose_examples.rs` の assert が fail する。2-tag の literal fixture 化は Rust 側 extractor の
+> 変更が必要 (marker 契約自体は 2-tag 併記のまま不変)。
 
 <!-- op-security-post-check -->
 audit_result: PASS

@@ -1,7 +1,16 @@
 <!--
 schema_version: 3
 last_breaking_change: 2026-05-31
-notes: v3 additive (2026-07-23, ADR-0027 第六波 6b): §4-2-pre の review_round 導出を PR コメント走査 (awk) から
+notes: v3 additive (2026-07-29, Wave A3 F07/G4): §4-1-b smoke test (dev-time 検証) の本体を本文から
+       ファイル末尾「付録: 4-1-b smoke test (dev-time)」へ移動 (削除ではなく退避、内容 byte 保全)。
+       本文側は 3 行の pointer に圧縮。また重複していた 2 つ目の「4-2-pre」見出し
+       (terminal blocked の表現方法) を「4-2-pre-blocked」に改名し一意化 (参照追従:
+       review-fix-loop.md §4.5-1)。挙動・contract 不変のため schema_version 据置。
+       v3 additive (2026-07-29, Wave A2 F01/F14): §4-2-pre の REVIEW_TERMINAL gate fence を
+       「唯一の実装 (正本)」と明示宣言 (review-fix-loop.md §4.5-4 の複製 fence は pointer 化して削除)。
+       §4-1-b の CUMULATIVE_NONDOC 判定式コメントを「本 fence = op-run 内実装正本」に整理し
+       手動同期約束 (「変更時は両方更新」) を撤去。挙動・contract 不変のため schema_version 据置。
+       v3 additive (2026-07-23, ADR-0027 第六波 6b): §4-2-pre の review_round 導出を PR コメント走査 (awk) から
        `op review state pull` + jq (`[.details.state.attempts[].review_round] | max // 0`) へ全面置換。
        §4-2-b の approve/non-approve 両 path に state push (attempt payload) を配線。trusted-author 集合
        (§4-2-pre `TRUSTED_REVIEW_AUTHORS`) は「comment 監査ログの人間向け表示用として残るが機械判定には
@@ -306,10 +315,11 @@ else
   # investigate (lens-audit) phase のみ sonnet に下げる (verify/gate/backstop は opus 維持、lens floor も不変)。
   # REVIEW_MODEL は opus のまま据置 = escape hatch (model_overrides.review-expert: opus) 互換を壊さない。
   # §4-2-a-pre が本フラグを見て REVIEW_INVESTIGATE_MODEL のみ分岐する。
-  # 非doc=0 は cumulative diff (origin/OP_RUN_BASE_REF...HEAD、§4.5-5 #717 と同一の CUMULATIVE_NONDOC 算出) で測る。
-  # doc-only 判定式の正本は model-selection.md §7.1.3。review-fix-loop.md §4.5-5 にも同式が存在する
-  # (drift 防止: 変更時は両方更新すること)。
-  # op-tools/crates/** にマッチした時点で非 doc 扱い (conservative、コメントのみ変更でも .rs touch なら opus 維持)。
+  # 非doc=0 は cumulative diff (origin/OP_RUN_BASE_REF...HEAD) で測る。
+  # doc-only 判定式 (grep filter) の spec 正本は model-selection.md §7.1.3、**op-run 内の実装正本は本 fence**。
+  # review-fix-loop.md §4.5-5 (#717) は本註への pointer + diff 端点 (PR head SHA + safe-degrade) のみ差分を持つ。
+  # doc-only = .md / docs/ のみ。op-tools/crates/** にマッチした時点で非 doc 扱い (#719 残論点1 の
+  # conservative 解: コメントのみ変更でも .rs touch なら opus 維持し、誤判定で sensitive を緩めない)。
   CUMULATIVE_NONDOC=$(git -C "${REVIEW_WT}" diff --name-only "origin/${OP_RUN_BASE_REF}...HEAD" \
     | grep -Ev '(\.md$|(^|/)docs/)' | wc -l | tr -d ' ')
   printf '%s' "$CUMULATIVE_NONDOC" | grep -Eq '^[0-9]+$' || CUMULATIVE_NONDOC=1
@@ -338,78 +348,11 @@ export SENSITIVE_INVESTIGATE_SONNET="${SENSITIVE_INVESTIGATE_SONNET:-0}"
 > `op-tools/crates/**` が sensitive glob に該当するため、canonical 正本を変更する PR の review は
 > 常に Opus 維持になる (意図的。canonical 変更を Sonnet で review しない設計)。
 
-#### 4-1-b smoke test (`SENSITIVE_PATTERNS` の §7.1.3 網羅性検証)
+#### 4-1-b smoke test (dev-time 検証、付録参照)
 
-`SENSITIVE_PATTERNS` が `model-selection.md` (>=4) §7.1.3 の全 sensitive カテゴリを漏れなく
-カバーすること (= sensitive PR は確実に Opus 維持されること) を確認する smoke test。
-regex を変更したら、または §7.1.3 に glob を追加したら本 test を再実行する。
-**全 sensitive path が match=1 (Opus)、全 non-sensitive path が match=0 (Sonnet 候補) なら PASS**。
-
-```bash
-# 4-1-b smoke test: §7.1.3 全カテゴリが Opus 判定になることを検証する
-# 不変則 3 (single-quote): regex / path 配列は single-quote で word-splitting / glob 展開を防ぐ。
-SENSITIVE_PATTERNS='(^|/)(migrations|auth|authentication|authorization|security|crypto|iam|capabilities|permissions|release|installer|updater|secrets)/|\.sql$|\.prisma$|(^|/)schema\.[^/]+$|(^|/)tauri\.conf\.json$|(^|/)scripts/release|(^|/)\.github/workflows/|^skills/_shared/|^agents/[^/]*\.md$|^op-tools/crates/|(^|/)LICENSE|(^|/)COPYRIGHT|(^|/)NOTICE|(^|/)\.env|(^|/)Cargo\.toml$|(^|/)package\.json$|(^|/)pubspec\.yaml$|(^|/)Cargo\.lock$|(^|/)VERSION$'
-
-# 不変則 4: 配列は使用前に初期化する
-SENSITIVE_CASES=()
-SENSITIVE_CASES=(
-  'release/build.rs'              # top-level release/ (旧 regex 取りこぼし)
-  'installer/setup.nsi'           # top-level installer/ (旧 regex 取りこぼし)
-  'updater/check.rs'              # top-level updater/ (旧 regex 取りこぼし)
-  'scripts/release.sh'            # top-level scripts/release* (旧 regex 取りこぼし)
-  'src/authentication/oidc.rs'    # authentication/ (旧 regex 取りこぼし)
-  'src/authorization/policy.rs'   # authorization/ (旧 regex 取りこぼし)
-  'src/crypto/aes.rs'             # crypto/ (旧 regex 取りこぼし)
-  'src/permissions/grant.rs'      # permissions/ (旧 regex 取りこぼし)
-  'secrets/keys.txt'              # secrets/ (旧 regex 取りこぼし)
-  'prisma/schema.prisma'          # *.prisma (旧 regex 取りこぼし)
-  'config/schema.json'            # schema.* (旧 regex 取りこぼし)
-  'vendor/foo/COPYRIGHT'          # COPYRIGHT (旧 regex 取りこぼし)
-  'vendor/foo/NOTICE'             # NOTICE (旧 regex 取りこぼし)
-  'src/auth/login.rs'             # auth/ (既存カバー)
-  'src/security/sanitize.rs'      # security/ (既存カバー)
-  'src/iam/role.rs'               # iam/ (既存カバー)
-  'src-tauri/capabilities/default.json' # capabilities/ (既存カバー)
-  'src-tauri/tauri.conf.json'     # tauri.conf.json (既存カバー)
-  'db/migrations/001_init.sql'    # migrations/ + *.sql (既存カバー)
-  'LICENSE-MIT'                   # LICENSE* (既存カバー)
-  '.env.production'               # .env* (既存カバー)
-  'skills/_shared/model-selection.md'   # canonical (既存カバー)
-  'agents/refactor-expert.md'     # agents/*.md (既存カバー)
-  'op-tools/crates/op/src/main.rs'      # op-tools/crates (既存カバー)
-  '.github/workflows/ci.yml'      # workflows (既存カバー)
-  'Cargo.toml'                    # version manifest (#721/#682 item4)
-  'crates/op/Cargo.toml'          # ネスト Cargo.toml (#721)
-  'package.json'                  # version manifest (#721)
-  'frontend/package.json'         # ネスト package.json (#721)
-  'pubspec.yaml'                  # Flutter version manifest (#721)
-  'Cargo.lock'                    # lockfile も version 整合の手掛り (#721)
-  'VERSION'                       # 単独 VERSION ファイル (#721)
-)
-NONSENSITIVE_CASES=()
-NONSENSITIVE_CASES=(
-  'src/foo.rs'                    # 通常 source
-  'README.md'                     # docs typo 修正等
-  'lib/schema_helpers.rs'         # "schema" 部分一致だが schema.<ext> ではない → 非該当
-  'docs/release-process.md'       # "release" 部分一致だが scripts/release でも /release/ でもない
-  'src/preauth.rs'                # "auth" 部分一致だが auth/ segment ではない
-  'src/version.rs'                # "VERSION" 部分一致だが VERSION ファイルではない → 非該当
-  'docs/package.json.md'          # "package.json" 部分一致だが filename 末尾ではない → 非該当
-)
-
-SMOKE_FAIL=0
-for p in "${SENSITIVE_CASES[@]}"; do
-  printf '%s\n' "$p" | grep -qE "$SENSITIVE_PATTERNS" \
-    && echo "OK  sensitive→Opus    : $p" \
-    || { echo "FAIL sensitive取りこぼし: $p"; SMOKE_FAIL=1; }
-done
-for p in "${NONSENSITIVE_CASES[@]}"; do
-  printf '%s\n' "$p" | grep -qE "$SENSITIVE_PATTERNS" \
-    && { echo "FAIL 非sensitive誤Opus  : $p"; SMOKE_FAIL=1; } \
-    || echo "OK  non-sensitive→Sonnet候補: $p"
-done
-[ "$SMOKE_FAIL" -eq 0 ] && echo "SMOKE PASS: §7.1.3 全カテゴリ網羅" || echo "SMOKE FAIL"
-```
+`SENSITIVE_PATTERNS` regex を変更したら、または §7.1.3 に sensitive glob を追加したら、
+本ファイル末尾「付録: 4-1-b smoke test (dev-time)」の smoke test を再実行して網羅性を検証する
+(test ケース定義・検証ループは付録に集約。op-run の通常 runtime 実行では走らない保守時専用手順)。
 
 ### 4-2. review-expert を別 context で spawn (post_check 結果に応じてモード分岐)
 
@@ -457,6 +400,10 @@ review-expert は spawn prompt 経由で渡された `review_round` を `<!-- op
 `review_round` フィールドに転写する (監査ログ用)。司令官は spawn 前に state 文書から前回 round を取得し、
 インクリメントした値を prompt に渡す。テンプレ側で round を固定値として持たない (1 固定だと修正ループで毎回
 round 1 が記録されてしまう問題を防ぐ)。
+
+> **本 fence が REVIEW_ROUND 算出 + REVIEW_TERMINAL gate の唯一の実装 (正本)**。
+> フェーズ4.5-4 (Review Fix Loop、`review-fix-loop.md` §4.5-4 step 6) の再 review 前 gate も
+> 本 fence をそのまま再実行する (呼び出し側に複製を置かない)。
 
 ```bash
 # === review_round の取得 (ADR-0027 6b: state 文書ベース) ===
@@ -588,7 +535,7 @@ terminal state は **制御フロー**として扱い、当該 PR の 4-2 以降
 司令官は 4-2 以降 (review-expert の Agent spawn) を絶対に実行してはならない。
 これは review-expert に「自分の判定で blocked にされる前提の round」を渡さないための物理的 gate でもある。
 
-#### 4-2-pre. terminal blocked の表現方法 (canonical schema を偽造しない)
+#### 4-2-pre-blocked. terminal blocked の表現方法 (canonical schema を偽造しない)
 
 Review Fix Loop 上限超過時、op-run は **canonical `<!-- op-review-meta -->` を偽造しない**。
 review-expert が出していない判定を canonical schema として PR に残すと、op-merge gate /
@@ -1064,3 +1011,76 @@ review approve label delta を内部で atomic 適用するため `apply_review_
 > Issue #406 Stage 1 で物理切り出し済み。lens-modular (ADR-0011) で label 呼び出しを §4-2-b に統合。
 
 ---
+
+## 付録: 4-1-b smoke test (dev-time)
+
+§4-1-b の `SENSITIVE_PATTERNS` が `model-selection.md` (>=4) §7.1.3 の全 sensitive カテゴリを漏れなく
+カバーすること (= sensitive PR は確実に Opus 維持されること) を確認する smoke test。
+**runtime 手順ではない** — regex を変更したら、または §7.1.3 に glob を追加したら再実行する dev-time 検証。
+**全 sensitive path が match=1 (Opus)、全 non-sensitive path が match=0 (Sonnet 候補) なら PASS**。
+
+```bash
+# 4-1-b smoke test: §7.1.3 全カテゴリが Opus 判定になることを検証する
+# 不変則 3 (single-quote): regex / path 配列は single-quote で word-splitting / glob 展開を防ぐ。
+SENSITIVE_PATTERNS='(^|/)(migrations|auth|authentication|authorization|security|crypto|iam|capabilities|permissions|release|installer|updater|secrets)/|\.sql$|\.prisma$|(^|/)schema\.[^/]+$|(^|/)tauri\.conf\.json$|(^|/)scripts/release|(^|/)\.github/workflows/|^skills/_shared/|^agents/[^/]*\.md$|^op-tools/crates/|(^|/)LICENSE|(^|/)COPYRIGHT|(^|/)NOTICE|(^|/)\.env|(^|/)Cargo\.toml$|(^|/)package\.json$|(^|/)pubspec\.yaml$|(^|/)Cargo\.lock$|(^|/)VERSION$'
+
+# 不変則 4: 配列は使用前に初期化する
+SENSITIVE_CASES=()
+SENSITIVE_CASES=(
+  'release/build.rs'              # top-level release/ (旧 regex 取りこぼし)
+  'installer/setup.nsi'           # top-level installer/ (旧 regex 取りこぼし)
+  'updater/check.rs'              # top-level updater/ (旧 regex 取りこぼし)
+  'scripts/release.sh'            # top-level scripts/release* (旧 regex 取りこぼし)
+  'src/authentication/oidc.rs'    # authentication/ (旧 regex 取りこぼし)
+  'src/authorization/policy.rs'   # authorization/ (旧 regex 取りこぼし)
+  'src/crypto/aes.rs'             # crypto/ (旧 regex 取りこぼし)
+  'src/permissions/grant.rs'      # permissions/ (旧 regex 取りこぼし)
+  'secrets/keys.txt'              # secrets/ (旧 regex 取りこぼし)
+  'prisma/schema.prisma'          # *.prisma (旧 regex 取りこぼし)
+  'config/schema.json'            # schema.* (旧 regex 取りこぼし)
+  'vendor/foo/COPYRIGHT'          # COPYRIGHT (旧 regex 取りこぼし)
+  'vendor/foo/NOTICE'             # NOTICE (旧 regex 取りこぼし)
+  'src/auth/login.rs'             # auth/ (既存カバー)
+  'src/security/sanitize.rs'      # security/ (既存カバー)
+  'src/iam/role.rs'               # iam/ (既存カバー)
+  'src-tauri/capabilities/default.json' # capabilities/ (既存カバー)
+  'src-tauri/tauri.conf.json'     # tauri.conf.json (既存カバー)
+  'db/migrations/001_init.sql'    # migrations/ + *.sql (既存カバー)
+  'LICENSE-MIT'                   # LICENSE* (既存カバー)
+  '.env.production'               # .env* (既存カバー)
+  'skills/_shared/model-selection.md'   # canonical (既存カバー)
+  'agents/refactor-expert.md'     # agents/*.md (既存カバー)
+  'op-tools/crates/op/src/main.rs'      # op-tools/crates (既存カバー)
+  '.github/workflows/ci.yml'      # workflows (既存カバー)
+  'Cargo.toml'                    # version manifest (#721/#682 item4)
+  'crates/op/Cargo.toml'          # ネスト Cargo.toml (#721)
+  'package.json'                  # version manifest (#721)
+  'frontend/package.json'         # ネスト package.json (#721)
+  'pubspec.yaml'                  # Flutter version manifest (#721)
+  'Cargo.lock'                    # lockfile も version 整合の手掛り (#721)
+  'VERSION'                       # 単独 VERSION ファイル (#721)
+)
+NONSENSITIVE_CASES=()
+NONSENSITIVE_CASES=(
+  'src/foo.rs'                    # 通常 source
+  'README.md'                     # docs typo 修正等
+  'lib/schema_helpers.rs'         # "schema" 部分一致だが schema.<ext> ではない → 非該当
+  'docs/release-process.md'       # "release" 部分一致だが scripts/release でも /release/ でもない
+  'src/preauth.rs'                # "auth" 部分一致だが auth/ segment ではない
+  'src/version.rs'                # "VERSION" 部分一致だが VERSION ファイルではない → 非該当
+  'docs/package.json.md'          # "package.json" 部分一致だが filename 末尾ではない → 非該当
+)
+
+SMOKE_FAIL=0
+for p in "${SENSITIVE_CASES[@]}"; do
+  printf '%s\n' "$p" | grep -qE "$SENSITIVE_PATTERNS" \
+    && echo "OK  sensitive→Opus    : $p" \
+    || { echo "FAIL sensitive取りこぼし: $p"; SMOKE_FAIL=1; }
+done
+for p in "${NONSENSITIVE_CASES[@]}"; do
+  printf '%s\n' "$p" | grep -qE "$SENSITIVE_PATTERNS" \
+    && { echo "FAIL 非sensitive誤Opus  : $p"; SMOKE_FAIL=1; } \
+    || echo "OK  non-sensitive→Sonnet候補: $p"
+done
+[ "$SMOKE_FAIL" -eq 0 ] && echo "SMOKE PASS: §7.1.3 全カテゴリ網羅" || echo "SMOKE FAIL"
+```

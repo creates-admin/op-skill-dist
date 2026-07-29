@@ -14,7 +14,11 @@ notes: v1 (2026-06-21) 初版。ADR-0006 (op-cleanup skill 新設) に基づく�
        op-sweep (ADR-0003) と補完関係にある two-tier 設計。
        Tier1 は機械判定 housekeeping mutation (op-sweep 同様の例外)。
        Tier2 は人間 gate を必須とし不変則 7 normal 遵守 (新たな例外を作らない)。
-       op-tools primitive (op cleanup *-candidates) は別 Issue で段階実装予定。
+       op-tools primitive (op cleanup worktree-candidates / worktree / pr-candidates /
+       issue-candidates) は #781/#782 で実装済み (`op-tools/crates/op/src/commands/cleanup.rs`、
+       main.rs 配線済み)。ただし本 SKILL.md の bash fence を primitive 呼び出しへ全面置換する
+       作業は不変則9 の wave 管理に従い別 PR で行う (現状 bash fence はそのまま残置、下記
+       各フェーズの callout で実コマンドを注記するに留める)。
 -->
 
 <!--
@@ -119,6 +123,8 @@ worktree ライフサイクル (失敗隔離 path の定義・パス規則・tas
 |---------|------|--------------|
 | `skills/_shared/worktree-ops.md` | worktree ライフサイクル / 失敗隔離 path の正本 | `(>=2)` |
 | `skills/_shared/runtime-contract.md` | runtime spawn 境界 / merge-blocking state | `(>=2)` |
+| `skills/_shared/common-setup.md` | フェーズ0 git/gh env check 標準手順の正本 | `(>=3)` |
+| `skills/_shared/github-channel.md` | Cloud (`OP_GITHUB_CHANNEL=mcp`) 時の gh 操作 channel 判定 | — |
 | `skills/_shared/version-check.md` | schema_version pin チェック手順 | `(>=3)` |
 | `docs/adr/0003-op-sweep-skill.md` | op-sweep 設計判断 / 不変則 7 例外宣言の前例 | — |
 | `docs/adr/0006-op-cleanup-skill.md` | op-cleanup 設計判断 / two-tier 責務分離 (Accepted) | — |
@@ -131,23 +137,27 @@ worktree ライフサイクル (失敗隔離 path の定義・パス規則・tas
 
 ## フェーズ0: 環境確認
 
+git/gh の基本 check (git repo 判定 + `gh auth status`) は
+`skills/_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」節を参照する
+(本節には再定義しない、Single Canonical Source Rule)。op-cleanup 固有の gh auth なし時挙動は
+同節の差分表に未掲載のため、以下に明記する: **gh auth なしでも Tier1 は続行可** (worktree/残骸は
+git/gh 不要な fs 操作のため)。gh auth 不在時は Tier2 (PR/Issue 候補列挙) のみをスキップする。
+
+Cloud 環境の gh 操作 (Tier2 の PR/Issue 列挙 / close) は `skills/_shared/github-channel.md`
+(`OP_GITHUB_CHANNEL`) の channel 判定に従う。
+
+本 skill 固有の追加 check:
+
 ```
-1. gh 認証状態確認
-   $ gh auth status
-   → エラーの場合は中断して認証を促す
-
-2. git 状態確認
-   $ git status
-   → uncommitted changes がある場合は warning を表示 (cleanup 対象は別資産なので続行可)
-
-3. git remote 確認
+1. git remote 確認
    $ git remote -v
    → origin が設定されていない場合は Tier2 (PR/Issue) をスキップする旨を表示
 
-4. repo 名の確認 (失敗 worktree パスの <repo-name> 解決)
+2. repo 名の確認 (失敗 worktree パスの <repo-name> 解決)
    $ basename $(git rev-parse --show-toplevel)
+   → uncommitted changes がある場合は warning を表示 (cleanup 対象は別資産なので続行可)
 
-5. _shared/*.md schema_version チェック (version-check.md >=3 に従う)
+3. _shared/*.md schema_version チェック (version-check.md >=3 に従う)
    → 参照ドキュメント節の (>=N) 条件を Read で確認、mismatch は warning 表示
 ```
 
@@ -158,8 +168,9 @@ worktree ライフサイクル (失敗隔離 path の定義・パス規則・tas
 ### Tier1 (失敗 worktree / 残骸) — read-only
 
 ```bash
-# op-tools primitive (op cleanup worktree-candidates) で候補を取得 (別 Issue で実装予定)
-# primitive 未実装時は bash 代替:
+# op-tools primitive `op cleanup worktree-candidates --older-than <N> --json` は実装済み
+# (`op-tools/crates/op/src/commands/cleanup.rs`、#781)。SKILL.md の bash fence → primitive
+# 呼び出しへの全面置換は別 PR (不変則9 wave 管理)。以下は現行の bash 代替:
 
 REPO=$(basename "$(git rev-parse --show-toplevel)")
 FAILED_DIR="${HOME}/cwork/worktrees-failed/${REPO}"
@@ -180,15 +191,17 @@ else
 fi
 ```
 
-> op-tools primitive `op cleanup worktree-candidates` が実装された後は、
-> そちらを優先して使用する (op-sweep が `op branch sweep-candidates` を使うのと同型)。
+> op-tools primitive `op cleanup worktree-candidates` は実装済み (op-sweep が
+> `op branch sweep-candidates` を使うのと同型の read-only primitive)。SKILL.md の主経路を
+> primitive 呼び出しへ切り替える書き換えは別 PR で行う (不変則9)。
 
 ### Tier2 (stale PR / stale auto-report Issue) — read-only
 
 ```bash
-# stale PR 候補: auto/* ブランチが head の open PR のうち、
-#   - reviewed_head_sha と現在の head SHA が乖離しているもの
-#   - updatedAt が古いもの (--older-than 閾値を超えるもの)
+# stale PR 候補: auto/* ブランチが head の open PR を label で絞り込んで列挙する。
+# 注意 (`op cleanup pr-candidates --help` より): --stale-days は候補理由ラベルに
+# 反映するだけで、閾値によるフィルタリングにはまだ使われない (age 採点は follow-up)。
+# 閾値判定 (updatedAt が古いかどうか) は候補一覧を見た controller / 人間が行う。
 OLDER_DATE=$(date -d "-${OLDER_THAN:-7} days" +%Y-%m-%d 2>/dev/null \
              || date -v "-${OLDER_THAN:-7}d" +%Y-%m-%d)
 
@@ -199,7 +212,7 @@ gh pr list --state open --json number,title,headRefName,updatedAt,url \
 
 ```bash
 # stale auto-report Issue 候補: op-source: op-scan / op-patrol / op-report 由来の
-#   open Issue で、updatedAt が閾値より古いもの
+#   open Issue を label で列挙する (age フィルタは上記と同様、controller/人間が候補一覧に対して判定する)。
 gh issue list --state open \
   --label "op-source" \
   --json number,title,updatedAt,url \
@@ -207,7 +220,11 @@ gh issue list --state open \
 ```
 
 > Tier2 は候補を **表示するだけ**。close コマンドは実行しない。
-> `op cleanup pr-candidates` / `op cleanup issue-candidates` primitive は別 Issue で実装予定。
+> `op cleanup pr-candidates` / `op cleanup issue-candidates` primitive は実装済み (#782、read-only
+> のみ・close はしない設計)。両 `--help` が明記する通り、現状は「指定 label の open PR/Issue を
+> 列挙する」最小実装で staleness の閾値判定はまだ行わない (`--stale-days` は理由ラベル表示のみ)。
+> 閾値フィルタの primitive 化は B1 (op-tools 側 Issue 案) として別トラック。
+> SKILL.md の主経路を primitive 呼び出しへ切り替える書き換えは別 PR (不変則9)。
 
 ---
 
@@ -254,8 +271,10 @@ gh issue list --state open \
 ```
 
 ```bash
-# op-tools primitive (op cleanup worktree) が実装された後はそちらを使用。
-# 暫定 bash 代替:
+# op-tools primitive `op cleanup worktree --older-than <N> --apply --json` は実装済み
+# (`op-tools/crates/op/src/commands/cleanup.rs::Worktree { apply, .. }`、#781。
+# 単一 apply flag であり "op cleanup worktree-apply" という別コマンドは存在しない)。
+# SKILL.md の主経路を primitive 呼び出しへ切り替える書き換えは別 PR (不変則9)。以下は現行の bash 代替:
 
 REPO=$(basename "$(git rev-parse --show-toplevel)")
 FAILED_DIR="${HOME}/cwork/worktrees-failed/${REPO}"
@@ -381,23 +400,27 @@ Tier2 stale auto-report Issue 候補: L 件
 
 ---
 
-## op-tools primitive 化 (別 Issue で段階実装)
+## op-tools primitive 化 (実装済み、SKILL.md 全面 CLI 化は別 PR)
 
-ADR-0006 に従い、以下の read-only primitive を op-tools に外出しする (本 skill の bash 代替を置換する):
+ADR-0006 に従い、以下の read-only primitive を op-tools に外出しした
+(`op-tools/crates/op/src/commands/cleanup.rs`、`main.rs` の `Commands::Cleanup` に配線済み):
 
 | primitive | 用途 | 状態 |
 |-----------|------|------|
-| `op cleanup worktree-candidates` | 失敗 worktree の候補列挙 (read-only) | 別 Issue で実装予定 |
-| `op cleanup worktree-apply` | 失敗 worktree の機械削除 (Tier1 apply) | 別 Issue で実装予定 |
-| `op cleanup pr-candidates` | stale PR の候補列挙 (read-only) | 別 Issue で実装予定 |
-| `op cleanup issue-candidates` | stale auto-report Issue の候補列挙 (read-only) | 別 Issue で実装予定 |
+| `op cleanup worktree-candidates` | 失敗 worktree の候補列挙 (read-only) | **実装済み** (#781) |
+| `op cleanup worktree --apply` | 失敗 worktree の機械削除 (Tier1 apply、単一 subcommand の flag) | **実装済み** (#781) |
+| `op cleanup pr-candidates` | stale PR の候補列挙 (read-only) | **実装済み** (#782) |
+| `op cleanup issue-candidates` | stale auto-report Issue の候補列挙 (read-only) | **実装済み** (#782) |
 
 > apply primitive は Tier1 (worktree 削除) のみ。Tier2 の close は人間承認後に
 > `gh pr close` / `gh issue close` の既存コマンドを使う (op-cleanup 専用 apply primitive を作らない
-> = 機械 close を構造的に防ぐ)。
+> = 機械 close を構造的に防ぐ)。primitive 自体も candidates 系は close を一切実行しない read-only
+> 実装であることを確認済み。
 >
-> op-tools primitive が実装された後は本 SKILL.md の bash フェンスを CLI 化する
-> (`op-tools/docs/implementation-order.md` の wave に従う)。
+> **primitive は実装済みだが、本 SKILL.md 上記フェーズ1/3a の bash フェンスはまだ主経路として
+> 残っている** (CLAUDE.md 不変則9: 「1 PR = 1 OP skill 全面書き換え」に従い、部分書き換えを避けるため)。
+> SKILL.md を primitive 呼び出しへ全面書き換えるかどうかは `op-tools/docs/implementation-order.md`
+> の wave trigger 表で本 skill の書き換え可否を確認したうえで、別 PR で一括対応する。
 
 ---
 

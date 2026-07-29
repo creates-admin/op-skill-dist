@@ -263,7 +263,7 @@ Agent({
 詳細仕様は `workflows/op-explore-render.js` の冒頭コメントと ADR-0013 決定H/決定I。
 
 ```javascript
-const render = Workflow({
+const renderRaw = Workflow({
   name: 'op-explore-render',
   args: {
     session_id: SESSION_ID,
@@ -276,8 +276,11 @@ const render = Workflow({
     models: { generate: 'opus', judge: 'opus' },  // 決定K: 全役 Opus
   },
 })
-// = { ok, patterns:[{ pattern_id, constraint_set, html_path, craft_notes, states_covered }], decision_matrix:{ dimensions[], per_pattern[], craft_distance, judge_not_judging }, dropped, mode_collapse }
+const render = renderRaw.result ?? renderRaw;  // chat-controller は `.result` にラップ (_shared/workflow-calling.md §2)
+// = { ok, patterns:[{ pattern_id, constraint_set, html, craft_notes, states_covered }], decision_matrix:{ dimensions[], per_pattern[], craft_distance, judge_not_judging }, dropped, mode_collapse }
 ```
+
+呼び出し規約 (preflight / `.result.*` unwrap / args 渡し) は `_shared/workflow-calling.md` に従う。
 
 - workflow は `.playground/<id>/pattern-*.html` を生成できない (fs 不可) ため、**生成 agent が返す HTML 本文を controller が
   `.playground/<id>/` に Write する** (workflow は HTML 本文と decision-matrix を返すだけ)。

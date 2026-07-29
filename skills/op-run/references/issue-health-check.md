@@ -21,8 +21,8 @@ notes: v1.1 相当 (2026-07-23, ADR-0024 Phase 3 第五波 5a): 1.5-3 の `op is
          派生 Issue 取り込み手順を SKILL.md 本体と byte-identical のまま分離する。
 注意点: 本ファイルの bash 実装・判定 grep パターン・モード分岐を変更するときは、必ず SKILL.md 本体の
        フェーズ1-1 (Issue 取得) / フェーズ1-2 (クラスタリング) との接続点と整合を確認する。
-       --no-wait-normalize / --auto / --auto --normalize の挙動表は op-scan/SKILL.md と
-       _shared/labels-and-markers.md の `derived-from-issue` / `requires-normalization` /
+       --no-wait-normalize / --auto / --auto --normalize の挙動表は op-scan (references/from-issue-mode.md) と
+       _shared/markers/labels-and-markers.md の `derived-from-issue` / `requires-normalization` /
        `needs-clarification` ラベル契約と一致する必要がある。
        Stage 3-6 (global-review-spawn / review-fix-loop / expert-resolution) は別 PR
        (Issue #425 proposed_stages 参照)。

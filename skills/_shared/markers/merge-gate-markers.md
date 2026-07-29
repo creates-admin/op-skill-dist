@@ -8,6 +8,9 @@ notes: v1 (2026-05-06) — Marker schema 分割 (followup #20) で `pr-templates
        v2 (2026-05-07) — `reviewed_head_sha` フィールドを必須化。stale override 検出ルールを追加。
        `has_valid_manual_override(target, expected_head_sha)` 10-条件 AND 判定 pseudocode を canonical 化。
        label-only bypass を構造的に拒否する文言に揃えた。
+       v2 末尾 (2026-07-29) — 「gate 適用範囲」表に gate 17 行 (legitimate_workflow_preserved 検証) を
+       additive 追加 (ファイル内で 7 箇所参照されながら表に未定義だった欠落の解消。実体は
+       `op-core::merge::verify` eval_security_gates と `op-merge/SKILL.md` で照合済)。bump なし。
 
 機能概要:
   op-merge gate 12〜13 / 15〜16 / 17 / 18 で UI / security post-check の skip + BLOCK 状態の
@@ -116,6 +119,7 @@ op-merge は以下の **両方** が揃った場合のみ gate を skip する:
 | 13 | UX/UI 影響 PR (post-check `BLOCK`) | BLOCK 判定のまま緊急マージ (再実装よりも即時マージが必要な事情) |
 | 15 | security 影響 PR (`pro-security-post-check-skipped`) | security post-check spawn 失敗等で skip 状態のまま緊急マージ |
 | 16 | security 影響 PR (post-check `BLOCK`) | BLOCK 判定のまま緊急マージ |
+| 17 | security 影響 PR (post-check meta の `legitimate_workflow_preserved` が `true` でない — false / missing / unknown を含む) | 正当な user workflow の保全確認が取れないまま緊急マージ (実装: `op-core::merge::verify` の gate 17 = `legitimate_workflow_preserved == true` 検証。field schema は `security-markers.md`) |
 | 18 | security mitigation の aux post-check skip / BLOCK | aux 系 (UX/UI auxiliary post-check) の skip / BLOCK のまま緊急マージ |
 
 詳細な gate 番号 / 中断条件 / 復旧手順は `skills/op-merge/SKILL.md` の post-check gate 節を参照。

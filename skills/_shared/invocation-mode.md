@@ -1,7 +1,8 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-05-04
-notes: 初版。expert agent の direct human invocation と OP-managed invocation の対話可否を分離し、
+notes: 2026-07-29 追記 — OP-managed 判定条件の trigger skill 列挙を「op-* skill (いずれか)」の包括基準へ書き換え (corrective、version 据置。判別材料・曖昧時 OP-managed 倒しは不変)。
+       初版。expert agent の direct human invocation と OP-managed invocation の対話可否を分離し、
        「質問で止まる責務」と「判断要求を構造化して返す責務」を明確に切り分ける。新標準名は
        `needs_human_decision`。旧 `needs_human_judgment` は deprecated alias として段階移行する。
 -->
@@ -11,7 +12,7 @@ notes: 初版。expert agent の direct human invocation と OP-managed invocati
 /**
  * 機能概要: expert agent が呼ばれた文脈に応じて Direct Mode / OP-managed Mode を判定し、
  *           対話可否・出力契約・「不足情報の扱い方」を切り分ける単一の真実源。
- * 作成意図: OP skill (op-scan / op-patrol / op-doctor / op-run / op-merge / op-architect) 由来の
+ * 作成意図: OP skill (op-* 群のいずれか) 由来の
  *           自動フローで expert が「Issue コメントで質問して停止」する事故を構造的に防ぐ。
  *           人間が expert を直接呼んだ場合の相談役としての使いやすさは保つ。
  * 注意点: 本ドキュメントは expert agent 全員と op-* skill 全員の共通契約。
@@ -39,11 +40,16 @@ expert は spawn された冒頭で必ず mode を判定する。判定材料は
 以下のいずれかを満たす場合は **OP-managed Mode** とする (一つでも該当したら確定)。
 
 - spawn prompt に `invocation_mode: op_managed` が明記されている
-- spawn prompt に `op-scan`, `op-patrol`, `op-doctor`, `op-run`, `op-merge`, `op-architect`
-  由来であることが明記されている
+  (`_shared/spawn-prompt-common.md` §1 で全 OP skill 由来 spawn prompt に必須化済 — これが主判定条件)
+- spawn prompt に **いずれかの `op-*` skill 由来であることが明記されている**。
+  個別 skill 名の網羅列挙は保守しない — **`op-*` skill (いずれか) が自動 spawn したものはすべて
+  OP-managed** と判定する (新設 skill も自動的に対象)。skill 自身の対人モードが
+  「Direct Mode 固定」であること (op-explore / op-rules 等、宣言はその skill 側 SKILL.md が持つ) は
+  例外にならない — Direct Mode 固定なのは skill controller ⟷ 人間の対話であり、
+  その skill が spawn した worker は本条件どおり OP-managed である
 - 入力に hidden marker が含まれる
   - `<!-- op-domain: ... -->`
-  - `<!-- op-source: op-scan | op-patrol | op-run | op-merge | op-architect | op-plan -->`
+  - `<!-- op-source: <op-* skill 名> -->` (enum の正本は `_shared/markers/labels-and-markers.md`)
   - `<!-- op-run-expert: ... -->`
   - `<!-- op-post-check-expert: ... -->`
   - `<!-- op-review-meta -->` / `<!-- op-review-finding -->`

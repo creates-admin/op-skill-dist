@@ -232,6 +232,11 @@ post_check_result: pass
 post_checked_head_sha: 1234567890abcdef1234567890abcdef12345678
 post_check_round: 1
 
+> 注: 以下の `op-run-controller-meta` example は本ファイルの宣言 scope (post-check 共通 schema) 外だが、
+> `op core schema-check` の prose-example lens (`dispatch_post_check_markers`) が本ファイルからも
+> 同 marker の example を抽出・検証するため残置する (削除すると R-PROSE-EXAMPLE-NO-EXAMPLE warn)。
+> marker の本籍 / core semantics は `labels-and-markers.md` の Controller / Run Markers 節。
+
 <!-- op-run-controller-meta -->
 base_ref: main
 base_sha: 1234567890abcdef1234567890abcdef12345678

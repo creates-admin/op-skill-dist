@@ -1,11 +1,19 @@
 <!--
+schema_version: 1
+last_breaking_change: なし
+notes: v1 (2026-07-29): SKILL.md 参照ドキュメント索引への追記 (F10) に伴い、
+       他 reference ファイルと同形式の schema_version header を additive 追加。
+       内容変更なし。
+-->
+
+<!--
 機能概要: op-run フェーズ3.5 で使用する post-check Agent spawn prompt 群を
          SKILL.md 本体から物理切り出しした参照ファイル。
 作成意図: SKILL.md の god file 化解消 (Issue #407)。prompt 文字列の内容は
          SKILL.md 本体と byte-identical のまま維持し、挙動を変えない。
 注意点: 本ファイルの prompt 文言を変更すると post-check 判定が変わる。
         変更時は security-expert / ux-ui-audit-expert の result enum との
-        整合 (_shared/markers/ux-ui-markers.md L146 / security-markers.md) を確認する。
+        整合 (_shared/markers/ux-ui-markers.md「UX/UI 固有 header フィールド」表の `audit_result` 行 / security-markers.md) を確認する。
 -->
 
 <!-- op-domain: refactor -->
@@ -48,7 +56,7 @@ Do not produce free-form question text.
 不足情報・確認すべき観点・再実行条件を書いてください。
 UX/UI post-check の result enum は pass / pass_with_notes / block の 3 値のみで、
 security 専用の human-decision result を返してはいけません
-(canonical schema は `~/.claude/skills/_shared/markers/ux-ui-markers.md` L146 参照)。
+(canonical schema は `~/.claude/skills/_shared/markers/ux-ui-markers.md`「UX/UI 固有 header フィールド」表の `audit_result` 行参照)。
 
 【作業環境】
 - 作業ディレクトリ: <WT_PATH>  ← apply の worktree を再利用 (Read のみ)
@@ -195,7 +203,7 @@ Do not produce free-form question text.
 不足情報・確認すべき観点・再実行条件を書いてください。
 UX/UI post-check の result enum は pass / pass_with_notes / block の 3 値のみで、
 security 専用の human-decision result を返してはいけません
-(canonical schema は `~/.claude/skills/_shared/markers/ux-ui-markers.md` L146 参照)。
+(canonical schema は `~/.claude/skills/_shared/markers/ux-ui-markers.md`「UX/UI 固有 header フィールド」表の `audit_result` 行参照)。
 
 【作業環境】
 - 作業ディレクトリ: <WT_PATH>

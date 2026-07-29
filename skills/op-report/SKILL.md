@@ -74,6 +74,7 @@ controller には 1 行の relay のみを返す薄い委任スキルである�
 | `~/.claude/skills/_shared/issue-enrichment.md` (>=1) §7.5 | lite enrichment (collision gate のみ)。scout 側が実行 |
 | `~/.claude/skills/_shared/dedup-policy.md` | fingerprint 照合・dedup ポリシー |
 | `~/.claude/skills/_shared/expert-spawn.md` (>=1) | needs_human_decision 正規スキーマ |
+| `~/.claude/skills/_shared/spawn-prompt-common.md` (>=1) | spawn prompt 共通必須ブロック (§4 質問禁止 + fallback の正本) |
 | `~/.claude/skills/_shared/github-channel.md` (>=2) | GitHub I/O channel / call-spec protocol (Cloud = mcp channel では scout が call-spec を実行する) |
 
 ---
@@ -263,10 +264,21 @@ expert-scout/SKILL.md に従って以下を実行してください:
 3. 構造化返却スキーマで result を返す
 
 You must not ask interactive questions.
-If information is missing, return it as assumptions[] or needs_human_decision.
+You must not ask the commander or user for clarification.
+Do not write Issue comments asking for clarification unless the OP skill explicitly delegates comment creation to you.
+If information is missing, return one of:
+  - assumptions[]               (前提を置いて続行する)
+  - needs_human_decision        (構造化された判断要求)
+  - blocked_actions[]           (この情報なしで実行しない操作のリスト)
+  - verification_not_run        (検証不能な場合)
+  - manual_review_bucket        (--auto 起票しないが人間レビューには載せる)
+Return the required schema / report format. Do not produce free-form question text.
   `
 })
 ```
+
+> 末尾の質問禁止 + fallback ブロックは `_shared/spawn-prompt-common.md (>=1)` §4 の canonical 全文
+> (独自省略形にしない — 省略すると fallback 経路が worker に伝わらない)。
 
 ### 非対称についての注記
 
@@ -277,10 +289,8 @@ If information is missing, return it as assumptions[] or needs_human_decision.
 
 ### scout を subagent_type に直接渡せる根拠
 
-scout は `active-expert-registry` に登録されていない utility worker だが、
-`agents/scout.md` が存在するため spawn 対象にできる (plugin 実行時の `subagent_type` は
-scoped 名 `op-skill:scout` を渡す。上記テンプレ参照)。
-op-codev が `feature-expert` を直接 subagent_type に渡すのと同じ前例に準じる。
+正本: `_shared/active-expert-registry.md`「Utility Workers」節「直接 spawn の根拠」。
+op-report 固有の点: 呼び出し元は op-report controller のみ。scoped 名は `op-skill:scout` (上記テンプレ参照)。
 
 ---
 

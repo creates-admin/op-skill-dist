@@ -113,11 +113,13 @@ Phase 5 で domain queue 側に提示するか、findings として報告に残�
 選定 feature を `op-spec-patrol-audit` workflow に渡す (Workflow tool):
 
 ```
-Workflow({ name: "op-spec-patrol-audit", args: JSON.stringify({
+Workflow({ name: "op-spec-patrol-audit", args: {
   today: "<YYYY-MM-DD>", run_id: "<run id>",
   features: [{ feature, spec_path, paths:[...], code_scope:[...], status, target_issues:[...] }]  // = Phase 1 選定
-})})
+} })
 ```
+
+args は bare object で渡す (`JSON.stringify` しない、`_shared/workflow-calling.md` §4 が正本)。
 
 workflow は feature ごとに spec-expert を spawn し正本⟷code を 3 者照合 (audit) → High/Critical を skeptic で反証
 (refute、**default=refuted**: spec drift は捏造リスクが本質ゆえ実引用で実証できた時のみ confirmed)。

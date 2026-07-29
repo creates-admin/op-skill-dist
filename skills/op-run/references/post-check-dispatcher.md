@@ -1,4 +1,16 @@
 <!--
+schema_version: 1
+last_breaking_change: なし
+notes: v1 (2026-07-29, Wave A3 F08/F09): §3.5-B-0 Legacy guard を要約圧縮 (発火条件 =
+       registry-verify error / verify 失敗の fail-safe、発火時の legacy skip 動作 6 点は全数保全、挙動不変)。
+       post-check expert の label 直接操作禁止則 (3 箇所同文) を §3.5-W に一本化し、
+       3.5-A-2 / 3.5-B-2 / 3.5-B-4 は 3.5-W への 1 行参照に短縮。契約不変のため schema_version 据置。
+       v1 (2026-07-29): SKILL.md 参照ドキュメント索引への追記 (F10) に伴い、
+       他 reference ファイルと同形式の schema_version header を additive 追加。
+       内容変更なし。
+-->
+
+<!--
 機能概要: op-run フェーズ3.5 の Post-check Dispatcher 全体 (dispatch 判定 / spawn 手順 /
          判定後処理 / skip 分岐 / error 分岐) を SKILL.md 本体から物理切り出した参照ファイル。
 作成意図: SKILL.md の god file 化解消 (Issue #407)。Phase 3.5 の dispatcher 全体をここに集約し、
@@ -45,12 +57,13 @@ match post_check_expert:
   default               → 3.5-E. Default Branch (unknown / unregistered / 他 planned を弾く)
 ```
 
-> **dispatch 判定は controller 保持 (workflow に委譲しない)**:
+> **dispatch 判定は ClusterOrchestrator が実施する (Dynamic Workflow に委譲しない)**:
 > 下記の判定優先 (null skip / active post-check / planned skip / unregistered error) は
-> すべて controller がフェーズ3.5 冒頭で実施する。ClusterOrchestrator に渡るのは
-> **3.5-A / 3.5-B (+ 3.5-B-4 aux) に振り分けられた active post-check 対象 PR のみ**。
-> null skip (3.5-C) / planned skip (3.5-D) / unregistered error (3.5-E) は controller 内で
-> 完結し、ClusterOrchestrator を呼ばない。
+> すべて ClusterOrchestrator がフェーズ5.5 冒頭で本ファイルのロジックに従い実施する
+> (ADR-0016 移管済み。旧「controller がフェーズ3.5 冒頭で実施」は廃止 — op-run/SKILL.md
+> フェーズ3.5 の移管宣言を参照)。**3.5-A / 3.5-B (+ 3.5-B-4 aux) に振り分けられた
+> active post-check のみ spawn に進む**。null skip (3.5-C) / planned skip (3.5-D) /
+> unregistered error (3.5-E) は spawn せずフェーズ5.5 内で完結する。
 
 dispatcher の判定優先 (上から順):
 
@@ -123,6 +136,10 @@ spawn 境界でのみ `op-skill:` を前置する。正本は `_shared/expert-sp
 
 - **apply worktree 再利用**: post-check は read-only 監査のため新規 worktree を作らない。
 - **post-check expert は監査専任**: コードを修正・push しない (exploration-only)。`commits_added: []` が正解。
+- **label 排他制御は controller 専任 (3.5-A-2 / 3.5-B-2 / 3.5-B-4 共通の禁止則)**: 判定確定後の
+  ラベル遷移は、必ず op-run controller が label helper (`apply_ux_post_check_labels` /
+  `apply_security_post_check_labels`、4-3-2 で定義) を呼んで排他制御する。
+  **post-check expert (aux 含む) が直接 `gh pr edit` / label helper を呼ぶことは禁止**。
 
 ### prompt_text の注入 (ClusterOrchestrator の責務、正本は post-check-prompts.md)
 
@@ -149,8 +166,7 @@ spawn は ClusterOrchestrator が担う (cluster-orchestrator-directives.md フ�
 ### 3.5-A-2. 判定に応じた処理 (controller 主語)
 
 op-run controller は、ClusterOrchestrator が post-check expert から受け取る結果から当該 PR の判定結果を確認した後、
-必ず `apply_ux_post_check_labels "<PR>" "<result>"` (4-3-2 で定義) を呼んで
-ラベルを排他制御する。post-check expert が直接 `gh pr edit` / label helper を呼ぶことは禁止。
+必ず `apply_ux_post_check_labels "<PR>" "<result>"` を呼んでラベルを排他制御する (label 境界の禁止則は 3.5-W 参照)。
 
 workflow 戻り値の `verdict` (PASS / BLOCK / NEEDS_HUMAN_DECISION) と post-check meta block
 (`PASS_WITH_NOTES` を含む) を controller が label helper 引数へ正規化する。
@@ -236,43 +252,28 @@ PR ごとに別 worktree を作る必要はない (read-only 監査のため、a
 
 ### 3.5-B-0. Legacy guard: security-expert installed 確認 (sanity check)
 
-**Phase 2 で security-expert が active 化** されたため、本 step は通常 `true` に倒れる。
-本ガードは「agent 実体が万一削除された場合の安全装置 (legacy guard)」として残す。
-通常運用では skip 動作には倒れない。
+**Phase 2 で security-expert は active 化済み**のため本 step は通常 `true` に倒れ、通常運用では
+skip 動作には倒れない。「agent 実体が万一削除された場合の安全装置 (legacy guard)」としてのみ残す。
+判定は下記 fence: registry-verify の error (target=security-expert) 検出、または registry-verify 自体の
+失敗 (JSON 空) を `installed=false` に倒す (fail-safe — 空 JSON を「error なし」と読まない)。
 
 ```bash
-# security-expert agent の installed 判定 (Phase 2 以降は true が期待値)
-# path flag は省略し CLI の plugin-aware 解決チェーンに委譲する
-# (cwd → $CLAUDE_PLUGIN_ROOT → binary 相対 plugin root → $HOME/.claude legacy)。
-# Cloud は $HOME/.claude/agents 等が存在しないため、この自動解決が必須 (op-scan 第二波と同じ解決チェーン)。
+# security-expert installed 判定 (Phase 2 以降は true が期待値)。path flag は省略し CLI の
+# plugin-aware 解決チェーンに委譲 (Cloud は $HOME/.claude/agents 不在のため自動解決が必須)。
 SECURITY_EXPERT_INSTALLED=false
 REGISTRY_VERIFY_JSON=$(op core registry-verify --lens registry-agent 2>/dev/null) || true
 SECURITY_EXPERT_ERROR=$(printf '%s' "$REGISTRY_VERIFY_JSON" \
   | jq -r '.. | objects | select(.rule_id? and (.effective_severity? == "error") and (.target? == "security-expert")) | .target' \
   2>/dev/null | head -1)
-# registry-verify 自体の失敗 (JSON 空) は installed=false 側に倒す (fail-safe。
-# 旧 file 存在チェックと同じ安全側デフォルトを保つ — 空 JSON を「error なし」と読まない)
 [ -n "$REGISTRY_VERIFY_JSON" ] && [ -z "$SECURITY_EXPERT_ERROR" ] && SECURITY_EXPERT_INSTALLED=true
 ```
 
-判定結果に応じた動作:
-
-| installed | 動作 |
-|-----------|------|
-| `true` (Phase 2 以降の通常状態) | 3.5-B-1 の通り ClusterOrchestrator が security-expert を spawn し、深掘り再監査を回す |
-| `false` (agent 削除 / 設定不整合の異常状態) | **ClusterOrchestrator が security-expert を spawn しない**。下記「legacy skip 動作」に倒れる |
-
-#### Legacy skip 動作 (security-expert 不在時、通常発生しない)
-
-agent 実体が削除されている等の異常状態では、Phase 1 と同等の安全策に倒れる。
-
-1. **ClusterOrchestrator が security-expert を spawn しない** (subagent_type: security-expert の spawn 失敗を構造的に防ぐ)
-2. PR コメントとして `<!-- op-security-post-check -->` 付きの skipped メモを残す
-3. **`pro-security-post-check-skipped` ラベルを PR に付与**
-4. フェーズ4 (review-expert global review) は **`review_mode = full`** で実行する
-5. 完了報告に `security_post_check_skipped: agent_missing` warning を出す
-6. ユーザーに「security-expert agent が見つかりません。`agents/security-expert.md` の整合を確認してください」を提示
-
+`true` (通常状態) → 3.5-B-1 で通常どおり spawn する。`false` (agent 削除 / 設定不整合の異常状態) →
+**legacy skip 動作**: ClusterOrchestrator は security-expert を spawn せず (spawn 失敗を構造的に防ぐ)、
+(1) `<!-- op-security-post-check -->` 付き skipped メモを PR コメントに残し、(2) `pro-security-post-check-skipped`
+ラベルを付与、(3) フェーズ4 (review-expert global review) は **`review_mode = full`** で実行、
+(4) 完了報告に `security_post_check_skipped: agent_missing` warning を出し、(5) ユーザーに
+「security-expert agent が見つかりません。`agents/security-expert.md` の整合を確認してください」を提示する。
 silent な攻撃面復活を防ぐため、security 影響 PR は op-merge gate 14〜16 でマージ対象外になる。
 解除には agent 実体の復元または `pro-security-post-check-manual-override` (例外運用) が必要。
 
@@ -287,8 +288,7 @@ ClusterOrchestrator が本クラスタを security post-check に振り分け、
 ### 3.5-B-2. 判定に応じた処理 (controller 主語)
 
 op-run controller は、ClusterOrchestrator が post-check expert から受け取る結果から当該 PR の判定結果を確認した後、
-必ず `apply_security_post_check_labels "<PR>" "<result>"` (4-3-2 で定義) を呼んで
-ラベルを排他制御する。post-check expert が直接 `gh pr edit` / label helper を呼ぶことは禁止。
+必ず `apply_security_post_check_labels "<PR>" "<result>"` を呼んでラベルを排他制御する (label 境界の禁止則は 3.5-W 参照)。
 
 workflow 戻り値の `verdict` (PASS / BLOCK / NEEDS_HUMAN_DECISION) と post-check meta block
 (`PASS_WITH_NOTES` / `requires_aux_post_check` を含む) を controller が label helper 引数へ正規化する。
@@ -414,8 +414,7 @@ prompt 内の `<trigger_reason>` は ClusterOrchestrator が security post-check
 ### aux post-check の判定処理 (controller 主語)
 
 op-run controller は、ClusterOrchestrator が post-check expert から受け取る aux post-check 判定結果を確認した後、
-必ず `apply_ux_post_check_labels "<PR>" "<result>"` (4-3-2 で定義) を呼んで
-ラベルを排他制御する。aux post-check expert が直接 `gh pr edit` / label helper を呼ぶことは禁止。
+必ず `apply_ux_post_check_labels "<PR>" "<result>"` を呼んでラベルを排他制御する (label 境界の禁止則は 3.5-W 参照)。
 
 | aux_post_check 判定 | 司令官の動作 | label helper 呼び出し |
 |--------------------|------------|----------------------|

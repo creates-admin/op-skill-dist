@@ -1,3 +1,16 @@
+<!--
+schema_version: 1
+last_breaking_change: なし
+notes: v1 (2026-07-29, Wave A3 G4): global-review-spawn.md の重複見出し改名 (2 つ目の「4-2-pre」=
+       terminal blocked の表現方法 → 「4-2-pre-blocked」) に §4.5-1 表内の参照 2 箇所を追従。
+       §4-2-pre (review_round 計算 / REVIEW_TERMINAL gate 正本) への参照は従来どおり変更なし。
+       v1 (2026-07-29, Wave A2 F01/F14): §4.5-4 step 6 の REVIEW_ROUND 再計算 + REVIEW_TERMINAL gate の
+       複製 bash fence を削除し、正本 (global-review-spawn.md §4-2-pre) の再実行 pointer + 差分 2 点のみに置換。
+       §4.5-5 の CUMULATIVE_NONDOC コメントも正本 (§4-1-b) pointer 化し手動同期約束を撤去。挙動不変。
+       v1 (2026-07-29): SKILL.md 索引の (>=1) pin に対して header が欠落していたため、
+       他 reference ファイルと同形式の schema_version header を additive 追加。内容変更なし。
+-->
+
 ## フェーズ4.5: Review Fix / Specialist Decision Loop (op-run 制御)
 
 review_result によって処理を分ける。
@@ -39,7 +52,7 @@ fix_round = review_round - 1
 | review_result = approve | merge gate へ。round に関わらず受理 |
 | review_result = blocked | 自動継続しない。`pro-review-blocked` |
 | review_result ∈ {needs-fix, needs-specialist-review} かつ review_round < max_review_fix_rounds + 1 | 4.5-1A の **finding.result 主語の状態遷移**へ進む |
-| review_result ∈ {needs-fix, needs-specialist-review} かつ review_round >= max_review_fix_rounds + 1 (= 3) | **3 回目の fix は実行しない**。op-run 側で `<!-- op-review-controller-meta -->` に `controller_result: blocked` を記録し、`pro-review-blocked` を付与する。**canonical `<!-- op-review-meta -->` は review-expert が出した値のまま上書きしない** (4-2-pre と同じ表現方針)。詳細は 4-2-pre「terminal blocked の表現方法 (canonical schema を偽造しない)」節を参照 |
+| review_result ∈ {needs-fix, needs-specialist-review} かつ review_round >= max_review_fix_rounds + 1 (= 3) | **3 回目の fix は実行しない**。op-run 側で `<!-- op-review-controller-meta -->` に `controller_result: blocked` を記録し、`pro-review-blocked` を付与する。**canonical `<!-- op-review-meta -->` は review-expert が出した値のまま上書きしない** (4-2-pre-blocked と同じ表現方針)。詳細は 4-2-pre-blocked「terminal blocked の表現方法 (canonical schema を偽造しない)」節を参照 |
 | review_round が max_review_fix_rounds + 1 を超えて spawn された (規定外) | 即 blocked (4-2-pre の bash gate で停止) |
 
 3 回目以降の自動 fix は scope creep / 設計問題のサイン。Issue 分割や scope 再定義を人間判断で行う。
@@ -474,64 +487,16 @@ specialist は finding 単位で 1 block を出す。複数 finding を一度に
 6. REVIEW_ROUND を再計算し、REVIEW_TERMINAL gate を評価してから review-expert を再 review する。
    **再 review の spawn は ClusterOrchestrator が review-expert を Agent tool で再 spawn して行う**
    (cluster-orchestrator-directives.md フェーズ6 と同等の経路。`op-run-review` は ADR-0016 で削除済み)。
-   REVIEW_ROUND 再計算と REVIEW_TERMINAL gate は controller 保持で不変 (以下の bash):
 
-```bash
-# 4.5-4 Review Fix Loop: REVIEW_ROUND 再計算 + REVIEW_TERMINAL gate (フェーズ4-2-pre と対称、
-# ADR-0027 6b: state 文書ベース。詳細は global-review-spawn.md §4-2-pre を参照 (丸コピー禁止)。
-
-# --- PREV_ROUND 再取得 (state 文書 attempts[] の review_round 最大値、tie-break は CLI 内蔵) ---
-REVIEW_STATE_JSON=$(op review state pull --pr "$PR_NUMBER" \
-  ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"})
-PREV_ROUND=$(printf '%s' "$REVIEW_STATE_JSON" | jq '[.details.state.attempts[]?.review_round] | max // 0')
-if ! printf '%s' "$PREV_ROUND" | grep -Eq '^[0-9]+$'; then
-  PREV_ROUND=0
-fi
-REVIEW_ROUND=$((PREV_ROUND + 1))
-
-# --- REVIEW_TERMINAL gate (フェーズ4-2-pre と対称、max_review_fix_rounds=2) ---
-if [ "$REVIEW_ROUND" -gt "$((MAX_REVIEW_FIX_ROUNDS + 1))" ]; then
-  echo "❌ Review Fix Loop: review_round=${REVIEW_ROUND} は許可上限 (MAX+1=$((MAX_REVIEW_FIX_ROUNDS + 1))) を超過。pro-review-blocked を付与し再 spawn を停止。"
-  apply_review_labels "$PR_NUMBER" blocked
-  CONTROLLED_AT="$(date -Iseconds)"
-  # コメント投稿 (監査ログ、機械は読まない)
-  if ! op pr comment "$PR_NUMBER" --body-file - <<NOTE; then
-<!-- op-review-controller-meta -->
-controller_result: blocked
-reason: review_round_over_limit
-review_round: ${REVIEW_ROUND}
-max_review_fix_rounds: 2
-controlled_at: ${CONTROLLED_AT}
-controller: op-run
-
-## ⛔ Review Fix Loop 上限超過 (op-run controller terminal state — Review Fix Loop)
-
-\`review_round=${REVIEW_ROUND}\` は許可上限 (\`max_review_fix_rounds + 1 = 3\`) を超過しました。
-review-expert spawn は行わず、\`pro-review-blocked\` を付与して自動継続を停止します。
-Issue 再設計 / scope 再定義 / 人間判断のいずれかが必要です。
-NOTE
-    echo "⚠️ PR #${PR_NUMBER} への terminal state コメント投稿が失敗しました (ラベル更新は完了済み)" >&2
-  fi
-
-  # state 文書側 (機械正本) にも controller terminal state を記録する (ADR-0027 6b)。
-  CONTROLLER_PAYLOAD=$(jq -n --arg reason "review_round_over_limit" \
-    --argjson round "$REVIEW_ROUND" --arg at "$CONTROLLED_AT" \
-    '{kind:"controller", value:{controller_result:"blocked", reason:$reason, review_round:$round, controlled_at:$at}}')
-  printf '%s' "$CONTROLLER_PAYLOAD" | op review state push --pr "$PR_NUMBER" \
-    --apply-json - --write-id "${OP_RUN_SESSION_ID}-terminal" --session "$OP_RUN_SESSION_ID" \
-    ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"} \
-    || echo "⚠️ PR #${PR_NUMBER} への state push (controller terminal) が失敗しました (コメント監査ログは完了済み)" >&2
-
-  REVIEW_TERMINAL=1
-else
-  REVIEW_TERMINAL=0
-fi
-
-if [ "$REVIEW_TERMINAL" = "1" ]; then
-  echo "⏭️ PR #${PR_NUMBER}: Review Fix Loop review_round over limit. Skip review-expert re-spawn." >&2
-  continue
-fi
-```
+   **REVIEW_ROUND 再計算 + REVIEW_TERMINAL gate の bash 正本は `global-review-spawn.md` §4-2-pre**
+   (state pull → PREV_ROUND (attempts[] max) → REVIEW_ROUND → terminal-blocked 処理
+   (`apply_review_labels blocked` → `<!-- op-review-controller-meta -->` comment → state push) →
+   REVIEW_TERMINAL 判定 → continue)。controller は同 fence を **そのまま再実行** する
+   (本ファイルには複製を置かない。fence は自己完結しており `MAX_REVIEW_FIX_ROUNDS=2` も fence 内で定義される)。
+   Fix Loop 文脈での差分は 2 点のみ:
+   - REVIEW_TERMINAL=1 で skip するのは review-expert の **再** spawn (当該 PR の再 review を打ち切り、次 PR へ continue)
+   - echo / terminal note の見出しに「— Review Fix Loop」を添えてよい (監査ログ上の文言差のみ。
+     `op-review-controller-meta` の field 値 (`controller_result` / `reason` / `review_round` 等) は §4-2-pre と同一)
 
    REVIEW_TERMINAL=0 を確認したら、ClusterOrchestrator は review-expert を Agent tool で再 spawn して再 review を実行する
    (cluster-orchestrator-directives.md フェーズ6 と同等の経路。`op-run-review` は ADR-0016 で削除済み)。
@@ -664,10 +629,9 @@ done
 #    非空 SHA でも controller cwd に fetch されていない場合 git diff exit128 + 空 stdout → wc-l=0 →
 #    ^[0-9]+$ ガードを 0 が通過 → CUMULATIVE_NONDOC=0 (doc-only 誤判定) になる (RVW-001 fix)。
 #    git cat-file -e で object 存在を先に確認し、不在なら即 safe-degrade する。
-#    doc-only 判定式の正本は model-selection.md §7.1.3。global-review-spawn.md §4-1-b にも同式が存在する
-#    (drift 防止: 変更時は両方更新すること)。
-#    doc-only = .md / docs/ のみ。op-tools/crates/** にマッチした時点で非 doc 扱い (#719 残論点1 の
-#    conservative 解: コメントのみ変更でも .rs touch なら full を維持し、誤判定で sensitive を緩めない)。
+#    doc-only 判定式 (grep filter) と conservative 解 (op-tools/crates → 非 doc、#719 残論点1) の
+#    実装正本は global-review-spawn.md §4-1-b (spec 正本は model-selection.md §7.1.3)。
+#    式を変えるときは正本側を変更し、本 fence は追従する (差分は diff 端点のみ)。
 if [ -n "${PR_HEAD_SHA_DIFF:-}" ] && git cat-file -e "${PR_HEAD_SHA_DIFF}^{commit}" 2>/dev/null; then
   CUMULATIVE_NONDOC=$(git diff --name-only "origin/${OP_RUN_BASE_REF}...${PR_HEAD_SHA_DIFF}" \
     | grep -Ev '(\.md$|(^|/)docs/)' | wc -l | tr -d ' ')

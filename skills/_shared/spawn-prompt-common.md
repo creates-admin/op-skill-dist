@@ -1,7 +1,8 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-05-21
-notes: v1 (2026-05-21) — expert spawn prompt の共通必須ブロック
+notes: v1 追記 (2026-07-29) — §4 の正本を本ファイルへ正式移譲 (expert-spawn.md 側の重複ブロックを pointer 化、version 据置)。
+       v1 (2026-05-21) — expert spawn prompt の共通必須ブロック
        (invocation_mode / 質問禁止 / 必読 checklist / commits_added 宣言 / assumptions fallback)
        の正本。Issue #316 (spawn template 11 箇所複製解消) の staged_refactor Stage 1 として新設。
        各 SKILL.md は spawn prompt 内の共通節をインライン展開せず、本ファイルへの pointer 1〜2 行に置換する。
@@ -80,7 +81,8 @@ apply spawn では `commits_added: []` のまま完了報告を返すことは *
 
 ## §4 質問禁止 + assumptions fallback
 
-すべての OP skill 由来 spawn prompt は以下のブロック全体を含む (expert-spawn.md §prompt規約 より転載)。
+すべての OP skill 由来 spawn prompt は以下のブロック全体を含む。
+**本節がこのブロックの正本** (旧: expert-spawn.md §prompt規約 より転載 → 2026-07-29 に正本を本節へ移譲し、expert-spawn.md 側は pointer 化)。
 
 ```text
 You must not ask interactive questions.

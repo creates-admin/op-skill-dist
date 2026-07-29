@@ -6,7 +6,16 @@ description: 警備員的にリポジトリを巡回監査するスキル。明�
 <!--
 schema_version: 2
 last_breaking_change: 2026-05-31
-notes: 2026-07-23 追記 (ADR-0024 Phase 3 第四波 / ADR-0026) — Cloud (mcp channel) 対応 +
+notes: 2026-07-29 追記 (ADR-0029 Wave B1 J5) — progressive disclosure による薄い入口化。
+       「Patrol Ledger Issue の仕様」節 (検索条件/初回作成設定/body 運用契約/schema pointer/
+       architecture_debt 追跡手順/CLI 運用例) を `references/patrol-ledger-schema.md` へ、
+       フェーズ2 のスコア計算式群 (risk/stale/churn/complexity/incident/
+       recently_scanned_penalty・starvation_bonus/jitter) を `references/patrol-score-formulas.md`
+       へ物理切り出し (移動のみ、内容変更なし)。本文には「いつ読むか」トリガー付き pointer を残す。
+       あわせて散文の bare `subagent_type: security-expert` を plugin scoped 名
+       `op-skill:security-expert` へ修正 (D1)。Ledger 契約・severity gate・巡回履歴の内容は不変
+       のため schema_version 据え置き。
+       2026-07-23 追記 (ADR-0024 Phase 3 第四波 / ADR-0026) — Cloud (mcp channel) 対応 +
        Patrol Ledger v2 追従。`github-channel.md (>=2)` を pin 追加、`patrol-markers.md` pin を
        `(>=2)` に bump (ADR-0026 破壊的変更 — body 型 state 文書への再設計)。フェーズ0-1 の
        `gh auth status` に channel guard、フェーズ0 の `ledger pull --auto-find` に mcp 素材注入
@@ -73,7 +82,7 @@ marker の routing metadata 定義・runtime spawn 解決の正本は以下を�
 
 op-patrol 固有の注意点:
 - `review-expert` は active expert だが、patrol / scan / apply の `recommended_runner` 候補にしない (global review 専任)。
-- `security-expert` は active expert。op-patrol は security area 巡回時に `subagent_type: security-expert` で正式 spawn し、canonical schema 拡張 (security / threat_model / usable_security / post_check) を必須出力とする。
+- `security-expert` は active expert。op-patrol は security area 巡回時に `subagent_type: op-skill:security-expert` で正式 spawn し、canonical schema 拡張 (security / threat_model / usable_security / post_check) を必須出力とする (plugin scoped-name 規約、`_shared/expert-spawn.md` 正本)。
 - `env-expert` は planned expert (未実装)。env area の patrol が起票する Issue では `op-run-expert` marker は routing metadata に留め、runtime spawn 担当の決定は op-run の独立解決に委ねる (詳細手順は `_shared/runtime-contract.md` / `_shared/planned-experts.md`)。release / installer / distribution 方針判断が主題なら `needs_human_decision` (commander triage) に倒す。
 
 env-expert 実装時は本 Notice を削除する。
@@ -141,9 +150,12 @@ op-scan は「ここを見てほしい」と命じる。op-patrol は「警備�
 - `~/.claude/skills/_shared/op-config-schema.md` (>=1) — `op-config.yaml` schema 定義の canonical 正本。op-patrol は `domain_tags` で `critical` 区画を判定し、`complexity_thresholds` で `complex` 区画を判定する
 - `~/.claude/skills/_shared/version-check.md` (>=2) — schema_version 整合性チェック手順 + Invocation Mode 上の責務分離
 - `~/.claude/skills/_shared/github-channel.md` (>=2) — GitHub I/O channel / call-spec protocol。mcp channel (Cloud) での素材注入手順 (§6) と司令官の call-spec 実行義務 (§3-§4) の正本
-- `~/.claude/workflows/op-patrol-audit.js` — フェーズ4 の区画別観点別並列 audit + 起票前 refute を実行する Dynamic Workflow (ADR-0009 Phase C / C3)。controller は確定 region (area + expert_list + model) を args 注入して `Workflow({name:'op-patrol-audit'})` で呼ぶ。spawn prompt 本文 / scan-finding schema / refute verdict schema はこのファイルが正本 (本 SKILL.md では重複保持しない)。`scripts/install-local.sh` で `~/.claude/workflows/` へ同期される
+- `~/.claude/workflows/op-patrol-audit.js` — フェーズ4 の区画別観点別並列 audit + 起票前 refute を実行する Dynamic Workflow (ADR-0009 Phase C / C3)。controller は確定 region (area + expert_list + model) を args 注入して `Workflow({name:'op-patrol-audit'})` で呼ぶ。spawn prompt 本文 / scan-finding schema / refute verdict schema はこのファイルが正本 (本 SKILL.md では重複保持しない)。plugin 同梱の `${CLAUDE_PLUGIN_ROOT}/workflows/op-patrol-audit.js` を SessionStart hook が `~/.claude/workflows/` へ冪等 staging する (ADR-0023)
 - `op-tools/docs/adr/0009-dynamic-workflows-for-op-fanout.md` — OP fan-out / verify を Dynamic Workflows へ移行する設計判断 (決定5: フォールバック非保持 / fail-fast、不変則9: 1 PR = 1 OP skill 全面書換)。op-patrol は C3 wave
-- `op-tools/docs/adr/0010-workflow-script-distribution.md` — workflow script (`.js`) の配布方針 (repo-root `workflows/` 正本 → `~/.claude/workflows/` へ install-local.sh 同期、skill bundle 対象外の infrastructure 扱い)
+- `op-tools/docs/adr/0010-workflow-script-distribution.md` — workflow script (`.js`) の repo 正本配置 (repo-root `workflows/`、skill bundle 対象外 infra) の経緯。配布経路は ADR-0023 に統合済み
+- `op-tools/docs/adr/0023-workflow-plugin-distribution.md` — workflow script の現行配布経路 (2026-07-21 移行後の正本)。SessionStart hook (`hooks/hooks.json`) による `~/.claude/workflows/` 冪等 staging (旧経路は deprecated、詳細は CLAUDE.md「配布・運用方式」節)
+- `references/patrol-ledger-schema.md` — Patrol Ledger Issue の検索条件 / 初回作成設定 / body (state 文書) 運用契約 / JSON schema pointer / `architecture_debt` 系 finding の既存 Issue 突合手順 / `op patrol ledger` CLI 運用例 (Ledger 初期化・修復時、または architecture_debt dedup 時のみ参照)
+- `references/patrol-score-formulas.md` — フェーズ2 patrol_score の各 component (risk/stale/churn/complexity/incident/recently_scanned_penalty・starvation_bonus/jitter) の算出式・上限値・実装詳細注記 (area 選定理由の説明や score 検証が必要なときのみ参照)
 
 ---
 
@@ -216,26 +228,12 @@ gh channel (未設定含む) のみ未認証で中断する。mcp channel は `!
 
 ### 0-2. Dynamic Workflows capability preflight (hard-fail)
 
-/**
- * 機能概要: フェーズ4 の区画別観点別並列 audit は `op-patrol-audit` Dynamic Workflow へ委譲されるため、
- *           Workflow tool (Dynamic Workflows) が利用可能かを起動直後に確認する。
- * 作成意図: ADR-0009 決定5 (フォールバック非保持 / fail-fast)。audit fan-out が workflow になった以上、
- *           capability 不在で warning + 続行すると silent に zero-findings となり「巡回したが何も無かった」と
- *           誤認させる (= より悪い)。twin フォールバック (旧 single-message spawn 経路) は保持しない。
- * 注意点: これは 0-pre の schema_version mismatch の「warning に留める」慣習 (CLAUDE.md 不変則2) とは
- *         別レイヤー。schema_version は forward-compat 判断のため warning だが、capability 不在は
- *         audit そのものが実行不能なため hard-fail (即停止) する。
- */
+フェーズ4 の区画別観点別並列 audit は `op-patrol-audit` Dynamic Workflow へ委譲されるため、
+`_shared/workflow-calling.md` **§1 capability preflight** (正本、hard-fail の理由・actionable message 文言は
+複製しない) の通り起動直後に Workflow tool 利用可否を確認する。
 
-司令官は Dynamic Workflows (`Workflow` tool) が当該セッションで利用可能かを確認する。
-利用不可の場合は **即停止** し、以下の actionable message を提示する (audit を旧機構へフォールバックさせない):
-
-> op-patrol の区画別 audit は `op-patrol-audit` Dynamic Workflow に依存します。現在のセッションで
-> Dynamic Workflows が利用できません。Workflows を有効化したセッションで再実行するか、
-> `~/.claude/workflows/op-patrol-audit.js` が `scripts/install-local.sh` で同期済みか確認してください。
-
-`--compact-ledger` (audit しない、Ledger 圧縮のみ) と `--dry-run` (フェーズ3 plan で停止、audit に到達しない)
-は本 preflight の対象外 (audit fan-out を持たないため skip してよい)。
+**op-patrol 固有**: `--compact-ledger` (audit しない、Ledger 圧縮のみ) と `--dry-run` (フェーズ3 plan で停止、
+audit に到達しない) は本 preflight の対象外 (§1「対象外の経路」に該当、skip してよい)。
 
 ### gh auth ありの場合
 
@@ -287,139 +285,18 @@ fail-closed する。**自動 close はしない** (誤検出時のロールバ�
 
 ## Patrol Ledger Issue の仕様
 
-### 検索条件
+Patrol Ledger Issue (label `op-state` / `do-not-close`) は巡回履歴を保存する唯一の正本。
+state は body 1 箇所 (v2、ADR-0026) に一本化され、コメント (`<!-- op-patrol-run -->`) は人間向け
+append-only 監査ログで **機械は二度と読まない**。このIssueは**クローズしない**。ローカルキャッシュは
+持たない (state を参照するエージェントは本 Issue の body を毎回読む)。
 
-```text
-labels: op-state
-state:  open
-```
-
-### 初回作成時の設定
-
-```text
-title:  [op-patrol] 巡回監査ステート / Patrol Ledger
-labels: op-patrol, op-state, do-not-close
-```
-
-### body (state 文書、v2、ADR-0026)
-
-`op patrol ledger init` が内部生成する v2 skeleton body (`--body-file` のような手書き body 引数は
-v2 に存在しない)。**手動編集しない**。
-
-- state (`area_state` / `state_rev` / `last_run_id` / `next_candidates`) は body に一本化される
-  (`op patrol ledger pull` は body 1 読みで完結する)
-- コメント (`<!-- op-patrol-run -->`) は人間向け append-only 監査ログ。**機械は二度と読まない**
-- このIssue は **クローズしない** (`do-not-close` ラベル)
-- ローカルキャッシュは存在しない。state を参照したいエージェントは本 Issue の body を毎回読む
-
-### state (body) / run コメント JSON スキーマ (v2)
-
-`<!-- op-patrol-ledger-state -->` (body 側 state 文書) / `<!-- op-patrol-run -->` (コメント側監査ログ)
-block の **JSON 構造 / field 単位 schema / area_state レコード形式 / `run_id` 命名規則** の正本は
-`~/.claude/skills/_shared/markers/patrol-markers.md` を参照する (`<!-- op-patrol-checkpoint -->` は
-ADR-0026 で廃止、同ファイルに v1 歴史として要約のみ残る)。
-
-本 SKILL.md は schema を **再掲しない** (Single Canonical Source Rule)。op-patrol は state 更新時 / run
-コメント投稿時に patrol-markers.md の schema に従い JSON を生成する。schema_version の bump は
-patrol-markers.md 側で行い、本 SKILL.md の参照ドキュメント節で `(>=N)` を確認する。
-
-### architecture_debt の追跡方式 (Phase 1)
-
-`finding_type: "architecture_debt"` (および `staged_refactor` / `needs_spec_decision`)
-の finding は、**GitHub Issue の本文 marker を正本** として追跡する。Patrol Ledger には
-専用 index を持たせない (Phase 2 検討)。
-
-op-patrol は架空の `seen_count` / `last_seen_at` / `risk_trend` を agent に推測させない。
-代わりに以下の手順で **既存 Issue を更新** する:
-
-1. refactor-expert が `architecture_debt` / `staged_refactor` / `needs_spec_decision`
-   finding を返す
-2. op-patrol は **以下のラベル群で既存 Issue を検索** する。debt 系 3 種類すべてが
-   対象 (`staged_refactor` / `needs_spec_decision` も `op-refactor-debt-key` を持つため)。
-
-   ```bash
-   # 検索対象ラベル: architecture-debt / staged-refactor / needs:spec-decision
-   gh issue list --label "auto-report" --state open \
-     --json number,title,body,labels --limit 100 | jq '
-       [ .[] | select(
-           any(.labels[]; .name == "op:architecture-debt"
-                       or .name == "op:staged-refactor"
-                       or .name == "needs:spec-decision")
-         ) ]
-     '
-   ```
-
-   mcp channel では上記 `gh issue list` が fail-closed するため、司令官が
-   `mcp__github__search_issues` (`repo:<owner>/<repo> is:issue is:open label:auto-report`) で
-   素材を取得し、同じ 3 ラベル OR 条件で候補を絞り込む (`github-channel.md` §6。raw body に
-   marker が生存するため fingerprint 突合はこの素材で可能)。
-
-   その上で **以下の優先順位で同一 debt 判定** する
-   (`_shared/dedup-policy.md` の「architecture_debt 補助 marker」節と同期):
-
-   ```text
-   優先順位 1: op-refactor-debt-key 完全一致
-              `refactor:<bulk_group>:<root_path>:<symbol_or_boundary>`
-   優先順位 2: op-fingerprint 完全一致
-              `<domain>:<normalized_title>:<primary_file>:<symbol>` (共通仕様)
-   優先順位 3: affected_paths 類似 + bulk_group 一致 + symbols 類似 (タイブレーカ)
-              優先順位 1〜2 のいずれにも一致しなかった場合のみ適用
-   ```
-
-   最初に一致したものを「同一 debt」とみなし、それ以降の優先順位は評価しない。
-   `op:architecture-debt` ラベル単独で検索すると `staged_refactor` / `needs_spec_decision`
-   を取り逃がして重複起票するため、必ず 3 ラベルの OR で検索する。
-
-3. 既存 Issue が見つかった場合:
-   - 新規 Issue を **起票しない**
-   - 既存 Issue に `op issue comment` でコメント追加: 今回の `last_seen_at` / 今回検出された
-     `affected_paths` / `risk_trend` (前回の `affected_paths` と差分比較)
-   - 既存 Issue 本文の `seen_count` を +1 にして `op issue edit-body` で edit
-     (mcp channel では既存の `issue_edit_body` call-spec を emit — 全置換 semantics のため素材注入不要、
-     `github-channel.md` §3-§4 で完遂する)
-   - `affected_paths` が増えていれば本文を更新し、`needs:triage` ラベルを追加
-4. 既存 Issue が見つからない場合:
-   - 新規 Issue を起票 (`first_detected_at = last_seen_at = today`, `seen_count = 1`)
-   - Issue 本文に **op-fingerprint と op-refactor-debt-key の 2 つの marker** を埋める
-
-agent (refactor-expert) 側は `first_detected_at` / `seen_count` / `risk_trend` を **推測で
-埋めない**。op-patrol が Ledger および既存 Issue から導出して finding に上書きする。
-agent が返す値はあくまで「今回の検出での暫定値」(seen_count=1 / first_detected_at=今日 等)。
-
-### `op patrol ledger` CLI 経由の運用例 (v2、ADR-0026)
-
-`op patrol ledger pull/push/to-flags/area-state/init` は実装済み。**push は用途で意味が分かれる**:
-`--updated-area` を渡すと body の state 更新、`--run-comment` を渡すと監査ログ post (フェーズ7-2 参照)。
-以下の CLI で運用する:
-
-```bash
-# 1. Patrol Ledger から最新 state (area_state / state_rev / last_run_id) を取得
-LEDGER_ISSUE=999  # ← Patrol Ledger Issue 番号
-op patrol ledger pull --issue $LEDGER_ISSUE --out-file /tmp/ledger.json
-
-# 2. last-scanned-at フラグ列を生成
-FLAGS=$(op patrol ledger to-flags --state /tmp/ledger.json)
-
-# 3. 採点 (ledger から last_scanned_at を注入)
-op patrol score --area op-tools/crates/op-core $FLAGS --random-seed $(date +%s) --json
-
-# 4. 巡回完了後、state (body) を更新 (area_state / state_rev を進める)
-op patrol ledger push \
-  --issue $LEDGER_ISSUE \
-  --run-id "run-$(date +%Y-%m-%d)-001" \
-  --previous-state /tmp/ledger.json \
-  --updated-area "op-tools/crates/op-core=$(date -Iseconds)"
-
-# 5. state を直接参照 (デバッグ用): pull の出力から area_state を直接参照
-op patrol ledger pull --issue $LEDGER_ISSUE --json | jq '.details.area_state'
-```
-
-> **mcp channel**: 4 の `push` (state 更新) は body 全置換の `op issue edit-body` call-spec を emit する。
-> 司令官は `github-channel.md` §3-§4 の protocol (verbatim 実行 → read-back → ingest) で完遂する。
-> `--previous-state auto` は gh channel 専用のため、mcp では 1 の `pull --input-json ... --out-file`
-> でファイル化してから `--previous-state <path>` で渡す。
-
-詳細な CLI フラグ仕様は `op-tools/docs/specs/patrol-ledger.md` を参照。
+検索条件 / 初回作成時の設定 (label) / body (state 文書) の運用契約 / state・run コメントの
+JSON schema pointer / `architecture_debt` 系 finding の既存 Issue 突合手順 (優先順位付き dedup) /
+`op patrol ledger` CLI 運用例の詳細は `references/patrol-ledger-schema.md` を参照する
+(**Ledger の初期化・修復を行うとき、または `architecture_debt` / `staged_refactor` /
+`needs_spec_decision` finding の既存 Issue 重複判定を行うときのみ読む** — 通常の巡回主経路
+[フェーズ0 ロード / フェーズ7 更新] は SKILL.md 本文と `_shared/markers/patrol-markers.md` の
+参照だけで完結する)。
 
 ---
 
@@ -485,99 +362,11 @@ patrol_score =
   + jitter                  (random-seed で再現可)
 ```
 
-### risk_score (0〜50)
-
-区画パスとファイル内容から risk marker を検出。1 marker = +10、上限 50。
-
-| カテゴリ | marker (パス含有 or 内容 grep) |
-|---------|-------------------------------|
-| file-io | `file_io`, `fs::`, `std::fs`, `path::`, `read_to_string`, `write_all`, `tempfile` |
-| ipc | `tauri::command`, `#[command]`, `invoke`, IPC handler |
-| auth | `auth`, `permission`, `capability`, `token`, `session` |
-| db | `migration`, `sqlx`, `diesel`, `sea_orm`, `pool.execute` |
-| queue | `queue`, `worker`, `scheduler`, `cron`, `job::` |
-| ext-cmd | `Command::new`, `subprocess`, `child_process`, `spawn` |
-| config | `config`, `env::var`, `.env`, `dotenv`, `capabilities` |
-| io-flow | `import`, `export`, `upload`, `download`, `backup`, `delete`, `overwrite` |
-| test-health | `tests`, `spec`, `__tests__`, `fixture`, `mock`, `snapshot`, `golden`, `coverage`, `vitest`, `pytest`, `flutter_test`, `.skip`, `xit`, `xfail` |
-
-`--risk a,b,c` 指定時は、該当カテゴリの marker を持つ区画のみ candidate にする。
-
-> (op patrol score 実装詳細) パス含有 OR 内容 grep の **OR** 判定。同 category が複数ファイルでマッチしても 1 件カウント。パス判定は case-insensitive。詳細は `op-tools/docs/specs/patrol-score.md` §4 項目 1 を参照。
-
-### stale_score (0〜30)
-
-最終変更からの経過日数。`max(0, days_since_last_change - 30) / 6`、上限 30。
-30 日以内は 0、180 日以上で満点。`--stale` フラグで重み 1.5x。
-
-> (op patrol score 実装詳細) 履歴なしの area (新規追加直後など) は `stale_score = 0` とする (RVW-002 由来)。`--stale` 指定時は重み 1.5x の結果として上限が **45** まで上がる (見出しの「0〜30」は通常時、`--stale` 時は 0〜45)。
-
-### churn_score (0〜20)
-
-直近 90 日のコミット数。`min(20, commit_count * 2)`。
-変更が多い場所はバグ混入率も高い。
-
-### complexity_score (0〜20)
-
-以下のいずれかが該当するごとに +5、上限 20:
-
-- ファイル数 ≥ 20
-- 1 ファイルが 500 行超を含む
-- `TODO|FIXME|XXX|HACK` の出現が 10 件以上
-- `unwrap\(\)|expect\(|panic!\(|as any|as unknown|@ts-ignore|eslint-disable` の出現が 10 件以上
-
-> (op patrol score 実装詳細) `TODO|FIXME|XXX|HACK` は **case-sensitive**。小文字 `todo` 等は対象外。
-
-### incident_score (0〜20、コスト高のため lazy 計算)
-
-過去に Issue が多い区画ほど加点。`gh issue list --search "<area path>" --state all --limit 30 | wc -l` の結果 × 2、上限 20。
-
-mcp channel では `gh issue list` が fail-closed するため、司令官が `mcp__github__search_issues`
-(`repo:<owner>/<repo> is:issue <area path>`) を実行し、返却 `total_count` (上限 30 相当に丸める) を件数として使う。
-
-**コスト管理**: incident_score は patrol_score 上位 10 区画に対してのみ計算 (全区画への gh API 呼び出しは避ける)。
-
-### recently_scanned_penalty (0〜40、wave-03b で curve 圧縮)
-
-Patrol Ledger 復元後の `area_state[area].last_scanned_at` から経過日数 d:
-
-- d < 1 日 → -40 (ほぼ除外、巡回直後)
-- 1 ≤ d < 3 → -25
-- 3 ≤ d < 7 → -10
-- d ≥ 7 → 0
-
-Ledger に未登録の area は **未巡回扱い (penalty = 0)**。
-**毎日運用 fit な圧縮**: 旧 curve (7/30/60 日) は月 1 cycle 想定で、毎日運用では 1 area が 7 日も top に居続けて lock-in を再発させていた (dogfooding 検証由来)。
-
-### starvation_bonus (0〜60、wave-03b 追加、毎日運用 fit な curve)
-
-長期未巡回 area への補正で **lock-in を解消し、3 日 floor を確保する**。
-高 baseline area (例: 中核 Rust crate) が永久に top を独占する失敗モードを構造的に防ぐ。
-**curve は毎日運用 (cycle 間隔 ~1 日)** に圧縮されており、N ≤ 50 / budget 5 で 1 周 ~10 日想定。
-
-| `last_scanned_at` から d | active (前回巡回後 commit あり) | dormant (前回巡回後 commit なし) |
-|---:|---:|---:|
-| None かつ history あり | +30 | +30 |
-| d < 3 | 0 | 0 |
-| 3 ≤ d < 7 | +10 | +5 |
-| 7 ≤ d < 14 | +20 | +10 |
-| 14 ≤ d < 30 | +35 | +17 |
-| 30 ≤ d < 60 | +50 | +25 |
-| d ≥ 60 | +60 | +30 |
-
-- **dormant 判定**: `days_since_last_change > days_since_last_scanned`
-  (= 前回巡回時点から新規 commit が入っていない area は dampened curve、active を常に優先)
-- **history なし** (新規追加直後など、`days_since_last_change=None`) → 0
-  (履歴ない area を巡回しても情報が得られない)
-- **設計想定 area 数 N ≤ 50**。N > 100 では bonus 飽和点で差別化が baseline+jitter のみになるため、
-  skill 側 orchestration で「force-include 1 dormant」等の補助制約が必要 (将来の `op patrol ledger` wave 検討事項)
-
-> (op patrol score 実装詳細) 詳細式と数値根拠は `op-tools/docs/specs/patrol-score.md` §4 項目 12 を参照。
-
-### jitter (0〜10)
-
-`hash(run_id + area_path) % 10`。`--random-seed N` 指定時は `hash(N + area_path) % 10` で再現可能。
-同一 patrol_score での tie-break + 完全に固定された巡回順を避ける効果。
+各 component (risk_score / stale_score / churn_score / complexity_score / incident_score /
+recently_scanned_penalty・starvation_bonus / jitter) の算出式・上限値・実装詳細注記は
+`references/patrol-score-formulas.md` を参照する (**area 選定理由を人間に説明する必要が生じたとき、
+または score の内訳を検証したいときのみ読む** — 通常の巡回主経路では `op patrol score --json` /
+`op patrol repo-map` の出力をそのまま使えば足り、算出式を毎回引く必要はない)。
 
 ### 暫定 plan モード (`--dry-run` かつ gh auth なし)
 
@@ -719,24 +508,17 @@ const auditOut = await Workflow({
     ],
   },
 });
-// auditOut.regions[] = { region_id, area, findings:[canonical scan-finding + detected_by + finding_ref],
+// auditOut.result.regions[] = { region_id, area, findings:[canonical scan-finding + detected_by + finding_ref],
 //   verdicts:[refute verdict], audit_report:{ findings_count / critical_count / high_count / refuted_count ... } }
-// auditOut.summary  = 全 region 合計 (regions_count / findings_total / critical_total / high_total / refuted_total)
+// auditOut.result.summary  = 全 region 合計 (regions_count / findings_total / critical_total / high_total / refuted_total)
 ```
 
-> **戻り値が barrier**: `auditOut.regions` は全 region × expert の audit + High/Critical の refute が揃った状態で
-> controller に返る。旧来の `run_in_background: true` + Monitor 完了待ち合わせ・30分タイムアウトは **不要**
-> (workflow runtime が完了を保証し、並列は region × expert を flat に展開して 16-cap で透過キューイングされる)。
+戻り値の barrier 挙動 (region × expert を flat 展開し 16-cap 透過キューイング) と `.result.*` unwrap 規約は
+`_shared/workflow-calling.md` **§2** が正本 (本 SKILL.md では複製しない)。上記コードの `auditOut.result.regions` /
+`auditOut.result.summary` がその実体。
 
-> **戻り値アクセス: chat-controller は `.result.*` を掘る (#644-A)**: 上記擬似コードの `auditOut.regions`
-> は **概念表記**。実際には chat Claude が Workflow tool を呼ぶと **background task として起動**し、
-> task-notification の出力ファイルに `{ summary, logs, result: { regions, summary }, agentCount }` 形式で
-> **`result` でラップ**されて返る。controller は `auditOut.result.regions` / `auditOut.result.summary` を
-> 読む (`.regions` 直アクセスは空振りする。2026-06-02 実走由来の既知の躓きポイント)。in-script (named
-> workflow 内) の同期戻り値とは経路が異なる点に注意する。
-
-> **planned expert 除外**: installed check (フェーズ3 / `op core registry-verify`) で除外された expert は
-> `expert_list` に含めない。除外した expert は最終報告サマリに併記する (silent 除外をしない)。
+installed check (フェーズ3 / `op core registry-verify`) で除外した planned/未登録 expert を `expert_list` に
+含めない・最終報告サマリへ併記する silent 除外禁止規約は `_shared/workflow-calling.md` **§3** が正本。
 
 > **Patrol Finding Policy / canonical schema の正本同期**: `buildAuditPrompt` は後述の Patrol Finding Policy と
 > recommended_runner / post_check_expert 規則を inline で埋め込む (workflow spawn された agent は本 SKILL.md を
@@ -802,7 +584,7 @@ op-run が patrol 起票 Issue を実装するため、ノイズ起票は下流�
  *         `finding_ref` (`<region_id>:<expert>#<idx>`) でデータ上保持される。
  */
 
-`auditOut.regions[].verdicts` を、同じ region の `findings` に `finding_ref` で突合して適用する。
+`auditOut.result.regions[].verdicts` を、同じ region の `findings` に `finding_ref` で突合して適用する。
 
 ### verdict 適用順 (逆転不可)
 
@@ -1093,7 +875,7 @@ post-check が不要なドメイン (UI 影響なしの debug / refactor / optim
 
 詳細は `_shared/dedup-policy.md` の「architecture_debt 補助 marker」節を参照。
 
-domain ごとの marker パターン (`op-run-expert` / `op-post-check-expert` の標準値) は `skills/op-scan/SKILL.md` §domain-marker-patterns を canonical source として参照する (Single Canonical Source Rule, Issue #318 Stage 2 完了)。
+domain ごとの marker パターン (`op-run-expert` / `op-post-check-expert` の標準値) は `skills/op-scan/references/routing-and-marker-reference.md` §domain-marker-patterns を canonical source として参照する (Single Canonical Source Rule, Issue #318 Stage 2 完了)。
 
 > feature-expert が apply するが、UI 状態 / a11y / 復帰可能性 / 画面遷移に影響する場合は、
 > post-check に `ux-ui-audit-expert` を必ず指定する (silent な UX 退化防止)。
@@ -1117,22 +899,9 @@ domain ごとの marker パターン (`op-run-expert` / `op-post-check-expert` �
 
 #### domain=refactor 固有のラベル付与ルール (finding_type / blocking / human_decision に応じて)
 
-op-patrol が refactor finding を起票するときは、`op-scan/SKILL.md` の「domain=refactor 固有の
-ラベル付与ルール」と **完全一致** で適用する (重複定義を避けるため、判定表は op-scan を正本とする)。
-
-| 条件 | 追加ラベル |
-|------|-----------|
-| `post_check_expert == "security-expert"` | `pro-security-expert` |
-| `post_check_expert == "ux-ui-audit-expert"` | `pro-ux-ui-audit-expert` |
-| `finding_type == "architecture_debt"` | `op:architecture-debt` |
-| `finding_type == "staged_refactor"` | `op:staged-refactor` |
-| `finding_type == "needs_spec_decision"` | `needs:spec-decision` |
-| `blocking == true` | `op:blocking-finding` |
-| `needs_human_decision.required == true` (構造化 block) | `needs:human-decision` |
-| `needs_human_decision.required == true` かつ `can_continue_without_decision == true` かつ `finding_type != needs_spec_decision` | `needs:human-decision-followup` (opt-out。詳細は `op-scan/SKILL.md`) |
-| `needs_human_decision.decision_type == "boundary"` | `needs:boundary-decision` (単独では apply を止めない) |
-| `needs_human_decision.decision_type == "spec"` | `needs:spec-decision` |
-| **op-patrol 限定**: `seen_count >= 3` または `affected_paths` 増加 / `risk_trend ∈ {worsening, spreading}` | `needs:triage` |
+op-patrol が refactor finding を起票するときは、`skills/op-scan/SKILL.md` §「domain=refactor 固有の
+ラベル付与ルール」の判定表 (`needs:triage` の op-patrol 行含む) と **完全一致** で適用する
+(重複定義を避けるため、判定表は op-scan を正本とする)。
 
 `op:architecture-debt` / `op:staged-refactor` / `needs:spec-decision` の 3 ラベルは
 **op-patrol 自身の debt 系 finding 既存 Issue 検索の正本ラベル群**
@@ -1142,26 +911,14 @@ op-patrol が refactor finding を起票するときは、`op-scan/SKILL.md` の
 
 #### Marker Publish Validate (起票直前 fail-fast、C3 で有効化)
 
-各 `op issue create` の **直前** に、組み立てた Issue body の hidden marker を fail-fast で検証する
-(`_shared/expert-spawn.md` の **Marker Publish Validate 節** が正本)。
-marker の typo / 必須フィールド漏れ / format drift を起票前に検出する。
+各 `op issue create` の **直前** に、`_shared/expert-spawn.md` の **Marker Publish Validate 節** (2段
+validate 手順の正本、内容はここに複製しない) を通す。`source-hint` は `issue-body` を使う (BODY_FILE = 起票する
+Issue 本文、hidden marker 埋め込み済・enrichment 反映後)。block された draft は起票せず
+manual_review_bucket / escalation に回す (対話モードはユーザー提示で停止、`--auto` は退避、フェーズ5.5 の block
+退避と同列)。直列 `op issue create` (1 draft = 1 invocation、並列化禁止) はフェーズ6 / フェーズ7 の起票規約を踏襲する。
 
-```bash
-# BODY_FILE = 起票する Issue 本文 (hidden marker 埋め込み済、enrichment 反映後)。
-# marker 名・schema の参照は `op help marker <name>`。block 条件は op core marker-lint --strict。
-LINT_JSON=$(op core marker-lint --body - --source-hint issue-body --strict < "$BODY_FILE" 2>/dev/null) || true
-LINT_DECISION=$(printf '%s' "$LINT_JSON" | jq -r '.decision' 2>/dev/null)
-if [ "$LINT_DECISION" != "pass" ]; then
-  echo "❌ marker-lint block: $(printf '%s' "$LINT_JSON" | jq -c '.blocking_reasons // []' 2>/dev/null)"
-  echo "→ hidden marker を修正してから再起票する。block された draft は起票せず manual_review_bucket / escalation に回す"
-  # 対話モードはユーザーに提示して停止、--auto は manual_review_bucket に退避 (フェーズ5.5 の block 退避と同列)
-fi
-# LINT_DECISION == "pass" のときのみ op issue create に進む
-```
-
-> **`||` で握り潰さない**: `LINT_DECISION` を jq で取り出し `pass` を明示確認してから `op issue create` する
+> **`||` で握り潰さない**: lint decision は明示確認してから `op issue create` する
 > (memory `feedback_op_review_meta_reviewer_field_required`: `op ... || fallback` だと block でも投稿が通ってしまう)。
-> 直列 `op issue create` (1 draft = 1 invocation、並列化禁止) はフェーズ6 / フェーズ7 の起票規約を踏襲する。
 
 ---
 
@@ -1293,8 +1050,8 @@ previous state の `last_run_id` が `--run-id` と一致する場合は no-op (
 
 ### 統計
 - 起票: 5 件 / スキップ (重複): 2 件 / 検出 0 件: 0 area
-- refute: confirmed 6 件 / refuted (偽陽性 drop) 2 件 / downgrade 1 件 (`auditOut.summary` から集計)
-- region audit_report: 各 region の findings_count / critical_count / high_count / refuted_count (workflow 戻り値 `auditOut.regions[].audit_report`)
+- refute: confirmed 6 件 / refuted (偽陽性 drop) 2 件 / downgrade 1 件 (`auditOut.result.summary` から集計)
+- region audit_report: 各 region の findings_count / critical_count / high_count / refuted_count (workflow 戻り値 `auditOut.result.regions[].audit_report`)
 - enrichment: enriched 5 件 / blocked 1 件 (manual_review_bucket 退避) / skipped 0 件
 - Patrol Ledger: #42 (run コメント追加 / state (body) 更新: state_rev 41→42)
 

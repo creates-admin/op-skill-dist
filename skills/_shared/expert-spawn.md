@@ -6,7 +6,12 @@ additive_only_policy:
   - breaking change (既存フィールドの削除 / 型変更 / required 化 / marker 仕様変更) のみ schema_version を bump する
   - 現行 schema_version 一覧は `~/.claude/skills/_shared/version-check.md` の
     「## _shared ファイル 現行 schema_version 一覧」節を参照する
-notes: v16 (2026-07-21, additive) — plugin 配布移行: 「Plugin scoped-name 規約」節を追加し、
+notes: v16 (2026-07-29, corrective) — spawn 3 パターン template 内に残存していた質問禁止 fallback の縮約 variant
+       (パターン1 = 2 択 / パターン2 = 3 択) を spawn-prompt-common.md §4 (5 択) 準拠の placeholder へ統一。
+       パターン3 は文脈適応 (verdict 4 値に閉じる) を 1 行明示。関連ドキュメント節の planned expert stale 列挙から
+       spec を除去し Utility Worker pointer を追記 (ADR-0017 W1b 追従。契約内容不変ゆえ schema_version 据置)。
+       v16 (2026-07-29, corrective) — 「invocation_mode の必須行」の verbatim ブロックを spawn-prompt-common.md §1/§4 への pointer に圧縮 (正本移譲、契約内容不変ゆえ schema_version 据置)。
+       v16 (2026-07-21, additive) — plugin 配布移行: 「Plugin scoped-name 規約」節を追加し、
        Agent tool の subagent_type に plugin scoped 名 (op-skill:<name>) を渡す契約を明文化。
        spawn の3パターン template と post-check 節の例を scoped 表記へ更新。
        bare canonical 名は resolution/registry/marker の正本として保持し、前置は spawn 境界のみ。
@@ -43,11 +48,16 @@ op-scan / op-run / op-merge は、ドメイン作業を `~/.claude/agents/` の 
 
 - `_shared/invocation-mode.md` (>=1) — Direct Mode / OP-managed Mode の対話可否契約と
   `needs_human_decision` の正規スキーマ。本ドキュメントの spawn 規約はこれを前提とする。
+- `_shared/spawn-prompt-common.md` (>=1) — spawn prompt 共通必須ブロック (invocation_mode 宣言 /
+  必読 checklist / commits_added 宣言 / 質問禁止 + assumptions fallback) の verbatim テンプレの正本。
+  本ドキュメント「invocation_mode の必須行」節は同ファイル §1 / §4 への pointer。
 - `_shared/runtime-contract.md` — runtime spawn eligibility / planned expert handling /
   reclassification policy / Issue・PR marker と spawn authorization の関係の正本。
 - `_shared/active-expert-registry.md` — runtime spawn 可能な active expert の単一正本リスト。
-- `_shared/planned-experts.md` — planned expert (env / release / compatibility / spec) の
-  lifecycle・normalization ルール・実装予定の正本。
+- `_shared/planned-experts.md` — planned expert (env / release / compatibility) の
+  lifecycle・normalization ルール・実装予定の正本。Utility Worker (`spec-expert` / `scout`) は
+  planned ではなく active — `active-expert-registry.md` の「Utility Workers」節を参照
+  (spec-expert は ADR-0017 W1b で active 化済)。
 - `_shared/markers/labels-and-markers.md` — Issue / PR / Review コメントに埋める hidden marker と
   GitHub label の正本一覧および semantics。
 - `_shared/model-selection.md` (>=3) — expert spawn 時の model (Opus / Sonnet / Haiku、具体 version は §1) 選択ルール
@@ -191,10 +201,7 @@ Agent({
     あなたは <domain>-expert です。<scope> を read-only で audit してください。
     <... scan prompt 規約に従う ...>
 
-    You must not ask interactive questions.
-    If information is missing, return assumptions or needs_human_decision.
-    Do not write Issue comments asking for clarification unless the OP skill
-    explicitly delegates comment creation to you.
+    <質問禁止 + fallback 5 択ブロック: `_shared/spawn-prompt-common.md` §4 を verbatim で含める (正本。2 択等への縮約禁止)>
     Return the required canonical schema JSON array. Do not mix question text
     into the JSON output.
   """
@@ -204,7 +211,9 @@ Agent({
 - isolation 不要 (read-only なので worktree は要らない)
 - 並列 spawn 可
 - 出力は Critical/High 候補のみ。Medium/Low はノイズなので返さない
-- expert は対話質問せず、不足情報は `assumptions` / `needs_human_decision` で構造化返却
+- expert は対話質問せず、不足情報は `spawn-prompt-common.md` §4 の 5 択 fallback で構造化返却。
+  特に `requires_runtime` / `inferred` / low confidence の finding は `manual_review_bucket` 返却が必須
+  (`_shared/auto-policy.md` と整合。assumptions / needs_human_decision の 2 択に縮約しない)
 
 ### パターン2: apply 用 (worktree 内で実装)
 
@@ -221,12 +230,8 @@ Agent({
     Issue #<N> を実装してください。
     <... apply prompt 規約に従う ...>
 
-    You must not ask interactive questions.
+    <質問禁止 + fallback 5 択ブロック: `_shared/spawn-prompt-common.md` §4 を verbatim で含める (正本。3 択等への縮約禁止)>
     Do not stop and wait for commander or user replies.
-    If information is missing, return one of:
-      - assumptions[] : 前提を置いて続行
-      - needs_human_decision : 構造化された判断要求
-      - blocked_actions[] : 判断なしでは実行しない操作
     Return the required apply report and commit. Do not push.
   """,
   run_in_background: true            ← 並列待機のため
@@ -285,6 +290,10 @@ Agent({
 - ロールも別 (review-expert) で「書いていない第三者」を演じる
 - review-expert は **修正・push しない**。指摘を finding として残し、op-run が specialist expert に再委任する
 - 判定は approve / needs-fix / needs-specialist-review / blocked のいずれかに閉じる (質問テキスト禁止)
+- 上記ブロックは `spawn-prompt-common.md` §4 の文脈適応 (fallback 5 択列挙は本 phase で非該当):
+  review phase の構造化返却は verdict 4 値 + finding block に閉じるため、assumptions[] /
+  blocked_actions[] / verification_not_run / manual_review_bucket は使わず、判断不能・scope 外・
+  人間判断要は `blocked` verdict (+ finding) で表現する
 
 ---
 
@@ -344,29 +353,18 @@ review の場合は「書いていない」と明言し、独立性を強調す�
 
 ### invocation_mode の必須行
 
-すべての OP skill 由来 spawn prompt は冒頭で以下を明示する。
-これにより expert は `_shared/invocation-mode.md` の OP-managed Mode rules を適用する。
+すべての OP skill 由来 spawn prompt は冒頭で `invocation_mode: op_managed` の 1 行と
+「質問禁止 + assumptions fallback」ブロックを明示する。これにより expert は
+`_shared/invocation-mode.md` の OP-managed Mode rules を適用する。
 
-```text
-invocation_mode: op_managed
+**両ブロックの verbatim テンプレの正本は `_shared/spawn-prompt-common.md (>=1)` §1 / §4**。
+本ファイルには転載しない (Single Canonical Source Rule)。spawn-procedure 固有の規定のみ以下に残す:
 
-You must not ask interactive questions.
-You must not ask the commander or user for clarification.
-Do not write Issue comments asking for clarification unless the OP skill explicitly delegates comment creation to you.
-If information is missing, return one of:
-  - assumptions[]               (前提を置いて続行する)
-  - needs_human_decision        (構造化された判断要求)
-  - blocked_actions[]           (この情報なしで実行しない操作のリスト)
-  - verification_not_run        (検証不能な場合)
-  - manual_review_bucket        (--auto 起票しないが人間レビューには載せる)
-Return the required schema / report format. Do not produce free-form question text.
-```
-
-詳細な mode 判定 / 禁止フレーズ / `needs_human_decision` の正規スキーマは
-`_shared/invocation-mode.md` を参照する。本ドキュメントは spawn 時の必須行のみ規定する。
-
-各 SKILL.md での pointer 記述形式 (共通節のインライン展開禁止 / 1〜2 行 pointer 化) は
-`_shared/spawn-prompt-common.md (>=1)` を参照する。
+- 本ブロックは上記「prompt 規約 (共通)」構造の 1 (invocation_mode) と 7 (不足情報の扱い) を充足する
+- 詳細な mode 判定 / 禁止フレーズ / `needs_human_decision` の正規スキーマは
+  `_shared/invocation-mode.md` を参照する
+- 各 SKILL.md での pointer 記述形式 (共通節のインライン展開禁止 / 1〜2 行 pointer 化) は
+  `_shared/spawn-prompt-common.md` §「SKILL.md での pointer 記述形式」を参照する
 
 ---
 

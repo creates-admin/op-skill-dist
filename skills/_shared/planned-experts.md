@@ -1,7 +1,9 @@
 <!--
 schema_version: 3
 last_breaking_change: 2026-06-20
-notes: v1 (2026-05-06) — planned expert (env / release / compatibility / spec) の正本を新設。
+notes: v3 追記 (2026-07-29, corrective) — 冒頭 summary (notes v1 行 / 機能概要) の stale な「spec」列挙を注記・除去
+       (spec-expert は v3 = ADR-0017 W1b で active Utility Worker 化済。契約不変ゆえ schema_version 据置)。
+       v1 (2026-05-06) — planned expert (env / release / compatibility / spec — 当時。spec は v3 で active 化) の正本を新設。
        agent / skill 実体を持たないため runtime spawn 禁止。本ファイルは planned expert names /
        purpose / runtime spawn prohibition / current substitutes / allowed metadata usage /
        runtime normalization requirement の単一正本。active expert は
@@ -20,8 +22,9 @@ notes: v1 (2026-05-06) — planned expert (env / release / compatibility / spec)
 
 /**
  * 機能概要: roadmap 上のみに存在し、agent / skill 実体を持たない planned expert (env / release /
- *           compatibility / spec) の名前・目的・現行代替先・許容メタデータ・runtime 禁止規則を
- *           1 ファイルに集約する。
+ *           compatibility) の名前・目的・現行代替先・許容メタデータ・runtime 禁止規則を
+ *           1 ファイルに集約する。Utility Worker (spec-expert / scout) は planned ではなく active —
+ *           `active-expert-registry.md` の「Utility Workers」節を参照 (spec-expert は ADR-0017 W1b で active 化済)。
  * 作成意図: 過去に planned expert (特に release-expert) が op-run / op-post-check の fallback
  *           destination として誤って指名される事故が複数あり、active と planned を物理的に
  *           分離する正本を設けて runtime spawn 禁止を 1 ヶ所で宣言する。

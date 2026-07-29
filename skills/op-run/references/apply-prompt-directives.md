@@ -31,6 +31,10 @@ expert 固有の判断基準は本ファイルが唯一の正本 (`op-run-fanout
 
 ## common (全 expert 共通、apply 指示書の追加要件)
 
+> 共通宣言層 (invocation_mode: op_managed の literal 行 / 質問禁止 / fallback 構造化返却) は
+> `~/.claude/skills/_shared/spawn-prompt-common.md` §1〜§4 が正本。apply spawn prompt の
+> 組立時は同ファイルに従い、本ファイルは apply 固有の追加要件のみを定める。
+
 ### 手順 (構造 prompt の補足)
 
 ```

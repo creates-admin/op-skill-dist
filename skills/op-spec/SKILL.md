@@ -5,7 +5,7 @@ effort: medium
 ---
 
 <!--
-schema_version: 3
+schema_version: 4
 last_breaking_change: 2026-06-20
 notes: v1 (2026-06-20): 初版。ADR-0017 W1b の最小一周版。issue-driven worklist + lazy 構築 (正本 missing なら
        深掘りしながら作る) まで。op-spec = 正本を育てる Direct Mode 固定の対話 skill。
@@ -18,6 +18,11 @@ notes: v1 (2026-06-20): 初版。ADR-0017 W1b の最小一周版。issue-driven 
        ledger pull` 消費 → worklist seed) + decide 段に derived issue 発行ステップ 3-1b (G1: align gate +
        fingerprint dedup + full enrichment + op issue create + back-link)。additive (既存 issue→正本 経路を
        保持、双方向両立 = ADR-0017 D1)。last_breaking_change は据置。
+       v4 (2026-07-29): ADR-0029 決定2 (Wave B1)。「薄い入口 + references/」分割。1-1 worklist 種取得の
+       mode 別詳細 / 3-1b derived issue 発行 5ステップ / spec-expert spawn テンプレート / decision-record
+       決定項目表を `references/*.md` へ物理移動 (byte-identical、内容変更なし)。本文には各節へのトリガー
+       付き pointer を残す。不変則7 例外宣言は本文残留 (内容不変)。additive (挙動非変更) のため
+       last_breaking_change は据置。
 -->
 
 <!--
@@ -78,6 +83,11 @@ issue は揺れるが feature (正本) は安定するので、feature を主役
 | 対象 repo の `.claude/rules/_schema.md` | 正本 schema / provenance タグ / 6 節 skeleton (定義の正本は ADR-0017 決定3) |
 | `~/.claude/skills/_shared/dedup-policy.md` | derived issue 発行時の fingerprint 照合・dedup |
 | `~/.claude/skills/_shared/expert-spawn.md` (>=16) | needs_human_decision 正規スキーマ / spawn schema |
+| `~/.claude/skills/_shared/spawn-prompt-common.md` (>=1) | spawn prompt 共通必須ブロック (§4 質問禁止 + fallback の正本) |
+| `references/worklist-entry-modes.md` | entry mode (issue-driven/feature-driven/drift-driven) 別の worklist 種取得詳細手順。1-0 でモードを選んだ直後に読む |
+| `references/derived-issue-procedure.md` | 3-1b derived issue 発行の 5 ステップ詳細。align 済み gap を issue 化すると決めた時のみ読む |
+| `references/spec-expert-spawn-template.md` | spec-expert spawn の literal prompt テンプレート。フェーズ2 2-1 に到達した時に読む |
+| `references/decision-record.md` | op-spec 設計決定の rationale 表。経緯確認したい時のみ読む |
 
 ---
 
@@ -135,72 +145,8 @@ worklist を **feature (= 正本) 主役**で構造化する。worklist の seed
 
 選んだ mode に応じて種を取得する。以降は取得結果を 1-2 で feature 主役に畳む。
 
-**issue-driven (既定)** — pending issue を起点にする:
-
-```bash
-gh issue list --state open --limit 50 --json number,title,labels
-```
-
-**feature-driven** — 正本一覧を起点にし、各 feature の正本 state + 紐づく issue を並べる:
-
-```bash
-# 正本一覧 (meta ファイル _* / 00-* は feature ではないので除外、_schema.md 索引除外規約)
-ls .claude/rules/*.md 2>/dev/null | grep -vE '/(_|00-)' \
-  || echo "[.claude/rules] に feature 正本がありません — issue-driven を使うか lazy 構築から始めます"
-
-# 各 feature の status は frontmatter から読む (cultivated / draft / unverified)
-#   例: grep -m1 '^status:' .claude/rules/<feature>.md
-# pending issue は issue-driven と同じ gh issue list で取り、feature 帰属を推定して紐づける
-```
-
-**drift-driven** — git log staleness + 未成熟 status を起点に seed する:
-
-```bash
-# (a) 正本より新しい code を持つ feature (stale 候補) を git log で拾う
-#     staleness は frontmatter 日付でなく git log で判定する (_schema.md「staleness は git log で判定」)。
-#     各 feature 正本の最終更新コミット時刻 ⟷ その paths 配下 code の最終更新コミット時刻を比較し、
-#     code の方が新しければ stale 候補とする。
-for SPEC in $(ls .claude/rules/*.md 2>/dev/null | grep -vE '/(_|00-)'); do
-  SPEC_TS="$(git log -1 --format=%ct -- "$SPEC" 2>/dev/null)"
-  # paths frontmatter の glob 配下 code の最新コミット時刻を取り SPEC_TS と比較する
-  # (glob 解決は paths 行を読んで feature ごとに行う。code が新しければ stale 候補に積む)
-  echo "  $SPEC: spec_ts=${SPEC_TS:-none}"
-done
-
-# (b) status: draft / unverified の正本 (人間深掘り未了) も seed に含める
-grep -lE '^status:[[:space:]]*(draft|unverified)' .claude/rules/*.md 2>/dev/null \
-  | grep -vE '/(_|00-)' \
-  || echo "draft/unverified の正本なし"
-
-# (c) Spec Patrol Ledger の confirmed drift feature を seed に合算 (ADR-0017 D3)
-#     op-spec-patrol が ledger push --drift-count で記録した feature の drift_counts が non-zero ならば
-#     confirmed drift として cultivation 対象に加える。
-#     Ledger Issue 番号は op-spec-patrol label + op-state label の Issue から解決する。
-# フォールバック: Ledger なし / pull 失敗 / op spec-patrol 未導入の場合は (a)(b) のみで継続する。
-LEDGER_ISSUE="$(gh issue list --label op-spec-patrol --label op-state --state open \
-  --json number --jq '.[0].number // empty' 2>/dev/null || true)"
-if [ -n "$LEDGER_ISSUE" ]; then
-  # ledger pull で area_state を取得し、drift_counts が空でない feature を抽出する
-  LEDGER_JSON="$(op spec-patrol ledger pull --issue "$LEDGER_ISSUE" 2>/dev/null || true)"
-  if [ -n "$LEDGER_JSON" ]; then
-    # drift_counts が {} でない feature のキー一覧を抽出する
-    echo "$LEDGER_JSON" \
-      | jq -r '.details.area_state // {} | to_entries[]
-               | select(.value.drift_counts != null and (.value.drift_counts | length) > 0)
-               | .key' 2>/dev/null \
-      || echo "(c) drift_counts の解析失敗 — スキップ"
-  else
-    echo "(c) ledger pull 応答なし — Ledger 未初期化か op spec-patrol 未導入。スキップ"
-  fi
-else
-  echo "(c) Spec Patrol Ledger Issue が見つからない — op spec-patrol 未導入か未初期化。スキップ"
-fi
-```
-
-> drift-driven の seed は「stale 候補」(a)、「未成熟 status」(b)、「Spec Patrol Ledger の
-> confirmed drift feature」(c) の和集合。
-> `status: cultivated` で git 上も最新かつ Ledger 上の drift_counts もゼロな正本は seed から外れる
-> (育成済みは後回し)。(c) の ledger pull が失敗 / Ledger 未導入の場合は (a)(b) のみで継続する。
+> **いつ読むか**: 1-0 で entry mode を選んだ直後、選んだモードの節だけ読めばよい (3 モードは排他的、
+> 他モードの手順は読む必要がない)。詳細手順は `references/worklist-entry-modes.md` を参照する。
 
 ### 1-2. feature 主役での構造化
 
@@ -267,7 +213,8 @@ lane は hint です (最終振り分けはあなたが決めてください)。
 
 ### 2-1. spec-expert を spawn (gather)
 
-controller は以下のテンプレートで spec-expert を spawn する (「spec-expert spawn テンプレート」節を参照)。
+controller は spec-expert を spawn する。literal prompt テンプレートは `references/spec-expert-spawn-template.md`
+を参照する (**いつ読むか**: このステップに到達した時)。
 spec-expert は隔離 context で正本 + code を読み、差分 (正本が古い / code が逸脱 / issue 前提が不一致) を根拠付きで返す。
 
 ### 2-2. present (human に提示)
@@ -343,179 +290,15 @@ schema 定義は `.claude/rules/_schema.md` が正本 (ここでは「書く側�
 ### 3-1b. derived issue 発行 (G1+enrich、ADR-0017 D2/D4/D5)
 
 3-1 の正本 write で確定した「正本↔code gap のうち実装が必要なもの」を、derived issue として起票できる。
-**D2 (発行責務 = op-spec のみ・人間 align 後)** に従い、以下の 5 ステップを経てから起票する。
-起票するかどうかは per-gap で必ず human に確認する (捏造禁止・自動起票なし)。
+**D2 (発行責務 = op-spec のみ・人間 align 後)** に従い、align gate → fingerprint dedup → full enrichment →
+op issue create → back-link の 5 ステップを経てから起票する。起票するかどうかは per-gap で必ず human に
+確認する (捏造禁止・自動起票なし)。
 
-> **発火条件**: 3-1 の正本 write で gap を記録し、かつ「この gap は実装で解消すべき」と human が align した場合のみ。
-> ✏️ 方向修正の gap (修正方針が確定した) も同様に対象となる。
-> ⛔/⏸️ の gap は起票しない。align していない gap は `[?] TODO: needs-human` のまま正本に残す。
-
-#### ステップ1: align gate (per-gap で human 承認)
-
-正本 write が済んだ後、実装が必要な gap について per-gap で確認する:
-
-```
-gap: <feature>#<decision-id> — <gap の内容を 1 行で>
-現在: code では <実態>、正本では <あるべき姿>
-
-この gap を derived issue として起票しますか？
-  y — 起票フロー (ステップ2〜5) へ
-  n — 起票しない (gap は正本の [?] のまま残す)
-```
-
-#### ステップ2: fingerprint dedup
-
-`_shared/dedup-policy.md` の fingerprint 生成仕様に従い fingerprint を組む。
-`op-fingerprint: <domain>:<normalized_title>:<primary_file>:<symbol>` を生成し、
-既存 open Issue と fingerprint が衝突しないか確認する。
-
-```bash
-# op core fingerprint で fingerprint 文字列を生成する (format drift 防止、正本: expert-spawn.md §fingerprint)
-# --domain / --title / --file / --symbol の named 引数を使う (positional 渡しは clap が拒否する)
-DERIVED_FP=$(op core fingerprint --plain \
-  --domain feature \
-  --title "<normalized_title>" \
-  --file "<primary_file>" \
-  --symbol "<symbol>" \
-  2>/dev/null)
-: "${DERIVED_FP:?op core fingerprint が fingerprint を返しませんでした}"
-
-# op scan dedup で既存 Issue との重複判定 (op-plan フェーズ7 手本: op-plan/SKILL.md L696-726)
-# op issue list --json は body raw を返さないため、手動 fingerprint 照合は使用しない
-FINDING_DRAFT_PATH=$(mktemp /tmp/op-spec-derived-finding-XXXXXX.json)
-cat > "$FINDING_DRAFT_PATH" <<EOF
-{
-  "domain": "feature",
-  "title": "<normalized_title>",
-  "files": ["<primary_file>"],
-  "symbols": ["<symbol>"]
-}
-EOF
-DEDUP_RESULT=$(op scan dedup --finding-json "$FINDING_DRAFT_PATH" --json --quiet 2>/dev/null)
-DEDUP_DECISION=$(printf '%s' "$DEDUP_RESULT" | jq -r '.decision' 2>/dev/null)
-rm -f "$FINDING_DRAFT_PATH"
-
-case "$DEDUP_DECISION" in
-  pass)
-    # 重複なし → ステップ3 へ進む
-    ;;
-  block)
-    # 既存 Issue と重複: issue_number を取り出してユーザーに提示して終了する
-    MATCHED_NUM=$(printf '%s' "$DEDUP_RESULT" | jq -r '.details.matched_existing.issue_number // "不明"' 2>/dev/null)
-    echo "fingerprint 衝突: 同内容の Issue #${MATCHED_NUM} が既に存在します"
-    echo "→ 起票せず既存 Issue を提示します"
-    # Direct Mode: ユーザーに既存 Issue 番号を示して終了する
-    ;;
-  *)
-    # dedup 取得失敗または想定外値 → fail-closed でエラーを提示して中断する
-    echo "dedup 判定に失敗しました ($DEDUP_DECISION)。手動で重複チェックを行ってから再試行してください。"
-    ;;
-esac
-```
-
-衝突あり (`block`) → 起票せず既存 Issue 番号を提示して終了。
-衝突なし (`pass`) → ステップ3 へ進む。
-dedup 失敗 (その他) → fail-closed でエラーを提示し、手動確認を促して中断する。
-
-#### ステップ3: full enrichment (不変則8 必須)
-
-**D5 (gate = full enrichment)** に従い、derived issue も `_shared/issue-enrichment.md` の full enrichment を通す。
-op-spec は Direct Mode 固定のため、block 時は対話で human に判断を返す。
-
-enrichment input を組む:
-
-```json
-{
-  "issue_draft": {
-    "title": "<gap の実装タイトル、例: [feature-expert] <feature> の <gap 内容> を実装する>",
-    "body": "<指示書フル版。op-spec-ref marker / op-source marker / op-domain marker を含む (後述)>",
-    "domain": "feature",
-    "recommended_runner": "feature-expert",
-    "scope_files": ["<gap に関連するソースパス>"],
-    "new_files": [],
-    "severity": "n/a",
-    "fingerprint": "<ステップ2 で生成した fingerprint>"
-  },
-  "options": {
-    "with_design_plan": "auto",
-    "with_cross_review": "auto",
-    "max_review_loops": 2,
-    "strict": false
-  }
-}
-```
-
-`issue-enrichment.md §7.6` の controller オーケストレーション順序に従って実行する:
-
-```
-1. [pre-step] with_design_plan(bool) / cross_review_experts / task_complexity 等を解決する (§4/§6)
-2. Workflow({name:'op-enrichment', args:{...}}) を呼び出す
-3. §8 Output contract を受領 (result: enriched | blocked)
-   - blocked → 起票せず escalation_report を human に提示して判断を仰ぐ:
-     「1. 指摘を修正して再 enrichment / 2. キャンセル」
-4. §7.5 Cross-instance Collision Gate (gh issue list 横断検索、workflow 後に必ず実行)
-   - collision_gate.verdict == warn → similar_issues を提示し「このまま起票しますか？」と確認
-   - collision_gate.verdict == block → 起票を停止して human に判断を返す
-```
-
-#### ステップ4: op issue create (marker 込み・直列)
-
-enrichment が pass した後、marker-lint を通してから起票する。
-起票直前の Marker Publish Validate (op-plan フェーズ7-2 と同パターン) を必ず実行:
-
-```bash
-# Issue 本文は Write tool で一時ファイルに書き出す (長文・特殊文字対応)
-export DERIVED_BODY_FILE="/tmp/op-spec-derived-$(date +%s).md"
-: "${DERIVED_BODY_FILE:?DERIVED_BODY_FILE must be set}"
-
-# 本文には必ず以下の hidden marker を含める (ADR-0017 D4):
-#   <!-- op-spec-ref: <feature>#<decision-id> -->  (発行元の正本決定を指す = linkage B + provenance)
-#   <!-- op-source: op-spec -->
-#   <!-- op-domain: feature -->
-#   <!-- op-fingerprint: <fingerprint> -->
-
-# 起票直前 Marker Publish Validate (op-plan フェーズ7-2 手本)
-LINT_JSON=$(op core marker-lint --body - --source-hint issue-body --strict < "$DERIVED_BODY_FILE" 2>/dev/null) || true
-LINT_DECISION=$(printf '%s' "$LINT_JSON" | jq -r '.decision' 2>/dev/null)
-if [ "$LINT_DECISION" = "pass" ]; then
-  # pass → 起票する (直列、並列化禁止: gh/op issue create の並列化は重複起票事故の元)
-  NEEDED_LABELS=()
-  NEEDED_LABELS+=("auto-report" "pro-feature-expert")
-  export LABEL_CSV=$(IFS=,; echo "${NEEDED_LABELS[*]}")
-  CREATE_JSON=$(op issue create \
-    --title "<derived issue タイトル>" \
-    --label "$LABEL_CSV" \
-    --body-file "$DERIVED_BODY_FILE" \
-    --ensure-labels)
-  DERIVED_ISSUE_NUM=$(printf '%s' "$CREATE_JSON" | jq -r '.details.issue_number // empty' 2>/dev/null)
-  : "${DERIVED_ISSUE_NUM:?op issue create が issue_number を返しませんでした}"
-else
-  # block → 起票せず、hidden marker を修正してから再起票するようユーザーに提示して停止する
-  # (Direct Mode 固定、op-spec は --auto を持たない)
-  echo "marker-lint block: $(printf '%s' "$LINT_JSON" | jq -c '.blocking_reasons // []' 2>/dev/null)"
-  echo "→ hidden marker を修正してから再起票する (このまま起票しない)"
-fi
-```
-
-#### ステップ5: back-link (正本への realizes 追記)
-
-起票して得た `#DERIVED_ISSUE_NUM` を正本の該当決定行へ張り、linkage B 双方向を完成させる
-(ADR-0017 決定9):
-
-正本 `.claude/rules/<feature>.md` の該当決定行に `realizes #DERIVED_ISSUE_NUM` を追記する:
-
-```
-変更前: D-N: <決定内容> [code]
-変更後: D-N: <決定内容> [code] (realizes #DERIVED_ISSUE_NUM)
-```
-
-これで linkage B が両端とも成立する:
-- 正本 → issue: `(realizes #DERIVED_ISSUE_NUM)` (今ここで追記)
-- issue → 正本: `<!-- op-spec-ref: <feature>#<decision-id> -->` (ステップ4 で issue 本文に埋め込み済)
-
-> **捏造禁止**: ステップ1 で human align を経た gap のみ起票する。align なしに derived issue を捏造しない。
-> 「gap の実装承認 (D2 align gate)」と「issue 本文の品質担保 (D5 enrichment cross-review)」は
-> 層が違うため、どちらも省略しない。
+> **発火条件 (いつ読むか)**: 3-1 の正本 write で gap を記録し、かつ「この gap は実装で解消すべき」と
+> human が align した場合のみ。✏️ 方向修正の gap (修正方針が確定した) も同様に対象となる。
+> ⛔/⏸️ の gap は起票しない (この場合、以降は読まなくてよい)。align していない gap は
+> `[?] TODO: needs-human` のまま正本に残す。5 ステップの詳細手順は
+> `references/derived-issue-procedure.md` を参照する。
 
 ### 3-2. write 先2: issue 側 (verdict)
 
@@ -636,61 +419,11 @@ verdict が付いた issue を疎結合で handoff する:
 
 ## spec-expert spawn テンプレート
 
-op-spec controller は以下のテンプレートで spec-expert を spawn する。
+op-spec controller は spec-expert を spawn する。literal prompt テンプレート (spec-expert 契約含む)・
+非対称設計 (op-spec = Direct Mode / spec-expert = OP-managed Mode) についての注記・subagent_type に
+直接渡せる根拠は `references/spec-expert-spawn-template.md` を参照する。
 
-```
-Agent({
-  subagent_type: "op-skill:spec-expert",
-  model: "opus",
-  description: "op-spec 3 者照合: <feature> ⟷ code ⟷ human",
-  prompt: `
-invocation_mode: op_managed
-
-# 照合タスク
-
-feature: <feature id>
-spec_path: .claude/rules/<feature>.md   # missing なら lazy 構築モード
-target_issues: [#NN, #MM]               # この feature に紐づく pending issue
-issue_premises:                         # 各 issue が前提とする挙動 (controller が抽出)
-  - issue: #NN
-    premise: <issue が前提とする挙動 1 文>
-code_scope:                             # 読むべき code 範囲 (paths から)
-  - <src/feature/**>
-
-# リポジトリ情報
-
-repo_root: <git rev-parse --show-toplevel の結果>
-
-# 指示
-
-expert-spec/SKILL.md に従って以下を実行してください:
-1. 正本 state 判定 (exists / stale / missing)
-2. 3 者照合 (正本 ⟷ code) で差分検出 (spec_stale / code_deviation / premise_mismatch)
-3. provenance タグ付与 (code 由来=[code] / domain・why=[?] TODO:needs-human、捏造禁止)
-4. issue 前提の事実照合 (premise_check)
-5. missing なら lazy 構築 (code から skeleton 候補抽出、domain は [?] で残す)
-6. 返却契約スキーマで構造化返却 (正本 write はしない、proposed_spec_update を返すまで)
-
-You must not ask interactive questions.
-If information is missing, return it as assumptions[] or needs_human_decision.
-  `
-})
-```
-
-### 非対称についての注記
-
-- **op-spec 自身**: Direct Mode (人間起動、align 対話あり、正本 write は human 承認 gate)
-- **spec-expert**: OP-managed Mode (op-spec controller から spawn、質問で停止しない、read-only)
-
-この非対称は意図的な設計。controller は human との align 対話と正本 write を担い、
-spec-expert は隔離 context で機械的に 3 者照合して差分を返す。
-
-### spec-expert を subagent_type に直接渡せる根拠
-
-spec-expert は `active-expert-registry` 上は Utility Worker (registry 追加は別 IU) だが、
-`agents/spec-expert.md` が存在するため spawn 対象にできる (plugin 実行時の `subagent_type` は
-scoped 名 `op-skill:spec-expert` を渡す。上記テンプレ参照)。
-op-report が `scout` を、op-codev が `feature-expert` を直接 subagent_type に渡すのと同じ前例に準じる。
+> **いつ読むか**: フェーズ2 2-1 (spec-expert を spawn する直前) に到達した時。
 
 ---
 
@@ -700,7 +433,7 @@ op-report が `scout` を、op-codev が `feature-expert` を直接 subagent_typ
 |----|-------|
 | issue を feature 主役で worklist 化する | 並列 fan-out で大量 audit する (op-scan の領分) |
 | 正本 ⟷ code ⟷ human の 3 者照合を回す | 自動マージする (op-merge の領分) |
-| 正本を育てる (human align 後に write) | align なしに derived issue を自動起票する (捏造禁止・D2 align gate 必須) |
+| 正本を育てる (human align 後に write) | align なしに derived issue を自動起票する (捏造禁止 — 冒頭の宣言に従う、D2 align gate 必須) |
 | align 済み gap を derived issue として full enrichment 経由で起票する (3-1b) | op-scan/op-plan の領分を侵す (bulk audit / 新規要望分解) |
 | issue に方向性 verdict を付ける | ADR を起こす (op-architect の領分) |
 | verdict 付き issue を op-run/op-codev へ handoff | op-run の cluster 実装をする (op-run の領分) |
@@ -723,19 +456,8 @@ op-report が `scout` を、op-codev が `feature-expert` を直接 subagent_typ
 
 ## decision-record
 
-ADR-0017 W1b で起こし、W2 で full 化した設計:
-
-| 決定項目 | 確定内容 |
-|---------|---------|
-| 形態 | 新 OP skill (op-spec) + active 化した worker (spec-expert) + 教科書 (expert-spec) |
-| mode | Direct Mode 固定 (OP-managed 経路なし)。正本 write は人間判断を伴うため |
-| worklist | feature 主役で構造化 (元症状の正攻法)。entry mode = issue-driven (既定) / feature-driven / drift-driven + quick/deep lane hint (W2) |
-| 深掘り | spec-expert を isolated context で spawn (3 者照合)。複数 feature を順に深掘り (W2)。Explore 型は使わない (rules を skip、ADR-0017 F3) |
-| lazy 構築 | 正本 missing なら深掘りしながら code から構築 (demand-driven、捏造禁止) |
-| linkage | A (正本 ⟷ 正本 cross-feature [[]]) + B (issue ⟷ 正本 双方向ポインタ、W2) |
-| ripple-check | 決定/不変則 update 時に依存元正本を grep で拾い波及を提示、望めば worklist へ積む (W2) |
-| 記録 | 正本 write (align 済みのみ) + issue verdict (4 本) + derived issue 発行 (3-1b、W5) + 複数 feature 進捗/done |
-| スコープ | W2 で full 化済 (worklist 全モード + linkage A/B + ripple-check + 複数 feature)。W5 で derived issue 発行 (3-1b: align gate + fingerprint dedup + full enrichment + op issue create + back-link) を追加。索引自動生成 / broken-link 検出 / back-link 自動保持は W3 (op-spec-patrol) |
+ADR-0017 W1b で起こし、W2 で full 化した設計の決定項目表は `references/decision-record.md` を参照する
+(**いつ読むか**: op-spec の設計意図・経緯を確認したい時。実装・運用のたびには読まなくてよい)。
 
 ### 不変則7 例外宣言 (ADR-0017 決定6 / 決定9)
 

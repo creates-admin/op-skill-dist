@@ -77,26 +77,23 @@ active expert / planned expert の canonical 定義は以下に集約されて�
 
 `env-expert` / `release-expert` 等 planned expert の post-check は実体不在のため skip され、
 `<!-- op-planned-post-check-skipped: <expert> -->` marker が PR に記録される。op-merge はこの
-marker 単体では block しない (下記 "planned post-check skip の扱い" の通り)。
+marker 単体では block しない (下記 "planned post-check skip / needs:human-decision の扱い" の通り)。
 正本仕様は `skills/_shared/planned-experts.md` および `skills/_shared/runtime-contract.md` を参照。
 
 これらの marker / label の **実際の判定** は `op merge verify` の gate 評価に内包されている。
 本 Notice は「どの marker / label が何を意味するか」を人間に説明するための解釈であり、
 op-merge が独自に bash gate を再実装することはない。
 
-現時点での実行時挙動:
+現時点での実行時挙動 — **gate ごとの人間向け説明は「フェーズ3.5-4. よく出る block の人間向け
+説明テンプレ」の表が本 SKILL.md 内の作業地点 (block 翻訳時の正本)**。ここでは表に載らない
+label / marker 由来の差分のみ挙げる:
 
-- `pro-reviewed` ラベルは **op-run フェーズ4 が自動付与**する (review-expert の `review_result == approve` 起点)
+- `pro-reviewed` ラベルは **op-run フェーズ4 が自動付与**する (review-expert の `review_result == approve` 起点)。
+  `pro-review-fix-in-progress` / `pro-review-stale` / `pro-review-blocked` は op-run の Review Fix Loop 由来
+  (gate 2 除外)、`pro-security-needs-fix` は security post-check BLOCK 時に op-run が付与する (gate 14 block)
 - **review state 文書 (`<!-- op-review-state -->`、PR body) に有効な `attempt` が存在しない場合**、
-  `op merge verify` は gate 3a で block を返す (ADR-0027 6b。旧 `<!-- op-review-meta -->` コメント
-  存在判定から state 文書判定へ置換)。op-merge はユーザーに「review-expert global review が未実行です。
-  op-run を再実行するか手動レビューしますか?」を確認する
-- `<!-- op-security-post-check -->` block が無い security 影響 PR は gate 14〜16 で block される
-- `pro-review-fix-in-progress` / `pro-review-stale` / `pro-review-blocked` ラベルは op-run の Review Fix Loop で
-  active に発生する。これらが付いた PR は gate 2 で除外される
-- `pro-security-needs-fix` ラベルは security-expert post-check が BLOCK を返した場合に op-run が付与する (gate 14 で block)
-- `legitimate_workflow_preserved: false` を post-check meta block で検出した PR は gate 17 で block
-- `requires_aux_post_check: true` で aux post-check が未充足な PR は gate 18 で block
+  `op merge verify` は gate 3a で block を返す (ADR-0027 6b)。op-merge はユーザーに
+  「review-expert global review が未実行です。op-run を再実行するか手動レビューしますか?」を確認する
 - `<!-- op-planned-post-check-skipped: <expert> -->` は単体では merge を止めない (gate 10 が planned-skipped expert を除外する)
 
 planned expert の active 化 (例: `env-expert` / `release-expert` 実装) に伴う Notice の差分更新は、
@@ -149,35 +146,18 @@ worktree cleanup / Issue close など、本 SKILL.md 後段に書かれている
 
 ラベル名 / marker 名 / 核となる意味論をローカルに再定義してはならない (重複正本禁止)。
 
-### planned post-check skip の扱い
+### planned post-check skip / needs:human-decision の扱い
 
-A planned expert post-check skip marker is not automatically merge-blocking.
+block 条件の正本は `skills/_shared/runtime-contract.md` — §3-B (planned-skip marker の valid 条件)
+と §11 (Merge-Blocking State Categories: `op-planned-post-check-skipped` は単体 block ではない /
+`needs:human-decision` は default merge-blocking)。条件リストを本節に再掲しない。
+op-merge 固有の差分 (どの gate が実装するか) のみ:
 
-`<!-- op-planned-post-check-skipped: <expert> -->` blocks merge only when paired with:
-
-- an unresolved blocking label,
-- an explicit post-check block,
-- unsafe `needs:human-decision`,
-- missing required review approval,
-- or failed required verification.
-
-つまり `op-planned-post-check-skipped` 単体では merge を止めない。この判定は `op merge verify` の
-gate 10 (planned-skipped expert を stale check から除外) に内包されている。
-
-### needs:human-decision の扱い
-
-`needs:human-decision` is merge-blocking by default.
-
-`needs:human-decision-followup` may be merge-allowed only when:
-
-- no blocking label remains,
-- safe-first-step is documented,
-- global review approves,
-- required verification passes.
-
-> **実装状況**: `op merge verify` の gate 2b が `needs:human-decision` を評価する。
-> followup なし = 無条件 block、followup あり + `pro-human-verified` = 通過許可 を強制する。
-> ラベル名の canonical 定義および follow-up 運用フローは `skills/_shared/markers/labels-and-markers.md` を参照。
+- `op-planned-post-check-skipped` 単体で merge を止めない判定は `op merge verify` の **gate 10**
+  (planned-skipped expert を stale check から除外) に内包されている
+- `needs:human-decision` は **gate 2b** が評価する: followup なし = 無条件 block、
+  `needs:human-decision-followup` あり + `pro-human-verified` = 通過許可 を強制する。
+  ラベル名の canonical 定義および follow-up 運用フローは `skills/_shared/markers/labels-and-markers.md` を参照
 
 ---
 
@@ -591,20 +571,18 @@ op-run に戻して状態を整えてもらう (Review Fix Loop / 再 post-check
 
 ### 3.5-4. よく出る block の人間向け説明テンプレ
 
+機械的に判定できる gate (1-2 / 3a-3i / 4-9 / 10 / 19-20) の人間向け説明は、
+`op merge verify` の `blocking_reasons[].reason` (gate/code とセットで日本語文言生成済) を
+**そのまま** ユーザー提示に使う。SKILL.md 側で reason 文言を再定義しない (Single Canonical
+Source Rule、正本は `op-tools/docs/specs/merge-verify.md`)。
+
+例外として、以下 2 系統は raw reason だけでは運用上の補足 (override 可否・設計意図) が
+不足するため、人間向け説明を本 SKILL.md 側で維持する:
+
 | gate / code 系統 | 人間向けの説明 |
 |---|---|
-| gate 1-2 (pro-reviewed / 排他ラベル) | レビューが完了していない、または修正中の PR です |
-| gate 3a-3i (review state provenance) | 正式な op-run review を経ていない、または review state 文書 (PR body) の provenance が不整合です |
-| gate 4 (review stale) | レビュー後に新しい commit が積まれました。再レビューが必要です |
-| gate 5 (approve) | レビュー結果が approve ではありません |
-| gate 6 (base ref) | マージ先 branch が想定 (通常 main) と違います |
-| gate 7-8 (mergeable / merge state) | コンフリクトまたは merge できない状態です |
-| gate 9 (checks) | CI (テスト等) が成功していません |
-| gate 10 (post-check stale) | post-check 後に commit が積まれました。再 post-check が必要です |
-| gate 11-13 (UX post-check) | UI 影響 PR の ux-ui-audit post-check が未完了 / 失敗 / stale です |
-| gate 14-18 (security post-check) | security 影響 PR の security post-check が未完了 / 失敗 / stale、または正当な操作が壊れています |
-| gate 19-20 (Fixes/Refs) | PR が Issue を自動 close する `Fixes #N` を持っていない、または参照先 Issue が不在/closed です |
-| gate 21 (blocking-finding) | repo に未解決の blocking Issue が残っており、この PR がそれを Fixes していません |
+| gate 11-18 (UX / security post-check) | UI/security 影響 PR の post-check が未完了 / 失敗 / stale、または正当な操作が壊れています。緊急時のみ manual override 可 (下記) |
+| gate 21 (blocking-finding) | repo に未解決の blocking Issue が残っており、この PR がそれを Fixes していません。manual override 不可 (「他作業を止めて先に直す」設計) |
 
 > **manual override について**: gate 11-18 (UX / security post-check) は緊急時に
 > `<!-- op-manual-override -->` block + manual-override ラベルで例外承認できる。
@@ -935,18 +913,13 @@ PR #61 fix(auth) — +85/-23, レビュー approve
 
 ## 既知の gap (additive follow-up)
 
-`op merge verify` の gate 評価器は全 gate の受け口を実装済みだが、一部は live 供給が partial
-(`op-tools/docs/specs/merge-verify.md` §2 out-of-scope)。いずれも **fail-CLOSED 側に倒れる**
-(gate を緩めない) ため本 wave で 1 PR 完結可能で、live 供給が揃い次第 additive に更新する:
+`op merge verify` の gate 評価器は全 gate の受け口を実装済みだが、一部は live 供給が partial。
+**live 供給 gap の一覧の正本は `op-tools/docs/specs/merge-verify.md` §2 (out-of-scope)**
+(現在: manual override の live 供給 / UI 影響の path-based 判定。いずれも **fail-CLOSED 側に
+倒れる** = gate を緩めない)。gate 10 (全 post-check stale 全網羅) は **ADR-0027 6b で配線済み**
+(review state 文書の `post_checks` map 列挙) であり、もはや gap ではない。
+以下は §2 に載らない op-merge 側固有の gap のみ:
 
-- **gate 10 (全 post-check stale 全網羅)**: **ADR-0027 6b で配線済み**。review state 文書
-  (`<!-- op-review-state -->`) の `post_checks` map (expert 名キー、aux は `<expert>@aux`) を列挙する
-  ことで、複数 post-check の stale 判定が構造的に網羅される (以前は live builder 側の
-  `post_check_latest_by_expert` 供給が未配線で gate 14f / 13b 単体検証に留まっていた)。
-- **manual override の live 供給**: evaluator 側受け口は完成済み、live builder の `*_override` 供給は
-  引き続き未配線 (state 文書の `manual_overrides[]` への配線は別 follow-up)。
-- **UI 影響の path-based 判定**: live builder は label + marker のみで判定。changed files を使う
-  path-based 判定は caller が別途 OR する拡張余地として残る。
 - **worktree cleanup の review-glob + remote-branch 削除**: `op run worktree cleanup` は単一 apply
   worktree のみ対象。review worktree の複数世代 glob と remote branch 削除は raw bash 残置
   (フェーズ4-4)。primitive 拡張は follow-up Issue。**mcp channel ではこの節自体が到達不能**

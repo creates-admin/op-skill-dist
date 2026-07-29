@@ -30,7 +30,7 @@ notes: v1 (2026-05-16): op-run のクラスタリング後 plan mode gate 詳細
 SKILL.md 本体は要点と本ファイルへの pointer のみを保持し、god file 化を抑制する。
 
 公式仕様: Claude Code [Choose a permission mode](https://code.claude.com/docs/en/permission-modes)
-パターン参照元: `skills/op-plan/SKILL.md` フェーズ -1 (行 140-180) / フェーズ 6 (行 514-610)
+パターン参照元: `skills/op-plan/SKILL.md`「フェーズ -1: プランモード自動遷移」/「フェーズ6: ユーザー承認 gate (ExitPlanMode)」
 
 ---
 
@@ -169,19 +169,13 @@ verdict / `op-spec-ref` が付いた issue は title + verdict emoji + link、
 ### クラスタ別 解説 (自然文 2-3 行ずつ)
 
 #### auth-1 (debug クラスタ)
-auth-1 は #42 #43 の login 失敗バグ 2 件を一括修正する。src-tauri/src/auth/ 配下の
-セッショントークン処理を debug-expert が直し、login 画面の挙動が安定する。
-他クラスタとファイル重複なしのため並列実行可能。
+(自然文解説はここに記入。お手本は本ファイル末尾「cluster 解説サンプル文」節のサンプル1)
 
 #### report-1 (refactor クラスタ)
-report-1 は #88 のレポート出力モジュールに溜まった architecture_debt を refactor-expert が整理する。
-振る舞いは保ったまま src/features/report/ の構造を平坦化し、後続の機能追加で同領域に
-新規変更が走った時に既存 debt が悪化するのを防ぐ。Critical 系のため最優先で直列実行。
+(自然文解説はここに記入。お手本は本ファイル末尾「cluster 解説サンプル文」節のサンプル2)
 
 #### profile-1 (feature クラスタ)
-profile-1 は #51 #52 のプロフィール編集画面新規追加。feature-expert が src/pages/profile/ 配下に
-既存パターン (src/pages/account/ を手本) を流用して実装し、ユーザーが自分の情報を編集できる UI が完成する。
-post-check で ux-ui-audit-expert を起動するため、UI 整合性も同 PR で担保される。並列実行可能。
+(自然文解説はここに記入。お手本は本ファイル末尾「cluster 解説サンプル文」節のサンプル3)
 
 ### 承認すると何が起きるか
 
@@ -312,7 +306,7 @@ god file 抑制のため、新規詳細は常に本ファイル側に追加す�
 
 ## 参照
 
-- `skills/op-plan/SKILL.md` フェーズ -1 (行 140-180) / フェーズ 6 (行 514-610) — 構造のお手本 (本ファイル作成元)
+- `skills/op-plan/SKILL.md` — 構造のお手本 (本ファイル作成元、節名は冒頭「パターン参照元」参照)
 - `skills/_shared/clustering.md` — クラスタリングロジック本体 (本 gate からは変更しない)
 - Claude Code 公式 [Choose a permission mode](https://code.claude.com/docs/en/permission-modes) — EnterPlanMode / ExitPlanMode の権限機構レベル仕様
 - op-run/SKILL.md の controller 分解は完了済 (references/ への段階分解で現在約 1,300 行)。本ファイルはその分解方針の先行実装 (旧 follow-up 作業指示書は完了に伴い削除済)

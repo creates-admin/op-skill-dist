@@ -112,9 +112,9 @@ commit を打つ前に以下を **全項目 yes** にしてから進む。
       (skip 時は code_review_skip_reason 確定済)
 - [ ] code-review による修正を含めて git add -A 実行済
 - [ ] git commit 実行済
-- [ ] git log --format='%H' "${BASE_SHA}..HEAD" で commits_added の SHA 配列を取得済、
+- [ ] git log --format='%H' "${OP_RUN_BASE_SHA}..HEAD" で commits_added の SHA 配列を取得済、
       完了報告の commits_added フィールドに記入済 (1 件以上であること)
-- [ ] git rev-list "${BASE_SHA}..HEAD" --count が 1 以上であることを確認済
+- [ ] git rev-list "${OP_RUN_BASE_SHA}..HEAD" --count が 1 以上であることを確認済
 ```
 
 > **Static 検証コマンドの正本は `skills/_shared/project-profile.md`**。
@@ -126,14 +126,17 @@ commit を打つ前に以下を **全項目 yes** にしてから進む。
 commit 直後、完了報告を返す前に以下のコマンドで commits_added の正確性を self-check する:
 
 ```bash
+# worktree 作成時 (worktree-ops.md) に op-run controller が export した値であること
+: "${OP_RUN_BASE_SHA:?OP_RUN_BASE_SHA must be set by op-run controller (phase 0-base)}"
+
 # 新規 commit 数を確認 (1 以上であること)
-git log --format='%H' "${BASE_SHA}..HEAD" | wc -l
+git log --format='%H' "${OP_RUN_BASE_SHA}..HEAD" | wc -l
 
 # 変更ファイル数を確認
-git diff --name-only "${BASE_SHA}..HEAD" | wc -l
+git diff --name-only "${OP_RUN_BASE_SHA}..HEAD" | wc -l
 
 # commits_added 配列要素数 == git log 出力行数 となること
-git log --format='%H' "${BASE_SHA}..HEAD"
+git log --format='%H' "${OP_RUN_BASE_SHA}..HEAD"
 ```
 
 `commits_added` 配列の要素数が `git log` の出力行数と一致することを確認してから完了報告を返す。

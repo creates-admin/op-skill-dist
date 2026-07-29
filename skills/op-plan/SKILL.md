@@ -1,7 +1,7 @@
 ---
 name: op-plan
-description: (experimental) 自然言語要望から対話で計画立て、enrichment を経て Issue 起票し、承認後 op-run を起動する主経路スキル。「op-plan」「機能追加」「実装したい」「計画立て」等のキーワードで起動。ADR 必要な大規模設計は op-architect を呼ぶ。
-# ADR-0009 L20: 計画フェーズの effort 無保証対策。effort は session 値を override (floor 不可) するため、
+description: 自然言語要望から対話で計画立て、enrichment を経て Issue 起票し、承認後 op-run を起動する主経路スキル。「op-plan」「機能追加」「実装したい」「計画立て」等のキーワードで起動。ADR 必要な大規模設計は op-architect を呼ぶ。
+# ADR-0009 Context 節 (計画フェーズの effort 無保証 bullet): 計画フェーズの effort 無保証対策。effort は session 値を override (floor 不可) するため、
 # どの session も降格させない max を pin。scope=起動 turn → 初回計画立て (フェーズ0-6 の最初の往復) をカバー。
 # 以降のヒアリング往復 turn は session 値へ自動復帰。
 effort: max
@@ -10,7 +10,15 @@ effort: max
 <!--
 schema_version: 2
 last_breaking_change: 2026-05-13
-notes: 2026-07-23 追記 (ADR-0024 Phase 3 第三波) — Cloud (mcp channel) 対応。
+notes: 2026-07-29 追記 (ADR-0029 Wave B1) — 「薄い入口 + references/」分割。
+       フェーズ2.5 §2.5-1〜§2.5-3 (auto-detect / override / Workflow 呼出) を
+       `references/op-survey-discovery.md` へ、フェーズ4 §4-judge 詳細と フェーズ6 §6-6
+       (EnterPlanMode/ExitPlanMode フォールバック) を `references/judge-panel-and-fallbacks.md` へ、
+       フェーズ7 Pass 2 の Issue 本文テンプレを `references/issue-body-template.md` へ移動 (verbatim、
+       内容変更なし)。§2.5-4 (aggregateSurveyFindings の javascript fence) は
+       `workflows/tests/op-plan.test.mjs` の sync-check が本ファイルを固定 path で読むため本文に残置。
+       純粋な配置変更 (契約・挙動不変) のため schema_version 据え置き。
+       2026-07-23 追記 (ADR-0024 Phase 3 第三波) — Cloud (mcp channel) 対応。
        `github-channel.md (>=2)` を pin 追加、フェーズ0-2 の `gh auth status` に channel guard、
        既存 Issue 件数取得 (`op issue list`) の mcp fail-closed 注記、フェーズ4-4 dedup 素材の
        `--input-json` 併用注記 (#27 の auto-report label filter 同梱)、フェーズ7-1 ラベル承認
@@ -36,9 +44,7 @@ notes: 2026-07-23 追記 (ADR-0024 Phase 3 第三波) — Cloud (mcp channel) �
          さらに v2 で bundled /batch と同じプランモード遷移を導入し、計画フェーズの
          read-only を権限機構レベルで担保しつつ、承認後の起票・op-run 起動を
          acceptEdits 自動進行に整流する。
-注意点: experimental release (proposal Phase 6)。1〜2 週間運用後の体感判断で
-       Phase 7 にて op-architect --extend を deprecation する。
-       Direct Mode 固定 (人間自然言語入口がコア価値であり、OP-managed Mode で呼ばれる経路はない)。
+注意点: Direct Mode 固定 (人間自然言語入口がコア価値であり、OP-managed Mode で呼ばれる経路はない)。
        自動モードを持たない (人間承認 gate を必須とする = ExitPlanMode 承認で実現)。
        orchestration ロジックは _shared/ 参照のみで肥大化を避ける。
        フェーズ -1 で EnterPlanMode を呼ぶため、Claude Code 側で
@@ -51,10 +57,6 @@ notes: 2026-07-23 追記 (ADR-0024 Phase 3 第三波) — Cloud (mcp channel) �
 op-plan は、ユーザーの自然言語要望 (「〇〇を追加したい」「△△を直したい」) を受け取り、
 対話で計画を固め、`_shared/issue-enrichment.md` 経由で Issue 品質を底上げし、
 承認後に Issue を起票して op-run を起動する **主経路スキル** である。
-
-**experimental release**: description に `(experimental)` を明記。1〜2 週間運用後に
-Phase 7 で `op-architect --extend` を deprecation する判断材料となる
-(proposal section 10 Phase 6)。
 
 ---
 
@@ -124,7 +126,7 @@ op-plan の責務範囲:
    (d) art-direction 意図 + exemplar gap を取り出す。
 2. **フェーズ1 ヒアリングを skip** (op-explore で発散・確定済)。フェーズ2 (ADR 必要性チェック) から開始する
    (record が ADR-heavy を示すなら op-architect へ escalate、それ以外はそのままフェーズ3〜)。
-   escalate する場合は op-plan→op-architect が context 非継承 (L318-319) ゆえ decision record を drop しないよう、
+   escalate する場合は op-plan→op-architect が context 非継承 (フェーズ2「2-2. 該当時の挙動」節) ゆえ decision record を drop しないよう、
    **`op-architect --from-record <同 path>` の起動を案内**して record を継続させる (handoff loss 緩和、ADR-0013 Risk 7)。
 3. フェーズ4 で issue_draft.body の `## 🎨 Design Plan` 節に record の (a) を射影、`success_criteria` /
    `verification_steps` に (c) を射影、Design Intent に (d) を射影 (apply 経路で designer-expert に再注入される)。
@@ -133,15 +135,10 @@ op-plan の責務範囲:
 
 ### プランモード遷移の選択肢 (v2)
 
-デフォルトでは司令官がフェーズ -1 で `EnterPlanMode` を呼ぶ。ユーザーが事前に
-plan mode で開始したい場合は以下のいずれかで起動できる (`/op-plan` 側の追加引数は不要):
-
-- `claude --permission-mode plan` 起動後に `/op-plan ...` を打つ
-- `.claude/settings.json` で `permissions.defaultMode: "plan"` を設定
-- セッション中に `Shift+Tab` で plan mode に切り替えてから `/op-plan ...` を打つ
-
-これらいずれの起動でも、本スキルはフェーズ -1 で **既に plan mode の場合は EnterPlanMode 呼び出しを skip** する
-(冪等性確保)。
+デフォルトでは司令官がフェーズ -1 で `EnterPlanMode` を呼ぶ。ユーザーが `--permission-mode plan` 起動 /
+`.claude/settings.json` の `permissions.defaultMode` 設定 / `Shift+Tab` 切替のいずれかで事前に plan mode に
+入っていた場合も (`/op-plan` 側の追加引数は不要)、本スキルはフェーズ -1 で **既に plan mode なら
+EnterPlanMode 呼び出しを skip** する (冪等性確保)。
 
 ---
 
@@ -168,6 +165,9 @@ plan mode で開始したい場合は以下のいずれかで起動できる (`/
 - `~/.claude/skills/_shared/github-channel.md` (>=2) — GitHub I/O channel / call-spec protocol。mcp channel (Cloud) での素材注入手順 (§6) と司令官の call-spec 実行義務 (§3-§4) の正本
 - Claude Code 公式 [Choose a permission mode](https://code.claude.com/docs/en/permission-modes) — フェーズ -1 / フェーズ 6 の EnterPlanMode / ExitPlanMode 仕様、承認オプションと acceptEdits / auto 自動遷移の挙動 (v2 で参照)
 - `workflows/op-survey.js` — 汎用 investigation fan-out workflow (Issue #645)。op-plan フェーズ2.5 の discovery ステップが呼び出す。`--survey` / `--no-survey` フラグで override 可。戻り値 `{ findings[], coverage_notes[] }` を `aggregateSurveyFindings()` で `asset_audit` に射影する。`op_survey.enabled: false` で無効化 (`op-config.yaml` §13)
+- `~/.claude/skills/op-plan/references/op-survey-discovery.md` (>=1) — フェーズ2.5 の auto-detect heuristic (§2.5-1) / override フラグ (§2.5-2) / `Workflow({name:'op-survey'})` 呼び出し手順 (§2.5-3) の詳細。investigation 型要望の判定・survey 起動可否を確認するときのみ読む (SKILL.md 本体 god file 抑制、ADR-0029 Wave B1)
+- `~/.claude/skills/op-plan/references/judge-panel-and-fallbacks.md` (>=1) — フェーズ4 計画 judge-panel (`op-plan-judge` workflow 呼出詳細、ADR-0014 Wave B) と フェーズ6 EnterPlanMode/ExitPlanMode 利用不可環境のフォールバック挙動の詳細。config gate / tool 未提供時のみ読む (SKILL.md 本体 god file 抑制、ADR-0029 Wave B1)
+- `~/.claude/skills/op-plan/references/issue-body-template.md` (>=1) — フェーズ7 Pass 2 が生成する Issue 本文の `## 依存` セクション (hidden marker + prose 正本ペア) の書き方サンプル。`FINAL_FILE_I` を Write tool で生成するときのみ読む (SKILL.md 本体 god file 抑制、ADR-0029 Wave B1)
 
 ---
 
@@ -224,15 +224,16 @@ permission prompt なしで進行する (公式 UX、permission-modes 仕様)。
 加えて、`_shared/version-check.md` の「installed op binary 鮮度確認」節 (Issue #249) に従い、`op version --json` の `details.git_sha` と `git log --format='%h' -n1 -- op-tools/crates/` の最新 SHA を比較する (比較元 path は binary 挙動に影響する範囲に絞る。docs-only commit の false-drift 回避 = Issue #641)。不一致時は warning + `cargo install --path op-tools/crates/op` を案内 (hard fail なし)。
 
 さらに、`op core schema-check` で _shared prose / Rust types / SKILL.md pin の drift を確認する。
-`stats.errors_total >= 1` または `stats.warnings_total` が 5 以上の場合は warning を表示し、ユーザーに続行可否を確認する (`--auto` モードでも一旦停止)。
-CI (CLAUDE.md ### 10) と異なり runtime では hard fail しない (CLAUDE.md 不変則2)。
+`stats.errors_total >= 1` または `stats.warnings_total >= 5` の場合は warning を表示し、
+**ユーザーに続行可否を確認する (`--auto` モードでも一旦停止)**。
+runtime では CI (CLAUDE.md「schema-check process 規約」節) と異なり hard fail しない (CLAUDE.md 不変則2)。
 
 > **controller の read 規律**: controller は本スキル全フェーズで `_shared/read-economy.md` の
 > 「Controller への適用」節に従う (既読 Issue/PR/file を再 Read しない / Issue・PR body は
 > meta・list で取得し full body を居座らせない / completion_report を圧縮取り込み)。詳細は同節を正本とする。
 
 ```bash
-# schema-check: drift 可視化 (runtime hard fail なし、warning のみ)
+# schema-check: drift 可視化 (runtime hard fail なし。閾値超過は warning + 続行可否確認)
 if command -v op >/dev/null 2>&1; then
   SCHEMA_RESULT=$(op core schema-check --repo-root . 2>/dev/null) || true
   SCHEMA_ERRORS=$(echo "${SCHEMA_RESULT}" | jq -r '.stats.errors_total // 0' 2>/dev/null || echo "0")
@@ -381,86 +382,12 @@ op-plan 内で ADR を書かない (proposal section 4.4)。
 op-survey は **既存 repo の多軸横断調査** (「調べて直したい」横断 investigation) を構造化するツール。
 op-plan の前段として動作し、発見した findings を `asset_audit` に整形して op-plan-judge に注入する。
 
-### 2.5-1. auto-detect heuristic
-
-controller はフェーズ1 のヒアリング結果を読み、要望が **investigation 型** かを判定する:
-
-- **起動条件 (investigation 型)**: 語彙「調べて / 洗い出し / 棚卸し / 監査 / どこに〜があるか / 全部探して」を含み、
-  **具体 target（単一 file / feature / symbol）が指定されていない**
-- **skip 条件 (通常 goal)**: 具体 file / feature / scope が名指しされた goal-driven 要望
-- **迷ったら skip**: 判定が曖昧な場合は通常フローへ進む (誤作動より漏れのほうが安全)
-
-**config gating** (`op-config.yaml` の `op_survey` セクション、後述):
-
-- `op_survey.enabled: false` → auto-detect / override を問わず survey を skip して フェーズ3 へ進む
-- `op_survey.auto_detect: false` → auto-detect をしない。`--survey` 明示時のみ起動する
-- 未設定時は `enabled: true` / `auto_detect: true` (既定)
-
-> **現状 (op-tools Phase 1 前)**: `op_survey` の YAML→env bridge は未配線のため、config 値は読まれず
-> default (`enabled:true` / `auto_detect:true`) で動作する。`enabled:false` 等の override が実際に効くのは
-> bridge 配線後 (op-config-schema.md §13 実装状況 参照)。config gating の仕様記述自体は将来配線時の仕様として正しい。
-
-### 2.5-2. override フラグ (誤作動の安全弁)
-
-判定誤作動に備え、ユーザーは起動時フラグで auto-detect を上書きできる:
-
-- `--survey`: auto-detect に関わらず survey を強制起動 (`op_survey.enabled: false` の場合は config が優先され起動しない)
-- `--no-survey`: auto-detect に関わらず survey を skip して フェーズ3 へ直接進む
-
-override フラグがない場合は 2.5-1 の heuristic に従う。
-`op_survey.enabled: false` が設定されている場合は、`--survey` フラグの有無を問わず survey は封じられる (config 設定が最優先)。
-このとき `--survey` が明示されていれば、`--survey が指定されましたが op_survey.enabled:false のため survey を skip します (config 優先)` とユーザーに通知する (silent skip を避ける)。
-
-### 2.5-3. survey 起動: Workflow 呼び出し
-
-**有効条件** (以下をすべて満たすとき survey を起動する):
-
-1. `op_survey.enabled != false` (config)
-2. auto-detect hit または `--survey` 指定
-3. `--no-survey` が指定されていない
-
-> **bridge 未配線中 (op-tools Phase 1 前) の有効条件 1 の実際の動作**: `op_survey` の YAML→env bridge は
-> 未配線のため config 値が読めず、条件 1 は常に `true` として扱われる (default: enabled)。
-> つまり `op_survey.enabled: false` を設定しても有効条件 1 が偽にならず survey が起動する可能性がある。
-> §2.5-1 の config gating は bridge 配線後 (op-config-schema.md §13) に初めて効力を持つ仕様として正しく、
-> bridge 配線前の現状は default (`enabled:true`) 固定と同等に動作する。
-
-起動時の `Workflow` 呼び出し:
-
-```javascript
-// goal は フェーズ1 で確定したヒアリングメモの要約。
-// op-skill repo の場合は op-skill-migration preset を使う (4 軸の定義済み調査)。
-// それ以外の repo では axes / goal-derived でカスタム調査する。
-// IS_OP_SKILL_REPO は controller が Workflow 呼出前に確定させる pre-step ロジック:
-//   controller は repo_root に skills/ と workflows/ の両ディレクトリが存在するかを
-//   確認し、両方あれば op-skill repo と判定する。
-//   確認方法 (2 択):
-//     A. Claude Code Glob tool: `Glob(pattern='skills/', cwd=repo_root)` で存在確認
-//     B. Node.js: `import { existsSync } from 'fs'; existsSync(path.join(repo_root, 'skills'))` 等
-//   'glob' npm パッケージを使う場合は `import { glob } from 'glob'` で import する。
-//   確認できない / 両方は揃わない場合は false (goal-derived fallback) として動作し機能停止しない。
-const surveyResult = Workflow({
-  name: 'op-survey',
-  args: {
-    repo_root: process.cwd(),         // または op-run の repo 絶対パス
-    goal: HEARING_GOAL_SUMMARY,       // フェーズ1 ヒアリングメモの 1〜2 行要約
-    preset: IS_OP_SKILL_REPO ? 'op-skill-migration' : undefined,
-    // 汎用 repo は axes / goal-derived を使う (preset なし → goal-derived に fallback)
-    model: OP_SURVEY_INVESTIGATOR_MODEL, // op_survey.models.investigator (既定 sonnet)
-  },
-})
-// 戻り値: { goal, preset, axis_source, findings[], coverage_notes[] }
-```
-
-**起動成功時のユーザー通知** (auto-detect 経由の場合):
-
-- 「investigation 型要望と判定したため op-survey discovery を実行します (--no-survey で無効化可)」とユーザーに通知する
-- `--survey` 明示起動の場合は通知不要 (ユーザーが意図的に指定したため)
-
-**フォールバック** (いずれもフェーズ3 へ進む点は共通。機能停止しない):
-
-- 取得失敗 (`Workflow` が `ok:false` / 例外) → 「survey を取得できませんでした。通常フローで継続します」とユーザーに通知する
-- 正常完了・該当なし (`ok:true` だが findings が空) → 「survey は完了しましたが該当 finding はありませんでした。通常フローで継続します」とユーザーに通知する (取得失敗ではないため文言を区別する)
+> **いつ読むか**: 要望が investigation 型 (「調べて / 洗い出し / 棚卸し / 監査 / どこに〜があるか /
+> 全部探して」等で具体 target 未指定) かどうかを判定するとき、または `--survey` / `--no-survey`
+> フラグの挙動・`Workflow({name:'op-survey'})` の呼び出し詳細を確認するときのみ、
+> `references/op-survey-discovery.md (>=1)` (§2.5-1 auto-detect heuristic / §2.5-2 override フラグ /
+> §2.5-3 Workflow 呼び出し) を読む。goal-driven な通常要望では auto-detect が skip 側に倒れるため、
+> この節を読まずにそのままフェーズ3へ進んでよい。
 
 ### 2.5-4. aggregateSurveyFindings: findings → asset_audit への射影
 
@@ -552,7 +479,8 @@ Agent({
     - rationale: 上記判定の根拠 (3〜5 行)
 
     You must not ask interactive questions.
-    If information is missing, return assumptions[] or needs_human_decision.
+    If information is missing, return one of: assumptions[] / needs_human_decision / blocked_actions[] /
+    verification_not_run / manual_review_bucket (5-item fallback、詳細は `_shared/spawn-prompt-common.md (>=1)` §4)。
     Read-only audit です。コードを変更しないでください。
   """
 })
@@ -599,61 +527,17 @@ audit 結果はメモに追加し、フェーズ 4 (Issue draft) の「触って
 ### 4-judge. 計画 judge-panel (案出し、ADR-0014 Wave B)
 
 要望の **Issue 分解** (どう Issue に割るか / 順序 / MVP 切り出し) を、N 案を別角度で並列生成 → evaluator が
-比較選定する judge-panel に置き換える。**案出し=workflow / 確定=司令官+人間 gate** (ADR-0009 L158。op-plan は
-自動モードを持たないため確定は常に フェーズ6 の人間 gate)。
+比較選定する judge-panel に置き換える。**案出し=workflow / 確定=司令官+人間 gate** (op-plan は
+自動モードを持たないため確定は常に フェーズ6 の人間 gate)。`ok:true` の場合、`recommended.plan.issues[]` を
+**フェーズ4 の Issue 群として採用**し、各 issue に 4-1 (domain 判定) / 4-2 (骨格) / 4-4 (fingerprint + dedup) を
+per-issue で適用する。`ok:false` またはワークフロー無効時は **従来の単発分解** (4-1 以降を司令官が 1 案で実施) に
+フォールバックする (機能停止しない)。
 
-**有効条件 (op-config gated)**: `planning_judge_panel.enabled` (既定 `true`)。`false` または workflow が `ok:false`
-(全候補不正) を返した場合は、**従来の単発分解** (4-1 以降を司令官が 1 案で実施) にフォールバックする (機能停止しない)。
-
-**司令官 prep**: フェーズ1 hearing memo を `requirement` (summary / clarifications / constraints)、フェーズ2 判定を
-`adr_decision`、フェーズ3 feature-expert audit (reusable_assets / pattern_to_follow / reuse_opportunities) を
-`asset_audit` として組む (hearing は interactive ゆえ workflow に渡す前に controller が深掘り済にする)。
-
-**op-survey 由来の `asset_audit` 補完**: フェーズ2.5 で survey を実行した場合は、`aggregateSurveyFindings()` の
-戻り値を `asset_audit` にマージする (フェーズ3 audit 結果で上書きはしない。survey 結果は補完情報として追加)。
-survey 未実行の場合は `asset_audit` はフェーズ3 の feature-expert audit 結果のみから構成する。
-
-`pattern_to_follow` キーが survey 由来と feature-expert 由来の両方に存在した場合は **配列連結** (spread) でマージし、
-どちらの情報も失わない:
-```javascript
-// pattern_to_follow の衝突解決: 上書きせず配列連結する (survey 由来と feature-expert 由来を両方保持)
-// 変数バインディング (controller の各フェーズで確定済の変数を参照):
-//   featureAudit: フェーズ3 で feature-expert audit subagent を spawn した戻り値オブジェクト
-//                 例: const featureAudit = featureExpertSpawnResult.result; // Agent() の戻り値
-//   surveyAudit:  フェーズ2.5 で aggregateSurveyFindings(surveyResult) を呼んだ戻り値
-//                 例: const surveyAudit = isSurveyRun ? aggregateSurveyFindings(surveyResult) : null;
-asset_audit.pattern_to_follow = [
-  ...(featureAudit.pattern_to_follow || []),
-  ...(surveyAudit?.pattern_to_follow || []),  // survey 未実行時 surveyAudit は null
-];
-```
-
-**workflow 呼出**:
-
-```javascript
-const planJudge = Workflow({
-  name: 'op-plan-judge',
-  args: {
-    requirement,                             // { summary, clarifications, constraints }
-    asset_audit,                             // フェーズ3 audit
-    adr_decision,                            // フェーズ2 判定
-    candidate_count: PJP_CANDIDATE_COUNT,    // op-config (既定 1)
-    // angles 省略可: workflow が mvp-first/risk-first/asset-reuse-first を default
-    models: { generate: PJP_GEN_MODEL, evaluate: PJP_EVAL_MODEL },  // model-selection §5.1: generate=Sonnet / evaluate=Opus
-  },
-})
-// = { ok, recommended:{angle, plan:{issues[]}, corrected}, candidates:[{angle, issues, score}], js_ranking, evaluator:{recommended_angle, rationale, ranking}, dropped }
-```
-
-**戻り値の扱い**:
-
-- `ok:false` → フォールバック (従来単発分解)。`dropped` を warning に出す。
-- `ok:true` → `recommended.plan.issues[]` (= 分解された issue: title / domain / scope_summary / files / expert /
-  depends_on / reuses_existing / is_mvp) を **フェーズ4 の Issue 群として採用**。各 issue に 4-1 (domain 判定) /
-  4-2 (骨格) / 4-4 (fingerprint + dedup) を **per-issue で適用**する (workflow は分解=planning までで、骨格化・dedup・
-  起票は controller)。ranked 代替案 (`candidates` の他 angle) は **フェーズ6 で提示**し、人間が別 angle を選べる。
-- 選定後の フェーズ5 enrichment は **採用分解の各 issue** に対して実施する。フェーズ6 で人間が代替 angle を選んだ場合は
-  その分解で enrichment をやり直す (op-plan は自動進行しないため再 enrichment コストは許容)。
+> **いつ読むか**: `planning_judge_panel.enabled` (既定 `true`) の下でフェーズ4 に入るとき、
+> workflow への args 組立 (`requirement` / `asset_audit` / `adr_decision` の作り方、op-survey 由来の
+> `asset_audit` マージ規則を含む) や `Workflow({name:'op-plan-judge'})` の呼び出し詳細・戻り値の
+> per-issue 適用ルールを確認するときに `references/judge-panel-and-fallbacks.md (>=1)` (計画
+> judge-panel 節) を読む。
 
 ### 4-1. domain 判定
 
@@ -949,20 +833,15 @@ ExitPlanMode を呼ぶ。ユーザーが承認 (任意のオプション) して
 
 ### 6-6. EnterPlanMode / ExitPlanMode が利用できない環境
 
-Claude Code のバージョンによっては `EnterPlanMode` / `ExitPlanMode` tool が提供されない場合がある
-(古い CLI バージョン / 特殊環境 / tool listing から除外されている場合など)。
-司令官はフェーズ -1 で `EnterPlanMode` 呼び出しが **tool 未定義エラー** で失敗した場合
-(tool listing に EnterPlanMode が存在しない、または ToolSearch で取得不能)、
-v1 互換のフォールバック挙動に退避する:
+Claude Code のバージョンによっては `EnterPlanMode` / `ExitPlanMode` tool が提供されない場合がある。
+司令官はフェーズ -1 で `EnterPlanMode` 呼び出しが **tool 未定義エラー** で失敗した場合、
+v1 互換のフォールバック挙動 (SKILL.md 規律のみでの read-only 進行 + フェーズ6 対話プレビュー) に退避する
+(機能停止しない)。
 
-- フェーズ 0-6 を **SKILL.md 内の規律のみ** で read-only 進行 (機能停止はしない、規律のみで進める)
-- フェーズ 6 では `ExitPlanMode` を呼ばず、従来の対話プレビュー
-  (司令官が `この内容で起票しますか? 1.起票する 2.修正要求 3.キャンセル` を表示する形式) に退避
-- ユーザーには「Claude Code のバージョンに `EnterPlanMode` tool がないため、
-  v1 互換動作で続行します (SKILL.md 規律レベルの read-only 保証)」と通知
-
-tool 自体は存在するが フェーズ -1 で **ユーザーが承認 prompt に No を返した** 場合は、
--1.1 節のフォールバックに従う (= 同じく v1 互換の対話プレビューに退避)。
+> **いつ読むか**: フェーズ -1 で `EnterPlanMode` 呼び出しが tool 未定義エラーで失敗したとき、
+> またはユーザーが承認 prompt に No を返したときのみ、
+> `references/judge-panel-and-fallbacks.md (>=1)` (EnterPlanMode/ExitPlanMode フォールバック節) を読む。
+> 通常の plan mode 遷移が成功するセッションでは読まなくてよい。
 
 ---
 
@@ -1054,7 +933,7 @@ fi
 #
 # ISSUE_NUMS: 0-based index → 実 issue 番号 のマッピング配列
 # MAP_TMP:    Pass 1 → Pass 2 で配列を受け渡すための一時ファイル
-#             (CLAUDE.md bash fence convention: fence をまたぐ変数は一時ファイル経由)
+#             (_shared/bash-fence-convention.md: fence をまたぐ変数は一時ファイル経由)
 declare -a ISSUE_NUMS   # index→番号 対応表。使用前に必ず初期化する
 declare -a CREATED FAILED
 export MAP_TMP
@@ -1214,26 +1093,11 @@ done
 
 Pass 1 で書き出す BODY_FILE_I には `## 依存` セクションを placeholder として含めておく。
 Pass 2 の Write tool で実番号に差し替える (依存なし issue はセクションごと省略)。
-
 marker と prose は「正本ペア」(`_shared/markers/labels-and-markers.md` 参照) のため必ず両方を更新する。
 
-```markdown
-<!-- hidden marker ブロック (op-architect IU1 の依存あり例と同形式) -->
-<!-- op-source: op-plan -->
-<!-- op-domain: feature -->
-<!-- op-run-expert: feature-expert -->
-<!-- op-post-check-expert: null -->
-<!-- op-depends-on: #806, #807 -->
-<!-- ↑ 依存ありの issue のみ Pass 2 で追加。依存なし issue は行ごと省略 (空 value は lint error)。 -->
-
-## 概要
-<issue の 1〜2 文要約>
-
-## 依存
-- depends on #806 (先に完了が必要)
-- depends on #807 (先に完了が必要)
-<!-- ↑ 依存なし issue はこの ## 依存 セクションごと省略する -->
-```
+> **いつ読むか**: 上記 Pass 2 の `FINAL_FILE_I` を Write tool で生成するとき、hidden marker
+> ブロック (`op-depends-on` 追加位置) と prose `## 依存` セクションの実例を確認したい場合のみ、
+> `references/issue-body-template.md (>=1)` を読む。
 
 ---
 
@@ -1320,51 +1184,6 @@ op-run #<N> を起動するには以下を実行してください:
 - 作業途中のメモ (フェーズ 1〜3 の確定情報) は司令官 context に残るが、
   次回 `/op-plan` 起動時には引き継がれない (state-less 設計)
 
----
-
-## op-architect --extend からの移行ガイド
-
-`op-architect --extend` を使っていたユーザー向けの対応表 (proposal section 8.2):
-
-| 元の `--extend` 用途 | 新しい入口 |
-|---|---|
-| 機能追加 (ADR 不要、中量級) | **op-plan** (本スキル、experimental) |
-| 機能追加 (ADR 必要、大規模設計) | op-architect デフォルトモード、または op-plan フェーズ 2 で escalate |
-| ADR 化のみ (`--adr-only` 相当) | `op-architect --adr-only` (本機能は残存) |
-| スケルトン雛形生成 (`--scaffold` 相当) | `op-architect --scaffold` (本機能は残存) |
-| gh 未認証環境向け Markdown 出力 (`--issue-md` 相当) | `op-architect --issue-md` (本機能は残存) |
-
-### deprecation スケジュール
-
-- **Phase 6 (本 PR)**: op-plan を experimental release で新設 (`--extend` は併存)
-- **Phase 7 (1〜2 週間後)**: op-architect --extend に deprecation notice 追加
-  (description 書き換え + `--extend` 節に notice、コード本体は残存)
-- **Phase 9 (運用判断後)**: `--extend` 削除判断、および op-architect 本体の存続再評価
-
-### 既存 `--extend` ユーザーへの推奨
-
-機能追加 (ADR 不要) であれば、本スキル (op-plan) を試してください:
-
-```
-# 旧: /op-architect --extend
-# 新:
-/op-plan
-```
-
-ADR 必要 / 設計判断が複雑 / 新規プロジェクト初期構築であれば、引き続き
-`op-architect` デフォルトモードを使ってください。op-plan は op-architect の代替ではなく、
-中量級 (ADR 不要) の機能追加用途に最適化された **別経路** です。
-
----
-
-## 実装メモ / 既知の課題
-
-本スキルは **experimental release** であり、以下は運用 1〜2 週間で評価する
-(proposal section 11 Open Questions):
-
-- ADR 必要性チェック条件 (フェーズ 2-1) の網羅性 — 検出漏れ / 過剰検出を運用で評価
-- enrichment コスト (フェーズ 5、`_shared/issue-enrichment.md` 経由で expert spawn 数最大 4〜6) の許容範囲
-- ヒアリング 1〜2 ラウンドの妥当性 (Open Questions #4)
-- op-architect --extend ユーザーの移行体感
-
-評価結果は Phase 7 (deprecation 判断) で本 SKILL.md に反映する。
+`op-architect --extend` は廃止済み (CLAUDE.md 配布・運用方式節)。既存プロジェクトへの新領域追加は
+本スキル (op-plan) を使う。op-plan と op-architect の使い分け基準は上記「このスキルの位置づけ」表
+および「設計原則 2」(ADR 必要時は op-architect へ escalate) を参照。

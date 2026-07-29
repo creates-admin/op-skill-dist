@@ -195,6 +195,14 @@ Agent tool で apply-expert を spawn する。`subagent_type` は **plugin scop
 prompt は以下の 3 層で構成する。
 
 ```
+【共通宣言層】
+invocation_mode: op_managed
+共通宣言 (invocation_mode / 質問禁止 / 必読 checklist / commits_added):
+`~/.claude/skills/_shared/spawn-prompt-common.md (>=1)` §1〜§4 を参照。
+本フェーズは apply のため commits_added: [SHA, ...] (1 件以上) を完了報告に必ず含める (§3)。
+You must not ask interactive questions. 不足情報があっても質問で停止せず、
+§4 の fallback (assumptions[] / needs_human_decision 等) を構造化返却する。
+
 【構造層】
 - 作業ディレクトリ: ${WORKTREE_PATH}
 - 担当 Issue: ${ISSUES[@]}
@@ -415,6 +423,23 @@ export REVIEW_ROUND
 
 `references/post-check-dispatcher.md` のロジックに従い、当該 PR の `op-post-check-expert` marker を
 読んで post-check expert の要否を判定する。
+
+**post-check expert の spawn は本フェーズで ClusterOrchestrator 自身が実行する** (ADR-0016、
+`op-run-postcheck` workflow は削除済み)。dispatch 判定の結果が active post-check
+(3.5-A ux-ui-audit-expert / 3.5-B security-expert / 3.5-B-4 aux ux-ui-audit-expert) の場合、
+Agent tool で当該 expert を spawn する。手順は以下をポインタ参照する (丸コピー禁止):
+
+- **spawn 手順・渡す値の契約** (worktree_path 再利用 / model: opus / read-only 監査):
+  `post-check-dispatcher.md` §3.5-W が正本。`subagent_type` は plugin scoped 名
+  (`"op-skill:ux-ui-audit-expert"` / `"op-skill:security-expert"`) を渡す。
+- **prompt_text**: `references/post-check-prompts.md` の該当節
+  (3.5-A / 3.5-B-1 / 3.5-B-4) の本文を読んで spawn prompt に注入する。
+- **spawn しない分岐**: null skip (3.5-C) / planned skip (3.5-D) / unregistered error (3.5-E)
+  は `post-check-dispatcher.md` の判定優先に従い spawn しない。
+- **判定後処理** (label transition / `op review state push` post_check payload):
+  `post-check-dispatcher.md` 3.5-A-2 / 3.5-B-2 / 3.5-B-4 の該当 block に従う。
+  state push を完了させた後に、下記の REVIEW_MODE 判定 (state 読み) を行う
+  (push 前に読むと post_checks map が空で SKIPPED に誤判定される)。
 
 ```bash
 # post-check 要否判定 (post-check-dispatcher.md §判定ロジックに従う)
@@ -840,7 +865,9 @@ jq -n \
 | `references/review-fix-loop.md` §4.5-1A | フェーズ7 | finding.result 主語の状態遷移 (needs-fix ループ) |
 | `references/review-fix-loop.md` §4.5-2 | フェーズ7 | 再委任先 expert の決定 (判定優先順位 1-8) |
 | `references/review-fix-loop.md` §4.5-5 | フェーズ6 | 差分 lens 和集合 (Round 2+ の active_lens_keys) |
-| `references/post-check-dispatcher.md` (>=1) | フェーズ5.5 | post-check 要否判定 / security post-check 実施 |
+| `references/post-check-dispatcher.md` (>=1) | フェーズ5.5 | post-check 要否判定 / spawn 手順 (§3.5-W) / 判定後処理 |
+| `references/post-check-prompts.md` (>=1) | フェーズ5.5 | post-check expert spawn prompt 本文 (3.5-A / 3.5-B-1 / 3.5-B-4) の注入元正本 |
+| `_shared/spawn-prompt-common.md` (>=1) | フェーズ2 | spawn prompt 共通宣言 (invocation_mode / 質問禁止 / commits_added) の pointer 参照先 |
 | `_shared/markers/review-markers.md` | フェーズ6 | op-review-meta / op-review-finding / op-review-controller-meta の field schema 正本 |
 | `_shared/markers/labels-and-markers.md` (>=2) | フェーズ6/7 | marker Writer / op-source 値リスト / label 排他制御 |
 | `_shared/pr-templates.md` | フェーズ4 | PR body テンプレ / PR タイトル規則 |

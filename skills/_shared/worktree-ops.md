@@ -15,6 +15,9 @@ notes: v3 (2026-05-21) — 並列度撤廃モード対応 (ADR-0007 v3 §4.1-v3)
        ADR-0002 (2026-05-18) で auto/ prefix 統一規約を追記。
        OP skill 自動生成 branch はすべて auto/ prefix を持つ命名規則に統一 (op-sweep スコープ前提)。
        (2026-06-21) 外部 base 注入節を追記 (op-loop 層前進対応、additive・非破壊、#807)。
+       (2026-07-29, corrective) review subagent の「typo 等は直接 push 可」例外段落を削除 (参照先の
+       expert-spawn.md「review agent の直接 push 許可範囲」節は削除済 = dangling。現行契約 = 不変則7 /
+       runtime-contract.md §8 の「typo でも push 禁止」に統一。契約自体は不変ゆえ schema_version 据置)。
 -->
 
 # worktree ライフサイクル運用
@@ -123,9 +126,10 @@ subagent は cd して作業し、**commit まで**実施する。
 **push は司令官が op-run のフェーズ2-D (Post-run conflict check) で実 diff の重複検証を通したあとに実施する**。
 これにより、並列実装中に競合する diff が remote へ流出する事故を構造的に防ぐ。
 
-例外として、**review subagent の直接 push 許可範囲** (`expert-spawn.md` の「review agent の直接 push 許可範囲」節) のみ、
-review subagent が PR ブランチへ push してよい (typo / コメント修正 / 軽微な振る舞いを変えない修正)。
-それ以外の subagent (apply / post-check / scan) は一切 push しない。
+**push の例外は存在しない**。review subagent も他の subagent (apply / post-check / scan) と同じく一切 push しない。
+review-expert は監査専任 (コード編集・commit・push 禁止) であり、typo 等の軽微な指摘であっても push せず
+finding (Spec Lens / Refactor Lens) として残す。修正は op-run が specialist expert に再委任する
+(正本: `expert-spawn.md` の「review-expert の禁止事項」節 / `runtime-contract.md` §8 No-Apply Rule / CLAUDE.md 不変則7)。
 
 ---
 

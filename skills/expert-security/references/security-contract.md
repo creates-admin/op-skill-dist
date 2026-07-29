@@ -241,7 +241,7 @@
 
 `<!-- op-security-post-check -->` ヘッダーで識別される PR コメント。
 `<!-- op-post-check-meta -->` block の全 field schema (共通 field + security 固有 field) の正本は
-`_shared/markers/security-markers.md (>=1)` (共通 field は `_shared/markers/post-check-markers.md (>=2)`)。
+`_shared/markers/security-markers.md (>=2)` (共通 field は `_shared/markers/post-check-markers.md (>=2)`)。
 必ず含める field group のみ挙げる (値の enum は正本参照):
 
 - 共通: `post_check_expert` / `post_check_result` / `post_checked_head_sha` / `post_check_round`

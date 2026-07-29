@@ -1,7 +1,7 @@
 ---
 name: op-run
 description: GitHub Issue を読み込み、共通機能でクラスタリングして worktree 並列で実装、PR open、別 context で独立レビューまで自動完了するスキル。「op-run」「並列実装」「Issue 実装」等のキーワードで起動。
-# ADR-0009 L20: 計画フェーズの effort 無保証対策。effort は session 値を override (floor 不可) するため、
+# ADR-0009 Context 節『計画フェーズの effort が無保証』箇条書き: 計画フェーズの effort 無保証対策。effort は session 値を override (floor 不可) するため、
 # どの session も降格させない max を pin。scope=起動 turn → clustering (フェーズ1-2、最初の plan gate より前) をカバー。
 # 対話モードは plan gate 後の apply turn で session 値へ自動復帰 (--auto は単一 turn のため全工程 max)。
 effort: max
@@ -10,7 +10,11 @@ effort: max
 <!--
 schema_version: 3
 last_breaking_change: 2026-06-15
-notes: v3.2 相当 (2026-07-23, ADR-0027 第六波 6b): mcp channel の段階degrade宣言 (フェーズ3.5/4/4.5) を
+notes: v3.2 相当 additive (2026-07-29, Wave A2 F03/F01): orphan だった references/parallel-dispatch-policy.md
+       を削除し、一意情報 (min(16,cores-2) / 探知は partition 不要 / max-parallel は hard cap でない) を
+       実行モード節 + 2-B-partition 節へ吸収 (並列 dispatch 方針の正本は両節と明記)。1-2-judge / 2-A-2 の
+       Workflow 呼出に `_shared/workflow-calling.md` §1-§2 pointer と防御的 `.result` unwrap を追記。挙動不変。
+       v3.2 相当 (2026-07-23, ADR-0027 第六波 6b): mcp channel の段階degrade宣言 (フェーズ3.5/4/4.5) を
        解消済みの履歴注記に縮退し、各フェーズ入口の degrade pointer 3 行を削除。post-check / global
        review / Review Fix Loop は `<!-- op-review-state -->` 文書 (`op review state pull/push`) 経由で
        mcp channel でも成立するようになった (詳細は `cluster-orchestrator-directives.md` /
@@ -74,7 +78,7 @@ apply / fix runtime spawn を行う前に、`op-run` は以下の正本を必ず
 
 - `~/.claude/skills/_shared/runtime-contract.md` — runtime spawn / fallback 動作契約
 - `~/.claude/skills/_shared/active-expert-registry.md` — active runtime-spawnable experts (canonical runtime registry。frontmatter は mechanical linkage の確認用)
-- `~/.claude/skills/_shared/planned-experts.md` — planned experts (env / release / compatibility / spec) の取り扱い契約
+- `~/.claude/skills/_shared/planned-experts.md` — planned experts (env / release / compatibility) の取り扱い契約
 - `~/.claude/skills/_shared/markers/labels-and-markers.md` — label / hidden marker 仕様の正本
 - `~/.claude/skills/_shared/expert-spawn.md` — subagent prompt 規約・canonical schema・mode 指示
 
@@ -137,8 +141,12 @@ constitution (`.claude/rules/00-constitution.md`) は always-on。
 **探知フェーズは Dynamic Workflows runtime が担う** (ADR-0009 / ADR-0010、Phase C C1)。
 **修正・レビュー・Review Fix Loop フェーズは ClusterOrchestrator (Agent tool) が担う** (ADR-0016)。
 controller は Workflow (`op-run-discover`) と ClusterOrchestrator (Agent tool) を呼び出すだけで、
-並列上限 (16 並列) は runtime が透過的にキューイングする (超過分は runtime が順次起動)。
+並列上限 (`min(16, cores-2)`) は runtime が透過的にキューイングする (超過分は runtime が順次起動)。
 controller 人為 cap (chunk 起動 / `CONTROLLER_CHUNK_BUDGET`) は撤廃した。
+**並列 dispatch 方針 (runtime 委譲 / 人為 chunk 分割禁止) の正本は本節および 2-B-partition 節**
+(旧 `references/parallel-dispatch-policy.md` は被参照ゼロの orphan だったため本節へ吸収して削除済み)。
+探知 (2-A) は read-only investigation ゆえ serialization 不要で、全 cluster を workflow に一括で渡す。
+partition (parallel_clusters / serial_chains) が意味を持つのは write を伴う修正フェーズのみ (2-B-partition で確定)。
 `op cluster max-parallel` の算出値はフェーズ 2-B の **parallel_clusters / serial_chains の partition 設計** (どの cluster を直列化するか) に使う。
 動的算出 fence の実体はフェーズ 1 末 (`EFFECTIVE_MAX_PARALLEL` 確定) と フェーズ 2-B 直後 (density 再計算) に置く。
 
@@ -154,7 +162,7 @@ controller 人為 cap (chunk 起動 / `CONTROLLER_CHUNK_BUDGET`) は撤廃した
 
 - `~/.claude/skills/_shared/runtime-contract.md` — runtime spawn / fallback 動作契約 (op-run の最終解決責任の上位契約)
 - `~/.claude/skills/_shared/active-expert-registry.md` (>=2) — active runtime-spawnable expert の canonical registry。frontmatter とは責務が異なり、矛盾時は contract error として停止する。agent 名から `skills/expert-<name>/` を機械生成しない
-- `~/.claude/skills/_shared/planned-experts.md` — planned expert (env / release / compatibility / spec) の取り扱い契約 (lifecycle / fallback 方針正本)
+- `~/.claude/skills/_shared/planned-experts.md` — planned expert (env / release / compatibility) の取り扱い契約 (lifecycle / fallback 方針正本)
 - `~/.claude/skills/_shared/markers/labels-and-markers.md` — label / hidden marker 仕様の正本 (op-run はこれを routing metadata として読む)
 - `~/.claude/skills/_shared/clustering.md` (>=6) — クラスタリング・競合検出ロジック (v6: density 算出方法を明文化)
 - `~/.claude/skills/_shared/worktree-ops.md` (>=3) — worktree ライフサイクル (v3: soft warning >16 / hard cap >32 fail-fast gate、ADR-0007 v3 §4.1-v3 整合)
@@ -169,11 +177,14 @@ controller 人為 cap (chunk 起動 / `CONTROLLER_CHUNK_BUDGET`) は撤廃した
 - `~/.claude/skills/op-run/references/plan-mode-gate.md` (>=1) — フェーズ -1 (EnterPlanMode) / フェーズ 1-3 (ExitPlanMode + plan file) の詳細仕様。SKILL.md 本体 god file 抑制のため分離 (v2 で追加)
 - `~/.claude/skills/op-run/references/issue-health-check.md` (>=1) — フェーズ1.5 (Issue 健全性判定 + 正規化委譲 + 派生 Issue 取り込み + ループ防止 + タイムアウト) の詳細仕様。SKILL.md 本体 god file 抑制のため分離 (Issue #425 Stage 2)
 - `~/.claude/skills/op-run/references/global-review-spawn.md` (>=3) — Global Review の詳細仕様。review worktree 作成 / review_model 決定 (narrow opt-down) / per-phase model 解決 / review_round 算出 / OP_RUN_SESSION_ID 払い出し / marker 組立 + 投稿 / apply_review_labels を集約。ClusterOrchestrator フェーズ5-6 のポインタ参照先 (ADR-0016 移管済)
-- `~/.claude/skills/op-run/references/review-fix-loop.md` (>=1) — Review Fix / Specialist Decision Loop の詳細仕様。review_result 別動作 / round 上限管理 (4.5-1 / 4.5-1A) / finding 抽出条件 (4.5-2-pre 8 条件 AND) / dispatch 判定優先順位 1-8 (4.5-2) / planned expert fallback (4.5-2-fallback) / specialist handoff (4.5-2A) / same worktree 判断基準 (4.5-3) / 再委任フロー (4.5-4) を集約。ClusterOrchestrator フェーズ7 のポインタ参照先 (ADR-0016 移管済)
+- `~/.claude/skills/op-run/references/review-fix-loop.md` (>=1) — Review Fix / Specialist Decision Loop の詳細仕様。review_result 別動作 / round 上限管理 (4.5-1 / 4.5-1A) / finding 抽出条件 (4.5-2-pre 2 条件、ADR-0027 6b で 8→2 に簡素化) / dispatch 判定優先順位 1-8 (4.5-2) / planned expert fallback (4.5-2-fallback) / specialist handoff (4.5-2A) / same worktree 判断基準 (4.5-3) / 再委任フロー (4.5-4) を集約。ClusterOrchestrator フェーズ7 のポインタ参照先 (ADR-0016 移管済)
 - `~/.claude/skills/op-run/references/expert-resolution.md` (>=1) — フェーズ1-2-c (expert 解決ロジック) / フェーズ1-2-d (Active Apply Expert Normalization) の詳細仕様。marker / label → expert の解決軸、Resolved → Runtime 正規化表、release-expert 再分類、normalize_to_active_apply_expert 判定軸を集約。SKILL.md 本体 god file 抑制のため分離 (Issue #467 Stage 6)
 - `~/.claude/skills/op-run/cluster-orchestrator-directives.md` (>=1) — ClusterOrchestrator の指示書正本。1 クラスターの apply → PR → post-check → review → round 管理 → compact summary 返却の 10 フェーズ構成 (ADR-0016)
 - `~/.claude/skills/op-run/references/apply-prompt-directives.md` (>=1) — apply フェーズの expert 別 load-bearing 指示の canonical 正本。controller が common 節 + 当該 expert の節を結合し、ClusterOrchestrator spawn 時の apply-expert prompt に注入する
-- `~/.claude/skills/op-plan/SKILL.md` フェーズ -1 (行 140-180) / フェーズ 6 (行 514-610) — plan mode 自動遷移パターンの出元 (op-run v2 で参照)
+- `~/.claude/skills/op-run/references/post-check-dispatcher.md` (>=1) — フェーズ3.5 Post-check Dispatcher の詳細仕様 (dispatch 判定 / spawn 手順 / 判定後処理 / skip・error 分岐)。ClusterOrchestrator フェーズ5.5 のポインタ参照先
+- `~/.claude/skills/op-run/references/post-check-prompts.md` (>=1) — フェーズ3.5 で spawn する post-check Agent の prompt 群の canonical 正本。dispatch 判定後、ClusterOrchestrator (フェーズ5.5) が prompt_text を本ファイルから注入する
+- `~/.claude/skills/op-run/references/label-transitions.md` (>=1) — フェーズ4-3 (4-3-1 review / 4-3-2 post-check) のラベル遷移 helper 群と遷移表の詳細仕様
+- `~/.claude/skills/op-plan/SKILL.md` フェーズ -1: プランモード自動遷移 / フェーズ6: ユーザー承認 gate (ExitPlanMode) — plan mode 自動遷移パターンの出元 (op-run v2 で参照)
 - Claude Code 公式 [Choose a permission mode](https://code.claude.com/docs/en/permission-modes) — EnterPlanMode / ExitPlanMode の権限機構レベル仕様、承認オプション (Approve and accept edits / start in auto mode / review each manually / Keep planning with feedback) と acceptEdits / auto 自動遷移挙動 (v2 で参照)
 - `~/.claude/skills/_shared/markers/claim-markers.md` (>=1) — op-run Issue claim 機構の marker schema 正本 (op-claim block / op-cluster-manifest block / TTL ルール / race 調停 / 除外条件)
 - `~/.claude/skills/_shared/apply-completion-verify.md` (>=1) — controller 側 apply 完了 verify gate の正本 (gate3 recovery 判断の receipt 仕様 / 不一致分岐 / SendMessage retry 文面 / worktrees-failed/ 隔離手順)。Phase 2-E §2-E-0 の手順詳細はこちら
@@ -188,11 +199,8 @@ controller 人為 cap (chunk 起動 / `CONTROLLER_CHUNK_BUDGET`) は撤廃した
 ## フェーズ-1: プランモード自動遷移 (対話モード時、v2)
 
 司令官は op-run を対話モードで起動した直後、フェーズ 0 に入る前に **`EnterPlanMode` tool を呼ぶ**。
-これによりフェーズ 0 (環境確認) / フェーズ 1 (Issue 取得・クラスタリング) /
-フェーズ1.5 (健全性チェック) / フェーズ 1-3 (ユーザー承認) が Claude Code の plan mode 下で進行し、
-**Edit / Write / Bash の書き込み系が権限機構レベルでブロック** される
-(bundled `/batch` および op-plan v2 と同方式、公式仕様:
-[Choose a permission mode](https://code.claude.com/docs/en/permission-modes))。
+これによりフェーズ 0-1.5 が Claude Code の plan mode 下で read-only 進行する
+(詳細: `references/plan-mode-gate.md`)。
 
 要点:
 
@@ -442,14 +450,14 @@ op-scan 委譲に回された Issue (元 Issue) はクラスタ対象から除�
 6. **Stage 1 競合検出**: ファイル重複 + global_conflict_files + 同一 symbol を検証
 
 ステップ 4-6 (= **どう束ね並列化するかのグルーピング決定**) は「単発 / 不可逆 / 深い推論」で、
-判定不能を 1 案に丸める従来手法は低 tier 司令官で品質劣化する (ADR-0009 L20)。
+判定不能を 1 案に丸める従来手法は低 tier 司令官で品質劣化する (ADR-0009 Context 節『計画フェーズの effort が無保証』箇条書き)。
 judge-panel 有効時 (既定) は、このグルーピングを **1-2-judge の judge-panel workflow に委譲** する
 (ステップ 1-3 = file/module/category 抽出は司令官が prep し、グルーピングだけ N 案競争にする)。
 
 #### 1-2-judge. clustering judge-panel (案出し、ADR-0014 Wave A)
 
 グルーピング (ステップ 4-6) を **N 案を別角度で並列生成 → evaluator が比較選定** する judge-panel に置き換える。
-**案出し=workflow / 確定=司令官+人間 gate** (ADR-0009 L158 厳守。確定は 1-3 / `--auto` 自動採択)。
+**案出し=workflow / 確定=司令官+人間 gate** (ADR-0009『目標アーキ: スイート全体の fan-out / verify 点マッピング』表の『計画フェーズ』行 厳守。確定は 1-3 / `--auto` 自動採択)。
 
 **有効条件 (op-config gated)**: `planning_judge_panel.enabled` (既定 `true`)。`false` または workflow が
 `ok:false` (全候補不正) を返した場合は、従来の司令官単発グルーピング (ステップ 4-6 を司令官が 1 案で実施) に
@@ -464,10 +472,11 @@ judge-panel 有効時 (既定) は、このグルーピングを **1-2-judge の
 3. 1-2-b の global_conflict_files リストを `global_conflict_files` として渡す (risk-first angle の判定材料)。
 4. `planning_judge_panel.candidate_count` (既定 1) と model (`model-selection.md` §5.1: generate=Sonnet / evaluate=Opus) を解決する。angles は Wave A では workflow default (標準/risk-first/throughput-first) に委ねる。
 
-**workflow 呼出** (`op-run-discover` と同形式、動的値は args 注入):
+**workflow 呼出** (`op-run-discover` と同形式、動的値は args 注入。呼び出し規約 —
+capability preflight / `.result` unwrap / args 渡し — は `_shared/workflow-calling.md` §1-§2 / §4 に従う):
 
 ```javascript
-const judgeOut = Workflow({
+const judgeRaw = Workflow({
   name: 'op-run-judge-clustering',
   args: {
     issues: enriched_issues,                 // [{number, files_declared, module_hint, category_hint, severity}]
@@ -478,6 +487,7 @@ const judgeOut = Workflow({
     models: { generate: PJP_GEN_MODEL, evaluate: PJP_EVAL_MODEL },
   },
 })
+const judgeOut = judgeRaw.result ?? judgeRaw  // workflow-calling.md §2: background task 経路は result ラップ (直アクセスは silent undefined)
 // judgeOut = { ok, recommended:{angle, plan, corrected}, candidates:[{angle, clusters, score}], js_ranking, evaluator:{recommended_angle, rationale, ranking}, dropped }
 ```
 
@@ -570,7 +580,7 @@ post-check 付与ルールは `~/.claude/skills/op-run/references/expert-resolut
 ### 1-2-d. Active Apply Expert Normalization (planned expert を runtime に漏らさない)
 
 1-2-c の expert 解決結果を Task spawn 前に必ず active expert へ正規化する gate。
-planned expert (env / release / compatibility / spec) を直接 spawn しないための変換境界。
+planned expert (env / release / compatibility) と Utility Worker (spec-expert) を直接 spawn しないための変換境界。
 Resolved → Runtime 正規化表 / 判定軸 / 疑似コード / 適用タイミングの詳細は
 `references/expert-resolution.md` を参照。
 
@@ -816,9 +826,11 @@ provision 済 worktree で investigation reader を別 context で並列 spawn �
 (**修正・コミット・push は禁止**で investigation のみ)、investigation report 配列を controller へ返す。
 spawn 並列管理 (16 並列上限の透過キューイング) は workflow runtime が担い、controller は人為 cap しない。
 
+呼び出し規約 (capability preflight / `.result` unwrap / args 渡し) は `_shared/workflow-calling.md` §1-§2 / §4 に従う。
+
 ```
 # controller が探知 workflow を 1 呼び出しで起動する (args は object。script 側が JSON 文字列を parse する正規化シム済み)
-const discoverOut = Workflow({
+const discoverRaw = Workflow({
   name: 'op-run-discover',
   args: {
     clusters: approved_clusters.map(c => ({
@@ -836,6 +848,7 @@ const discoverOut = Workflow({
     ts:       RUN_TS,                     // bundle-level の run timestamp
   },
 })
+const discoverOut = discoverRaw.result ?? discoverRaw  // workflow-calling.md §2: background task 経路は result ラップ (直アクセスは silent undefined)
 // discoverOut = { base_sha, base_ref, ts, reports: [investigationSchema...] }
 // reports[].files_likely_to_modify が controller の Stage2 競合検出 (2-B) の入力になる。
 ```
@@ -932,6 +945,9 @@ Stage 2 競合検出と density 再算出の結果から、controller は修正�
 **serialization は dispatch 順序 (serial_chains への配置) で強制する。prompt hint には依存しない** (決定D)。
 controller はこの partition を ClusterOrchestrator spawn の引数として渡し、
 直列化を実行構造として保証する (apply agent への「直列でお願い」という prompt 文言で誘導しない)。
+並列 dispatch 方針 (serialization の強制機構) の正本は本節 (runtime 委譲側は「実行モード」節)。
+`op cluster max-parallel` の算出値は partition 設計・observability 用途であり、dispatch の hard cap として扱わない
+(上限強制は runtime、競合吸収は partition)。
 
 ```markdown
 ## Stage 2 結果
@@ -1144,7 +1160,9 @@ ClusterSummary compact schema に issues[] を追加しないことで ADR-0016 
 
 事前準備: controller は 2-Orchestrate 起動前に parallel_clusters と serial_chains を展開し、
 `ALL_CLUSTERS_JSON` (= `[{"cluster_id":"c1","issues":[42,43],...}, ...]` 形式の JSON 文字列) を
-export しておく。これにより 2-E-0 fence が独立 subshell でも cluster list を参照できる。
+export しておく。ただし **export の fence 間持続は環境依存で保証されない**
+(正本: `_shared/bash-fence-convention.md`) — 2-E-0 fence は冒頭の `:?` guard で不在を fail-fast し、
+持続しない環境では同 fence 内で本手順の再構築 (または一時ファイル経由の受け渡し) を行う。
 `ALL_CLUSTERS_JSON` は各 cluster オブジェクトの `cluster_id` と `issues[]` を jq で直接組み立てる。
 
 ```bash

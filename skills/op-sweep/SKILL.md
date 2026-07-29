@@ -100,6 +100,8 @@ op-merge は 1 PR ずつ即削除する。op-sweep は一定期間後に全体�
 | `skills/_shared/worktree-ops.md` | worktree / branch ライフサイクル契約、task-id / branch 命名規則 | `(>=2)` |
 | `skills/_shared/markers/labels-and-markers.md` | hidden marker の名前と semantics | `(>=7)` |
 | `skills/_shared/runtime-contract.md` | runtime spawn 境界 / merge-blocking state | `(>=2)` |
+| `skills/_shared/common-setup.md` | フェーズ0 git/gh env check 標準手順の正本 | `(>=3)` |
+| `skills/_shared/github-channel.md` | Cloud (`OP_GITHUB_CHANNEL=mcp`) 時の gh 操作 channel 判定 | — |
 | `skills/_shared/version-check.md` | schema_version pin チェック手順 | `(>=3)` |
 | `docs/adr/0002-op-skill-branch-naming.md` | auto/* branch 命名統一規約 (Accepted) | — |
 | `docs/adr/0003-op-sweep-skill.md` | op-sweep 設計判断 / 責務分離 (Accepted) | — |
@@ -111,20 +113,21 @@ op-merge は 1 PR ずつ即削除する。op-sweep は一定期間後に全体�
 
 ## フェーズ0: 環境確認
 
+git/gh の基本 check (git repo 判定 + `gh auth status`、認証なし時は `exit 1`) は
+`skills/_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」節を参照する
+(本節には再定義しない、Single Canonical Source Rule)。
+
+Cloud 環境の gh 操作 (branch sweep の PR/Issue 参照 fetch) は `skills/_shared/github-channel.md`
+(`OP_GITHUB_CHANNEL`) の channel 判定に従う。
+
+本 skill 固有の追加 check:
+
 ```
-1. gh 認証状態確認
-   $ gh auth status
-   → エラーの場合は中断して認証を促す
-
-2. git 状態確認
-   $ git status
-   → uncommitted changes がある場合は warning を表示 (中断は不要、sweep 対象は別 branch)
-
-3. git remote 確認
+1. git remote 確認
    $ git remote -v
    → origin が設定されていない場合は remote 削除をスキップする旨を表示
 
-4. _shared/*.md schema_version チェック (version-check.md >=3 に従う)
+2. _shared/*.md schema_version チェック (version-check.md >=3 に従う)
    → 参照ドキュメント節の (>=N) 条件を Read で確認、mismatch は warning 表示
 ```
 
@@ -254,88 +257,43 @@ op branch sweep --older-than "${OLDER_THAN:-7}" --apply
 
 ## CLI インターフェース仕様 (op-tools 実装済み)
 
-op-tools primitive (`op branch sweep-candidates` / `op branch sweep`) の
-インターフェース仕様。Rust 側実装 (PR #186/#187 由来) の参照仕様として利用する。
+op-tools primitive (`op branch sweep-candidates` / `op branch sweep`) の参照仕様。
+OPTIONS の全量は `op branch sweep-candidates --help` / `op branch sweep --help` を参照
+(正本 spec ファイルは未整備、`op-tools/docs/specs/` に該当なし)。
 
 ### `op branch sweep-candidates` (read-only)
 
-```
-USAGE:
-    op branch sweep-candidates [OPTIONS]
-
-OPTIONS:
-    --older-than <N>         grace period (デフォルト: 7、単位: 日)
-    --include-source <src>   source filter (予約, 初版未実装)
-    --format <fmt>           出力形式: json | text (デフォルト: json)
-    --repo <owner/repo>      対象リポジトリ (デフォルト: origin から自動検出)
-
-OUTPUT (JSON):
-{
-  "candidates": [
-    {
-      "branch": "auto/feat-xxx-20260510-120000-c1",
-      "merged_at": "2026-05-10T12:00:00Z",
-      "elapsed_days": 8,
-      "pr_number": 42,
-      "pr_title": "feat(xxx): ...",
-      "has_local": true
-    }
-  ],
-  "protected": [
-    {
-      "branch": "auto/docs-zzz-20260517-180000-c3",
-      "reason": "worktree_in_use",
-      "detail": "path: /home/user/cwork/worktrees/..."
-    }
-  ],
-  "summary": {
-    "candidate_count": 2,
-    "protected_count": 1,
-    "grace_days": 7,
-    "evaluated_at": "2026-05-18T21:34:00Z"
-  }
-}
-```
+出力フィールドは下記「実行例」の JSON 構造を参照 (二重記述を避けるため一覧はここに一本化):
+`candidates[]` は `branch` / `merged_at` / `elapsed_days` (grace 判定に使う経過日数) / `pr_number` /
+`pr_title` / `has_local`、`protected[]` は `branch` / `reason` (6 種、上記「保護条件」表と対応) /
+`detail`、`summary` は `candidate_count` / `protected_count` / `grace_days` / `evaluated_at`。
 
 ### `op branch sweep` (apply)
 
+OPTIONS は `sweep-candidates` に `--dry-run` (削除せず候補表示のみ、デフォルト) が加わる。
+**候補列挙 (`sweep-candidates`) と削除実行の間で保護条件を再評価する** (safety-net) ため、
+実行タイミングのずれで保護対象が誤って削除されることはない。
+
+出力フィールド骨格:
+
+- `deleted[]` — 削除成功。`branch` / `deleted_local` / `deleted_remote`
+- `failed[]` — 削除失敗。`branch` / `error` (例: `remote delete failed: 403 Forbidden`)
+- `summary` — `deleted_count` / `failed_count` / `remaining_auto_count`
+
+実行例 (`sweep-candidates`、grace 内 1 件が保護される例):
+
 ```
-USAGE:
-    op branch sweep [OPTIONS]
-
-OPTIONS:
-    --older-than <N>         grace period (デフォルト: 7、単位: 日)
-    --include-source <src>   source filter (予約, 初版未実装)
-    --format <fmt>           出力形式: json | text (デフォルト: json)
-    --repo <owner/repo>      対象リポジトリ (デフォルト: origin から自動検出)
-    --dry-run                削除せず候補表示のみ (デフォルト: false)
-
-BEHAVIOR:
-    sweep-candidates の結果を再評価してから削除を実行する。
-    候補列挙と削除の間に保護条件が変化しても safety-net が機能する。
-
-OUTPUT (JSON):
-{
-  "deleted": [
-    {
-      "branch": "auto/feat-xxx-20260510-120000-c1",
-      "deleted_local": true,
-      "deleted_remote": true
-    }
-  ],
-  "failed": [
-    {
-      "branch": "auto/broken-yyy-20260509-000000-c0",
-      "error": "remote delete failed: 403 Forbidden"
-    }
-  ],
-  "summary": {
-    "deleted_count": 2,
-    "failed_count": 0,
-    "remaining_auto_count": 3
-  }
-}
+$ op branch sweep-candidates --older-than 7
+{"candidates":[{"branch":"auto/feat-xxx-20260510-120000-c1","elapsed_days":8,"pr_number":42,"has_local":true}],
+ "protected":[{"branch":"auto/docs-zzz-20260517-180000-c3","reason":"worktree_in_use"}],
+ "summary":{"candidate_count":1,"protected_count":1,"grace_days":7}}
 ```
+
+判断に使う読み方:
+
+- **merged 判定**: `candidates[]` は squash-merge 済み `auto/*` のみ。`protected[]` は「保護条件」表の 6 条件いずれかに該当し削除しない。
+- **grace**: `elapsed_days < grace_days` の間は `AgeBelowGrace` で保護。`--older-than` で grace_days を変更できる。
+- **dry-run 出力**: `op branch sweep` を `--apply` なしで実行すると `sweep-candidates` と同一構造の JSON を返す (削除は未実行)。`--apply` 時のみ `deleted[]` / `failed[]` が埋まる。
 
 ### branch 命名規則との整合 (ADR-0002)
 

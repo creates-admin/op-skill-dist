@@ -1,4 +1,12 @@
 <!--
+schema_version: 1
+last_breaking_change: なし
+notes: v1 (2026-07-29): SKILL.md 参照ドキュメント索引への追記 (F10) に伴い、
+       他 reference ファイルと同形式の schema_version header を additive 追加。
+       内容変更なし。
+-->
+
+<!--
 機能概要: op-run フェーズ4-3 のラベル遷移 helper 群 (4-3-1 review / 4-3-2 post-check) を
          SKILL.md 本体から物理切り出しした参照ファイル。
 作成意図: SKILL.md の god file 化解消 (Issue #406 Stage 1)。bash 実装の内容は

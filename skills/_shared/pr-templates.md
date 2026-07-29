@@ -722,13 +722,8 @@ EOF
 review-expert は **修正・push しない**。op-run が specialist expert に再委任して修正させる。
 
 ```bash
-: "${REVIEW_ROUND:?REVIEW_ROUND is required. op-run must export computed review_round before invoking this template.}"
-: "${OP_RUN_SESSION_ID:?OP_RUN_SESSION_ID is required in OP-managed mode. op-run controller must export a real session id (not 'unknown').}"
-if [ "$OP_RUN_SESSION_ID" = "unknown" ]; then
-  echo "❌ OP-managed mode で OP_RUN_SESSION_ID=unknown は許可されません。op-run controller が払い出した値を export してください (op-merge gate 3i 対応)。" >&2
-  exit 1
-fi
-: "${REVIEW_WT_HEAD_SHA:?REVIEW_WT_HEAD_SHA is required in OP-managed mode. op-run must export review worktree HEAD SHA.}"
+# guard (REVIEW_ROUND / OP_RUN_SESSION_ID / REVIEW_WT_HEAD_SHA の :? fail-fast チェック) は
+# 上の approve テンプレ冒頭と同一。単体 copy-paste 時はその 8 行をこの位置に複製すること。
 
 REVIEWED_SHA=$(git rev-parse HEAD)
 
@@ -779,13 +774,8 @@ EOF
 修正方針決定や妥当性判断に specialist 観点が必要な場合。op-run はまず specialist expert に handoff する。
 
 ```bash
-: "${REVIEW_ROUND:?REVIEW_ROUND is required. op-run must export computed review_round before invoking this template.}"
-: "${OP_RUN_SESSION_ID:?OP_RUN_SESSION_ID is required in OP-managed mode. op-run controller must export a real session id (not 'unknown').}"
-if [ "$OP_RUN_SESSION_ID" = "unknown" ]; then
-  echo "❌ OP-managed mode で OP_RUN_SESSION_ID=unknown は許可されません。op-run controller が払い出した値を export してください (op-merge gate 3i 対応)。" >&2
-  exit 1
-fi
-: "${REVIEW_WT_HEAD_SHA:?REVIEW_WT_HEAD_SHA is required in OP-managed mode. op-run must export review worktree HEAD SHA.}"
+# guard (REVIEW_ROUND / OP_RUN_SESSION_ID / REVIEW_WT_HEAD_SHA の :? fail-fast チェック) は
+# 上の approve テンプレ冒頭と同一。単体 copy-paste 時はその 8 行をこの位置に複製すること。
 
 REVIEWED_SHA=$(git rev-parse HEAD)
 
@@ -1418,17 +1408,8 @@ needs_human_decision:
 
 ### フィールド早見表
 
-| フィールド | 必須 | 意味 |
-|-----------|-----|------|
-| `required` | ✓ | 人間判断が要るかどうか。要らないなら block ごと省略可 |
-| `reason` | ✓ | なぜ自動判断できないのか (例: scope_in 外への踏み込みが必要 / spec が複数解釈可能) |
-| `decision_type` | ✓ | 判断種別。dispatcher / Issue 化時のラベルに使う (12 値の enum: scope / risk / behavior / boundary / spec / compatibility / security / design / release / environment / deletion / dependency) |
-| `options[]` | ✓ | 最低 2 つ。各要素は `id` (短縮) / `label` / `consequence` を持つ |
-| `recommended_option` | ✓ | expert の推奨。判断保留なら `none` |
-| `safest_default` | ✓ | commander が即時に決められない場合に取る既定値 |
-| `blocked_actions[]` | ✓ | 判断なしでは絶対に実行しない操作 (push / delete 等) |
-| `can_continue_without_decision` | ✓ | true なら他の安全な作業は続行可、false なら全停止 |
-| `next_safe_action` | ✓ | 続行可能な場合に取る次の行動 (停止と区別する) |
+各フィールドの必須可否・意味は `_shared/invocation-mode.md`「`needs_human_decision` Block (新標準スキーマ)」
+の「### フィールド説明」表を SSoT として参照する (本ファイルでは再掲しない)。
 
 ### 出力例 (scope 判断)
 
@@ -1483,16 +1464,9 @@ needs_human_decision:
 
 ### 質問テキストとの違い (重要)
 
-OP-managed Mode の expert は以下を **やらない**:
-
-| 旧 (禁止) | 新 (構造化返却) |
-|----------|---------------|
-| 「Issue コメントで質問してください」 | `needs_human_decision.reason` に書き、commander が必要なら Issue コメント化 |
-| 「ユーザーに判断を仰ぐ」 | `decision_type` + `options` + `recommended_option` で判断材料を構造化 |
-| 「回答があるまで停止」 | `can_continue_without_decision: false` を明記。停止理由は `blocked_actions` に列挙 |
-| 「対話モードに回す」 | `manual_review_bucket` (`auto-policy.md`) または `needs_human_decision` |
-
-詳細・mode 判定・禁止フレーズ完全リストは `_shared/invocation-mode.md` を参照。
+OP-managed Mode の expert は質問テキストではなく構造化返却を使う。禁止フレーズ対応表は
+`_shared/invocation-mode.md`「Forbidden in OP-managed Mode (文言ブラックリスト)」を SSoT として
+参照する (本ファイルでは再掲しない)。
 
 ---
 

@@ -1,7 +1,23 @@
 <!--
 schema_version: 9
 last_breaking_change: 2026-05-22
-notes: v9 末尾 (2026-06-21) — op-source 値に op-spec を additive 追加 (ADR-0017 W5: op-spec が正本↔code gap から発行する derived issue の source)。schema_version は 9 のまま (additive、inline.rs SCHEMA_VERSION=9 と一致維持)。
+notes: v9 末尾 (2026-07-29) — ADR-0026/0027 追従の corrective + additive 改訂。(1) `op-patrol-ledger-state` /
+       `op-review-state` (各 domain 正本 v2 の機械正本 marker) の entry を additive 新設。(2) review 系
+       (`op-review-meta` / `op-review-finding` / `op-specialist-review-meta` / `op-review-controller-meta`) と
+       `op-patrol-run` の記述を「comment marker = 人間向け監査ログ / 機械正本 = body state 文書」に整合。
+       (3) `op-patrol-checkpoint` に廃止注記 (ADR-0026)。(4) domain 正本参照へ (>=2) pin 追記
+       (patrol / review / post-check / ux-ui。security-markers は据置)。(5) claim 系 Lint Regression Example を
+       claim-markers.md (所有者) へ一本化し pointer 化。(6) op-fallback-applied example の `source_id` を
+       型宣言 (string|null) と整合する `null` に訂正。marker 契約自体の変更なし・doc 記述整合のみのため
+       schema_version は 9 のまま据置 (inline.rs SCHEMA_VERSION=9 と一致維持)。
+       v9 末尾 (2026-07-29) — enrichment 層 collision gate (issue-enrichment.md §7.5) が投稿する
+       `op-collision-warning` marker と `op:potential-collision` label を additive 登録 (v2 2026-05-16 の
+       §7.5 新設以来、正本一覧に未登録のまま runtime 使用されていた欠落の corrective 登録。field schema の
+       正本は issue-enrichment.md §7.5 のまま)。あわせて `op-fingerprint` の Owner を実態 (op-plan /
+       op-report / op-spec / op-spec-patrol も生成) へ更新し、`needs:triage` の用途に collision-warn 経路を
+       追記。schema_version は 9 のまま据置 (doc 登録のみで inline.rs の検証対象 marker set には足さない
+       = SCHEMA_VERSION=9 と一致維持。marker-lint / `op help marker --list` の対象 marker 数は inline.rs 側が正本)。
+       v9 末尾 (2026-06-21) — op-source 値に op-spec を additive 追加 (ADR-0017 W5: op-spec が正本↔code gap から発行する derived issue の source)。schema_version は 9 のまま (additive、inline.rs SCHEMA_VERSION=9 と一致維持)。
        v9 末尾 (2026-06-21) — ADR-0017 W4: op-spec-ref marker を additive 登録 (consumer=op-run/op-codev、producer=op-spec/op-spec-patrol、linkage B の issue 端)。schema_version は 9 のまま据置 (additive、既存 marker の意味変更なし、doc 登録のみで inline.rs の検証対象 marker set には足さない = SCHEMA_VERSION=9 と一致維持)。
        v9 末尾 (2026-06-21) — op-depends-on 工程依存 marker (`<!-- op-depends-on: #N, #M -->`、inline-value) を additive 追加 (ADR-0019 op-loop 工程A、Owner=op-architect/op-plan、Consumer=op-loop / `op issue dep-graph`、merge 非blocking)。schema_version は 9 のまま (additive、dep_graph.rs SCHEMA_VERSION=9 と一致維持)。
        v9 末尾 (2026-06-21) — op-spec-patrol label + Spec Patrol Markers (`op-spec-patrol-run` / `op-spec-patrol-checkpoint`、fingerprint `spec-patrol-checkpoint:<fp>`) を additive 追加 (ADR-0017 W3、op-spec-patrol skill 新設)。schema_version は 9 のまま (additive、既存 marker / label の意味変更なし、inline.rs SCHEMA_VERSION=9 と一致維持)。
@@ -52,11 +68,11 @@ It must contain every OP marker name currently used by active OP skills.
 
 | 概念 | 正本 |
 |---|---|
-| review 系 marker (`op-review-meta` / `op-review-finding` / `op-review-finding-direct` / `op-review-report` / `op-specialist-review-meta`) の field schema / enum / null 許可ルール / Direct Mode 契約 / 集約ルール / reclassification | `skills/_shared/markers/review-markers.md` |
-| `op-post-check-meta` の共通 field schema / enum / 複数 post-check 共存 / stale 判定 | `skills/_shared/markers/post-check-markers.md` |
-| security 系 marker (`op-security-post-check` / `op-security-requires-aux-post-check`) の usable_security / threat_model / aux post-check 状態遷移 / 8 観点 | `skills/_shared/markers/security-markers.md` |
-| UX/UI 系 marker (`op-ux-ui-gate` / `op-ux-ui-audit`) の Design Plan gate / post-check 観点 / Applicable States 判定 | `skills/_shared/markers/ux-ui-markers.md` |
-| patrol 系 marker (`op-patrol-run` / `op-patrol-checkpoint`) の Ledger コメント JSON schema / area_state 構造 / 命名規則 / state 復元手順 / parse fallback / compact 条件 | `skills/_shared/markers/patrol-markers.md` |
+| review 系 marker (`op-review-state` (機械正本、PR body state 文書) / 監査ログ comment 系 `op-review-meta` / `op-review-finding` / `op-review-finding-direct` / `op-review-report` / `op-specialist-review-meta`) の field schema / enum / null 許可ルール / Direct Mode 契約 / 集約ルール / reclassification / state 文書位置規約 (ADR-0027 6b) | `skills/_shared/markers/review-markers.md (>=2)` |
+| `op-post-check-meta` の共通 field schema / enum / 複数 post-check 共存 / stale 判定 | `skills/_shared/markers/post-check-markers.md (>=2)` |
+| security 系 marker (`op-security-post-check` / `op-security-requires-aux-post-check`) の usable_security / threat_model / aux post-check 状態遷移 / 8 観点 | `skills/_shared/markers/security-markers.md` (>=2) |
+| UX/UI 系 marker (`op-ux-ui-gate` / `op-ux-ui-audit`) の Design Plan gate / post-check 観点 / Applicable States 判定 | `skills/_shared/markers/ux-ui-markers.md (>=2)` |
+| patrol 系 marker (`op-patrol-ledger-state` (機械正本、Ledger body state 文書) / 監査ログ comment 系 `op-patrol-run`) の body/コメント JSON schema / area_state 構造 / 命名規則 / 冪等性・並行制御 (ADR-0026、`op-patrol-checkpoint` は v2 で廃止) | `skills/_shared/markers/patrol-markers.md (>=2)` |
 | manual override block (`op-manual-override`) の field schema / 必須要件 / validation rule / 監査追跡 | `skills/_shared/markers/merge-gate-markers.md` |
 | claim 系 marker (`op-claim` / `op-cluster-manifest`) の field schema / TTL ルール / race 調停 / 除外条件 / `op claim` CLI との対応 | `skills/_shared/markers/claim-markers.md` |
 | PR body / コメント bash gh HEREDOC テンプレ / human-readable example | `skills/_shared/pr-templates.md` |
@@ -255,11 +271,15 @@ Not meaning:
 ### `<!-- op-fingerprint: <domain>:<normalized_title>:<primary_file>:<symbol> -->`
 
 Owner / producer:
-- op-scan / op-patrol / op-architect (起票時に必須)
+- op-scan / op-patrol / op-architect / op-plan (起票時に必須)
+- op-report (scout の dedup 照合 + 起票時に生成)
+- op-spec (derived issue 起票時) / op-spec-patrol (Spec Patrol Ledger checkpoint、
+  `spec-patrol-checkpoint:<fp>` 形式)
 
 Consumer:
 - op-scan / op-patrol (重複 Issue 抑止 / `seen_count` 更新)
 - op-run / op-merge (Issue / PR の同一性確認)
+- enrichment 層 collision gate (`issue-enrichment.md` §7.5 Query 1 — 完全一致で block)
 
 Meaning:
 - finding の重複判定キー。同一 fingerprint の Issue は重複として既存に集約。
@@ -269,6 +289,32 @@ Not meaning:
 
 Runtime spawn effect:
 - なし。ただし重複判定で起票自体を抑制するため、間接的に spawn 抑止に効く。
+
+---
+
+### `<!-- op-collision-warning -->`
+
+Owner / producer:
+- enrichment 層 collision gate (`issue-enrichment.md` §7.5)。runtime の投稿主体は起票 controller
+  (op-scan / op-patrol / op-plan / op-report — lite enrichment 経路含む。`--no-enrichment` でも本 gate は
+  bypass 不可)
+
+Consumer:
+- 人間 (`needs:triage` / `op:potential-collision` ラベルと合わせた起票後トリアージ)
+- op-run / 人間 (実装競合リスクの事前把握)
+
+Meaning:
+- Cross-instance Collision Gate が **warn** 判定 (Query 2 / 3 / 4 hit、Query 1 は非 hit) した Issue の
+  本文末尾に付加する block marker。「起票は続行するが、既存 open Issue と実装競合リスクがある」ことを示す。
+  `query_hit` / `similar_issues` / `similar_reason` / `warned_at` / `gate_version` の field を持つ。
+- 判定条件 (Query 1〜4 / block / warn / clear) と field schema の正本は `issue-enrichment.md (>=2)` §7.5。
+  本エントリは name + core semantics の登録のみ (要約 + pointer)。
+
+Not meaning:
+- 重複確定 (block) ではない。fingerprint 完全一致 (Query 1) は本 marker を付けず起票自体を停止する。
+
+Merge blocking effect:
+- なし (起票時 warn の記録。merge gate は参照しない)。
 
 ---
 
@@ -411,7 +457,7 @@ Consumer:
 Meaning:
 - issue → binding な正本セクションへの双方向ポインタ (linkage B の issue 端、ADR-0017 決定9)。
 - value は `<feature>#<decision>` (例: `op-sweep#decision-12`)。feature = `.claude/rules/<feature>.md` の feature キー、decision = その正本内の決定 / セクション anchor。
-- 正本側の対は決定行の `([[feature/section]], realizes #NN)` (op-spec/SKILL.md L328)。1 本のリンクで provenance (どの決定から派生したか) と binding (実装時に読むべき正本) が同時に成立する。
+- 正本側の対は決定行の `([[feature/section]], realizes #NN)` (op-spec/SKILL.md「3-1-a. linkage A」節)。1 本のリンクで provenance (どの決定から派生したか) と binding (実装時に読むべき正本) が同時に成立する。
 
 Not meaning:
 - routing marker ではない (op-domain / op-source が routing を担う)。本 marker は「正本への binding pointer」であり、cluster / domain 判定には使わない。
@@ -422,8 +468,13 @@ Not meaning:
 
 ## Review Markers
 
-review-expert (global review 専任) と specialist reviewer の出力に使われる marker 群。op-run フェーズ4 の
-review lifecycle と op-merge gate が読み取る。
+review-expert (global review 専任) と specialist reviewer の出力に使われる marker 群。
+
+> **v2 (ADR-0027 6b) 追従**: review lifecycle を機械が判定・分岐する唯一の正本は PR body 上の
+> `<!-- op-review-state -->` state 文書 (本節末尾 entry / `review-markers.md (>=2)`) である。
+> 以下の comment 系 marker (`op-review-meta` / `op-review-finding` / `op-specialist-review-meta` /
+> `op-review-controller-meta`) は **人間向け append-only 監査ログとして投稿を維持する**が、
+> op-run / op-merge はこれらのコメントを parse して判定に使わない。
 
 ### `<!-- op-review-meta -->`
 
@@ -432,24 +483,29 @@ Owner / producer:
 - ClusterOrchestrator (op-run controller が Agent tool で spawn) — review-expert が返す構造化結果を組み立て PR に投稿する。ADR-0016 決定7 (#744) により、投稿主体が op-run controller から CO に移管。
 
 Consumer:
-- op-run (review_round / max_review_fix_rounds の追跡 / Review Fix Loop 制御)
-- op-merge gate 3a-3c / 5 (review_result / reviewed_head_sha / round の最終確認)
-- op-merge gate 3i (op_run_session_id の forge 防止検証 — non-empty / != "unknown" を要求)
-- op-merge フェーズ 1-1 (chain 起動時の PR filter — op_run_session_id で自 session の PR のみに絞り込む、本 Issue #208 で追加)
+- 人間 (PR コメントで review 履歴を追う append-only 監査ログ。**v2 (ADR-0027 6b) 以降、機械は本
+  comment を parse しない**)
+- op-run (review_round / Review Fix Loop 制御) / op-merge gate 3a-3c / 3i / 5 / フェーズ 1-1 の
+  **判定入力は `<!-- op-review-state -->` 文書の `attempts[]`** (`op review state pull`)。本 comment は
+  その人間可読 mirror。
 
 Meaning:
 - review lifecycle metadata block。`review_result` (`approve` / `needs-fix` / `needs-specialist-review` /
   `blocked`) / `reviewed_head_sha` / `review_round` / `max_review_fix_rounds` / `global_review_expert` を含む。
+- v2 以降は人間向け監査ログ専用。同内容の機械正本は `op-review-state` 文書の `attempts[]` entry
+  (field は本 block と 1:1 対応、`review-markers.md (>=2)`)。
 
 Not meaning:
 - review 単体での merge approval ではない。`pro-reviewed` ラベル付与と head_sha 一致が別途必要。
+- v2 以降、op-run / op-merge の機械判定の入力ではない (それは `op-review-state`)。
 
 Runtime spawn effect:
-- なし。op-run 側で `needs-fix` 系の場合は specialist expert 再 spawn を判定する。
+- なし。op-run 側で `needs-fix` 系の場合は specialist expert 再 spawn を判定する (判定は state 文書由来)。
 
 Merge blocking effect:
 - `review_result != approve` または `reviewed_head_sha != current head` の場合 op-merge は中断する
-  (op-merge gate 3a〜3c / 5)。
+  (op-merge gate 3a〜3c / 5)。**v2 以降この判定の根拠は `op-review-state` 文書の `attempts[]` 最新 entry**
+  であり、本 comment marker は gate 入力にならない。
 
 ---
 
@@ -460,21 +516,23 @@ Owner / producer:
 - ClusterOrchestrator (op-run controller が Agent tool で spawn) — review-expert が返す finding を PR コメントとして投稿する。ADR-0016 決定7 (#744) により、投稿主体が op-run controller から CO に移管。
 
 Consumer:
-- op-run (Review Fix Loop で specialist expert に handoff する入力)
-- op-merge (`needs-fix` / `needs-specialist-review` / `blocked` finding が残っていないかの確認)
+- 人間 (finding 単位の監査ログ。**v2 (ADR-0027 6b) 以降、機械は本 comment を parse しない**)
+- op-run Review Fix Loop の handoff 入力 / op-merge の残存 finding 確認は
+  **`<!-- op-review-state -->` 文書の `attempts[].findings[]`** から行う。本 comment はその人間可読 mirror。
 
 Meaning:
-- machine-readable な review finding。`result` (`needs-fix` / `needs-specialist-review` / `blocked`) /
+- 構造化 review finding block。`result` (`needs-fix` / `needs-specialist-review` / `blocked`) /
   `reviewed_round` / `reviewed_at` / 必要に応じた candidate specialist 等を含む。
+- v2 以降は人間向け監査ログ専用。機械正本は state 文書の `findings[]` (field は 1:1 対応)。
 
 Not meaning:
 - approve finding は本 block を出さない (review_result=approve の時は finding 不要)。
 
 Runtime spawn effect:
-- なし。op-run 側で finding を読んで specialist 再 spawn を判定する。
+- なし。op-run 側で finding (state 文書由来) を読んで specialist 再 spawn を判定する。
 
 Merge blocking effect:
-- 本 finding が残ったまま re-review で解消されないと merge 不可。
+- 未解消 finding が残ったままだと merge 不可 (判定根拠は state 文書側。本 comment は gate 入力にならない)。
 
 ---
 
@@ -536,20 +594,22 @@ Owner / producer:
 - planned expert (`release-expert` / `compatibility-expert` / `env-expert`) は producer になれない。
   `spec-expert` は active だが op-spec 専用 Utility Worker (op-run の specialist review に参加しない) のため
   同じく producer になれない (詳細は `skills/_shared/planned-experts.md` /
-  `skills/_shared/active-expert-registry.md` および `skills/_shared/markers/review-markers.md`)
+  `skills/_shared/active-expert-registry.md` および `skills/_shared/markers/review-markers.md (>=2)`)
 
 Consumer:
-- op-run (specialist review 結果の取り込み / Review Fix Loop 進行)
-- op-merge (specialist review 通過確認)
+- 人間 (specialist review の監査ログ。**v2 (ADR-0027 6b) 以降、機械は本 comment を parse しない**)
+- op-run (specialist review 結果の取り込み / Review Fix Loop 進行) / op-merge (通過確認) の判定入力は
+  **`<!-- op-review-state -->` 文書の `specialist_reviews[]`**。本 comment はその人間可読 mirror。
 
 Meaning:
 - specialist review lifecycle metadata。元 finding / 担当 specialist / 結果を残す。
+- v2 以降は人間向け監査ログ専用。機械正本は state 文書の `specialist_reviews[]`。
 
 Not meaning:
 - global review (review-expert) を置き換えるものではない。global review は review-expert 専任。
 
 Merge blocking effect:
-- specialist review が `needs-fix` / `blocked` のままなら merge 不可。
+- specialist review が `needs-fix` / `blocked` のままなら merge 不可 (判定根拠は state 文書側)。
 
 ---
 
@@ -560,23 +620,53 @@ Owner / producer:
   ClusterOrchestrator が担当する前は op-run controller が書いていたが、ADR-0016 決定7 (#744) により CO に移管。
 
 Consumer:
-- op-merge (terminal blocked PR の継続停止根拠の追跡 / audit trail として参照)
-- 人間 (review_round 上限超過の経緯追跡)
+- 人間 (review_round 上限超過の経緯追跡。**v2 (ADR-0027 6b) 以降、機械は本 comment を parse しない**)
+- op-merge の terminal blocked 追跡の機械正本は **`<!-- op-review-state -->` 文書の `controller` field**。
+  本 comment はその人間可読 mirror (audit trail)。
 
 Meaning:
 - Review Fix Loop の controller-side terminal state。`controller_result` /
   `reason` / `review_round` / `max_review_fix_rounds` / `controlled_at` / `controller` を含む。
-- canonical `<!-- op-review-meta -->` (review-expert 出力) と独立して controller の
-  terminal 判定を残すための別 marker。詳細 field schema は
-  `skills/_shared/markers/review-markers.md` を参照。
+- `<!-- op-review-meta -->` (review-expert 出力) と独立して controller の
+  terminal 判定を残すための別 marker。v2 以降は人間向け監査ログ専用 (機械正本 = state 文書の
+  `controller`)。詳細 field schema は `skills/_shared/markers/review-markers.md (>=2)` を参照。
 
 Not meaning:
-- review-expert の判定ではない (それは `<!-- op-review-meta -->`)。
+- review-expert の判定ではない (それは `<!-- op-review-meta -->` / state 文書の `attempts[]`)。
 - run 全体の controller metadata ではない (それは `<!-- op-run-controller-meta -->`)。
 
 Merge blocking effect:
-- 単独では merge をブロックしない。実 merge gate は `<!-- op-review-meta -->` の
-  `review_result` と `pro-review-blocked` ラベルを根拠にする。本 marker は補助 audit trail。
+- 単独では merge をブロックしない。実 merge gate は state 文書の `review_result`
+  (`attempts[]` 最新 entry) と `pro-review-blocked` ラベルを根拠にする。本 marker は補助 audit trail。
+
+---
+
+### `<!-- op-review-state -->`
+
+Owner / producer:
+- ClusterOrchestrator / op-run controller (`op review state push` 経由で PR body に write。
+  review-expert / post-check expert の構造化結果を controller が state 文書へ反映する)
+
+Consumer:
+- op-run (`op review state pull` — review_round 導出 / Review Fix Loop 判定 / post-check 結果判定)
+- op-merge (`op merge verify` の gate 3a〜3i / 5 / post-check gate の LiveInputFacts 入力)
+
+Meaning:
+- PR body 上に置かれる **review lifecycle の唯一の機械正本** (単一 JSON state 文書、ADR-0027 6b)。
+  `attempts[]` (review round 通算履歴 + `findings[]`) / `post_checks` (expert 名キー map) /
+  `specialist_reviews[]` / `controller` / `state_rev` / `last_write_id` を含む。
+- 「PR body = 機械が読む現在 state / PR コメント = 人間向け監査ログ (機械は二度と読まない)」の
+  body 側 (ADR-0026 の `op-patrol-ledger-state` と同型)。state shape の正本は ADR-0027 および
+  `op-core::review_state`、PR body 上の位置規約は `review-markers.md (>=2)` を参照。
+
+Not meaning:
+- 人間向け監査ログではない (それは comment 系 `op-review-meta` / `op-review-finding` 等)。
+- 手動編集対象ではない。更新は `op review state push` (body 全置換 + `state_rev` 楽観ロック) のみ。
+
+Merge blocking effect:
+- op-merge gate 3a〜3i / 5 および post-check gate の判定入力。`attempts[]` 最新 entry の
+  `review_result != approve` / `reviewed_head_sha != current head` / `post_checks` の block・stale 等で
+  merge 中断する。
 
 ---
 
@@ -607,7 +697,7 @@ Merge blocking effect:
   op-merge は対象 gate (11〜18) で中断する。
   (注: `audit_result` は domain 固有 expert の出力フィールドとして残存するが、gate 判定の primary key は
   `post_check_result` (lower_case 4 値) であり `audit_result` は gate 条件には使わない。
-  詳細は `post-check-markers.md` の「op-merge gate ルール」節を参照)
+  詳細は `post-check-markers.md (>=2)` の「op-merge gate ルール」節を参照)
 
 ---
 
@@ -715,6 +805,8 @@ Consumer:
 
 Meaning:
 - 本来 post-check が必要だが、担当 expert が planned (未実装) のため skip した事実を残す marker。
+- value は inline-value 形式で **skip された planned expert 名** を取る
+  (例: `<!-- op-planned-post-check-skipped: env-expert -->`)。
 
 Not meaning:
 - 単体では merge-blocking ではない。op-merge は他の gate (security / ux-ui / review) と組み合わせて判断する。
@@ -881,43 +973,67 @@ Merge blocking effect:
 
 ## Patrol Markers
 
-op-patrol が巡回履歴を Patrol Ledger Issue で管理する際に使用する marker 群。
-**本節 entry は marker name / owner / consumer / 基本 meaning の正本** であり、JSON コメント全体構造 /
-field 単位 schema / area_state レコード構造 / `run_id` / `checkpoint_id` 命名規則 / state 復元手順 /
-parse fallback / compact 条件は `skills/_shared/markers/patrol-markers.md` を正本とする。
-op-patrol の運用フェーズ進行 / gh コマンド / Ledger Issue 作成手順は `skills/op-patrol/SKILL.md` を参照。
+op-patrol が巡回履歴を Patrol Ledger Issue で管理する際に使用する marker 群 (v2、ADR-0026)。
+**「body = 機械が読む現在 state (`op-patrol-ledger-state`) / コメント = 人間向け append-only 監査ログ
+(`op-patrol-run`、機械は二度と読まない)」** の分離を採る。
+**本節 entry は marker name / owner / consumer / 基本 meaning の正本** であり、body / コメントの
+JSON 構造 / field 単位 schema / area_state レコード構造 / `run_id` 命名規則 / 冪等性・並行制御は
+`skills/_shared/markers/patrol-markers.md (>=2)` を正本とする。
+op-patrol の運用フェーズ進行 / op CLI コマンド / Ledger Issue 作成手順は `skills/op-patrol/SKILL.md` を参照。
+
+### `<!-- op-patrol-ledger-state -->`
+
+Owner / producer:
+- op-patrol (`op patrol ledger push` 経由で Ledger Issue の body に write。更新は body 全置換)
+
+Consumer:
+- op-patrol (`op patrol ledger pull` — 巡回 state の唯一の機械読み出し経路)
+- 人間 (Ledger Issue body で現在 state を確認。手動編集はしない)
+
+Meaning:
+- Patrol Ledger Issue の **body 全体を構成する巡回 state の唯一の機械正本** (単一 JSON 文書、ADR-0026)。
+  `area_state` (区画ごとの巡回履歴レコード) / `next_candidates` / `last_run_id` / `state_rev` を含む。
+- 詳細 schema は `patrol-markers.md (>=2)` の「`<!-- op-patrol-ledger-state -->` block schema」節を参照。
+
+Not meaning:
+- 人間向け監査ログではない (それはコメント側 `op-patrol-run`)。run 履歴は body に持たない。
+- 手動編集対象ではない。更新は `op patrol ledger push` (`state_rev` 楽観ロック) のみ。
+
+---
 
 ### `<!-- op-patrol-run -->`
 
 Owner / producer:
-- op-patrol (1 巡回 run の開始時)
+- op-patrol (1 巡回 run の完了時、Ledger Issue へのコメントとして append)
 
 Consumer:
-- op-patrol (Patrol Ledger Issue のコメントで巡回履歴を追跡)
-- 人間 (どの巡回でどの区画を audit したかの追跡)
+- 人間のみ (どの巡回でどの区画を audit したかの追跡)。
+  **v2 (ADR-0026) 以降、機械は本コメントを二度と読まない** (state 復元は body 側
+  `op-patrol-ledger-state` の 1 読みで完結する)。
 
 Meaning:
-- 単一 op-patrol 起動の identity marker。
+- 単一 op-patrol 起動の identity marker + 監査ログ (1 回の巡回結果の記録)。
 
 Not meaning:
-- run 単位の checkpoint ではない (それは `op-patrol-checkpoint`)。
+- 機械が読む state ではない (それは body 側 `op-patrol-ledger-state`)。
 
 ---
 
-### `<!-- op-patrol-checkpoint -->`
+### `<!-- op-patrol-checkpoint -->` (廃止、v1 歴史)
 
-Owner / producer:
+> **v2 (ADR-0026) で廃止**。state が body 側 `op-patrol-ledger-state` に一本化されたため、
+> コメント側の集約スナップショット (checkpoint) は不要になった。新規投稿禁止。過去に投稿された
+> checkpoint コメントは削除しない (監査ログとして残置)。後継 / v1 schema の歴史的参照は
+> `patrol-markers.md (>=2)` の「`<!-- op-patrol-checkpoint -->` block (廃止、v1 歴史)」節を参照。
+
+Owner / producer (v1 当時):
 - op-patrol (区画 audit 完了 / Issue 起票 / 既存 Issue update 時)
 
-Consumer:
-- op-patrol (Patrol Ledger Issue で `seen_count` / `last_seen_at` 更新の根拠)
-- 人間 (区画ごとの最終巡回時刻の追跡)
-
-Meaning:
-- 区画単位の巡回 checkpoint metadata。`area` / `risk_trend` / `last_seen_at` 等を含む。
+Meaning (v1 当時):
+- 区画単位の巡回 checkpoint metadata (`area_state` 集約スナップショット)。
 
 Not meaning:
-- finding 自体ではない (finding は通常の `auto-report` Issue として起票される)。
+- 現役 marker ではない (機械 state は `op-patrol-ledger-state` が唯一の正本)。
 
 ---
 
@@ -928,7 +1044,7 @@ marker 群。op-patrol の Patrol Ledger とは **別個の Issue** (label `op-s
 **本節 entry は marker name / owner / consumer / 基本 meaning の正本**。JSON コメント全体構造 / field 単位 schema /
 area_state レコード構造 / `run_id` / `checkpoint_id` 命名規則 / state 復元手順は op-core::spec::ledger (Rust types) が
 実装正本であり、運用フェーズ進行 / gh コマンドは `skills/op-spec-patrol/SKILL.md` を参照する。
-patrol marker (`op-patrol-run` / `op-patrol-checkpoint`) と **prefix が衝突しない** よう `op-spec-patrol-*` を用いる。
+patrol marker (`op-patrol-ledger-state` / `op-patrol-run`) と **prefix が衝突しない** よう `op-spec-patrol-*` を用いる。
 
 ### `<!-- op-spec-patrol-run -->`
 
@@ -961,7 +1077,8 @@ Consumer:
 Meaning:
 - feature 単位の巡回 checkpoint metadata。`area_state` (feature → {last_patrolled_at, scan_count, drift_counts, last_run_id})。
 - 冪等性のため op-fingerprint 行 `<!-- op-fingerprint: spec-patrol-checkpoint:<fp> -->` を先頭に持つ
-  (op-patrol の `patrol-checkpoint:<fp>` とは prefix が異なり衝突しない)。
+  (op-patrol の run コメント fingerprint prefix `patrol-run:` (patrol-markers.md v2 で
+  `patrol-checkpoint:` から改名) とは prefix が異なり衝突しない)。
 
 Not meaning:
 - domain drift finding 自体ではない (confirmed drift は op-spec cultivation queue へ回す。本 wave では起票しない)。
@@ -1143,7 +1260,8 @@ Merge blocking effect:
 
 ## Deprecated / Compatibility Markers
 
-現状なし。
+- `<!-- op-patrol-checkpoint -->` — v2 (ADR-0026) で廃止。読み取り互換 / 履歴保全のため entry は
+  Patrol Markers 節に廃止注記付きで保持している (新規投稿禁止。後継は `op-patrol-ledger-state`)。
 
 ---
 
@@ -1165,7 +1283,7 @@ label は以下の 7 カテゴリに分類する。
 2. Active Issue routing labels (例: `pro-feature-expert`, `pro-debug-expert`)
 3. Active post-check labels (例: `pro-ux-ui-audit-needs-fix`, `pro-security-post-check-skipped`)
 4. Human-decision labels (`needs:human-decision` / `needs:human-decision-followup` /
-   `needs:boundary-decision` / `needs:spec-decision` / `needs:triage`)
+   `needs:boundary-decision` / `needs:spec-decision` / `needs:triage` / `op:potential-collision`)
 5. Specialist review labels (`needs-specialist-review`)
 6. Deprecated / compatibility labels (現行で新規付与しないが履歴互換のため残す)
 7. Historical / roadmap-only labels (roadmap でのみ言及される構想中 label)
@@ -1238,7 +1356,7 @@ Value:
 Meaning:
 - review-expert spawn の model 決定根拠を観測可能にする。canonical 判定仕様は
   `model-selection.md` (>=3) §7.1、bash 実装は `global-review-spawn.md` §4-1-b。
-- `<!-- op-review-meta -->` の任意 field として転写される (schema: `markers/review-markers.md`)。
+- `<!-- op-review-meta -->` の任意 field として転写される (schema: `markers/review-markers.md (>=2)`)。
 
 Not meaning:
 - 必須 field ではない (controller が値を渡さなければ review-expert は省略してよい)。
@@ -1250,7 +1368,7 @@ Runtime spawn effect:
 Merge blocking effect:
 - なし (任意 field)。
 
-詳細仕様: `_shared/model-selection.md` (>=3) §7.1 / `_shared/markers/review-markers.md` の `op-review-meta` 任意 field 節。
+詳細仕様: `_shared/model-selection.md` (>=3) §7.1 / `_shared/markers/review-markers.md (>=2)` の `op-review-meta` 任意 field 節。
 
 ---
 
@@ -1335,8 +1453,9 @@ apply 後の domain 別 post-check 結果を表す label 群。op-merge gate 11�
 | `needs:human-decision-followup` | op-scan / op-patrol / expert agent | op-run (`safe_first_step` のみ apply) | `needs_human_decision.required: true` かつ `can_continue_without_decision: true` の opt-out フラグ。判断は将来必要だが `safe_first_step` だけは現 PR で進めてよい Issue。 | partial。`safe_first_step` のみ apply 可、`blocked_actions[]` は厳守。 |
 | `needs:boundary-decision` | op-scan / refactor-expert (`decision_type: "boundary"`) | op-run / 人間 | scattered tokens / directory 移動などで責務境界の合意が必要な Issue。**単独では apply を止めない** (`manual_review_bucket` には `needs:human-decision` の有無で判定する)。 | なし (本 label 単体では)。 |
 | `needs:spec-decision` | op-scan / spec-expert (op-spec, `decision_type: "spec"`) | op-run / 人間 | public API / serialized format / IPC contract 変更など仕様判断が必要な Issue。`finding_type=needs_spec_decision` 由来は常に apply 不可 (`manual_review_bucket`)。 | あり (Issue 段階で apply ブロック)。 |
-| `needs:triage` | op-patrol (`seen_count >= 3` または `affected_paths` 増加検出時) | 人間 | architecture_debt Issue に付与される人間判断によるトリアージ待ち label。 | なし (Issue 段階の人間判断待ち)。 |
-| `pro-human-verified` | 人間 (op-merge gate 2b で `needs:human-decision-followup` 付き PR の判断完了時に明示付与) | op-merge (gate 2b) | `needs:human-decision-followup` 経路の PR に対して人間が判断を完了し、merge を明示承認したことを示すラベル。`needs:human-decision` + `needs:human-decision-followup` 両ラベルが付いた PR において本ラベルが **ない** と gate 2b で block される。**常用厳禁** — `needs:human-decision-followup` 経路以外の PR への付与禁止。解除条件: PR merge 完了後、または `needs:human-decision-followup` ラベル除去後に人間が手動除去する。詳細: `skills/op-merge/SKILL.md` L690-704 (gate 2b bash 実装、Refs PR #101)。色: `#0E8A16` (承認系・緑)。 | gate 2b block 解除効果 (`needs:human-decision-followup` と AND 条件で揃った場合のみ)。 |
+| `needs:triage` | op-patrol (`seen_count >= 3` または `affected_paths` 増加検出時) / enrichment 層 collision gate (warn 判定時、`issue-enrichment.md` §7.5) | 人間 | 人間判断によるトリアージ待ち label。用途は 2 系統: (a) architecture_debt Issue (op-patrol 経路) / (b) collision gate warn 判定 Issue (`op:potential-collision` と同時付与、enrichment 経路)。 | なし (Issue 段階の人間判断待ち)。 |
+| `op:potential-collision` | enrichment 層 collision gate (warn 判定時、`issue-enrichment.md` §7.5。runtime 付与主体は起票 controller: op-scan / op-patrol / op-plan / op-report) | 人間 (起票後トリアージ) / op-run (実装競合リスクの事前把握) | Cross-instance Collision Gate が warn 判定 (Query 2 / 3 / 4 hit) した Issue に `needs:triage` と同時付与される実装競合注意 label。`<!-- op-collision-warning -->` block と対で付く。判定条件の正本は `issue-enrichment.md (>=2)` §7.5。 | なし (Issue 段階の注意喚起のみ)。 |
+| `pro-human-verified` | 人間 (op-merge gate 2b で `needs:human-decision-followup` 付き PR の判断完了時に明示付与) | op-merge (gate 2b) | `needs:human-decision-followup` 経路の PR に対して人間が判断を完了し、merge を明示承認したことを示すラベル。`needs:human-decision` + `needs:human-decision-followup` 両ラベルが付いた PR において本ラベルが **ない** と gate 2b で block される。**常用厳禁** — `needs:human-decision-followup` 経路以外の PR への付与禁止。解除条件: PR merge 完了後、または `needs:human-decision-followup` ラベル除去後に人間が手動除去する。詳細: `skills/op-merge/SKILL.md`「Shared Merge State Contract」節 (gate 2b) および `op merge verify` 実装 (Refs PR #101)。色: `#0E8A16` (承認系・緑)。 | gate 2b block 解除効果 (`needs:human-decision-followup` と AND 条件で揃った場合のみ)。 |
 
 ---
 
@@ -1497,7 +1616,8 @@ Active Issue Routing Labels (§2) へ昇格する想定。
 | `needs:human-decision-followup` | `fef2c0` | human decision (follow-up) | op-scan, op-patrol, expert agent | op-run: safe_first_step のみ apply 可 |
 | `needs:boundary-decision` | `FBCA04` | scattered tokens / directory 移動などで責務境界の合意が必要な Issue | op-scan, refactor-expert | op-run / 人間 |
 | `needs:spec-decision` | `FBCA04` | public API / serialized format / IPC contract 変更など仕様判断が必要な Issue | op-scan, spec-expert (op-spec) | op-run: apply block |
-| `needs:triage` | `FBCA04` | architecture_debt Issue に付与される人間トリアージ待ち label | op-patrol (seen_count>=3) | 人間 |
+| `needs:triage` | `FBCA04` | architecture_debt Issue に付与される人間トリアージ待ち label | op-patrol (seen_count>=3), enrichment 層 collision gate (warn 判定時、§4 prose 表参照) | 人間 |
+| `op:potential-collision` | (実態未確認 — 未作成なら `FBCA04` で作成推奨) | collision gate warn 判定 (既存 open Issue と実装競合リスクあり) の Issue | enrichment 層 collision gate (op-scan, op-patrol, op-plan, op-report の起票 controller) | 人間 / op-run |
 | `needs-clarification` | `FBCA04` | op-run フェーズ1.5 insufficient 判定で人間に投げ返した Issue | op-run (フェーズ1.5) | 人間 |
 | `pro-human-verified` | `0E8A16` | op-merge gate 2b: needs:human-decision-followup の明示承認ラベル (人間判断完了) | 人間 (gate 2b) | op-merge: gate 2b (block 解除、AND条件) |
 | `needs-specialist-review` | `FBCA04` | review-expert global review が specialist 判断を必要と判定した PR / finding | review-expert, op-run | op-merge: merge 不可 (specialist review 待ち) |
@@ -1587,22 +1707,11 @@ inline 系はテンプレート (`<value>` 等) ではなく具体値で書く�
 <!-- op-design-plan-by: designer-expert -->
 <!-- op-planned-post-check-skipped: env-expert -->
 
-### claim 系 (block-yaml)
+### claim 系 (block-yaml) — pointer
 
-<!-- op-claim:
-  task_id: fix-auth-20260516-143052-c1
-  acquired_at: 2026-05-16T14:30:52+09:00
-  ttl_seconds: 14400
-  schema_version: 1
--->
-
-<!-- op-cluster-manifest:
-  run_id: dbf4665bb7f1-20260516-143052
-  cluster_id: c1
-  cluster_issues: [42, 43, 44]
-  acquired_at: 2026-05-16T14:30:52+09:00
-  schema_version: 1
--->
+`op-claim` / `op-cluster-manifest` の canonical Lint Regression Example は、詳細 field schema の
+所有者である `skills/_shared/markers/claim-markers.md (>=1)` の「Lint Regression Examples」節に
+一本化した (本ファイル側の byte-identical 重複は 2026-07-29 に削除。2 箇所同期の負債解消)。
 
 ### block-yaml 系 (run controller / fallback)
 
@@ -1614,7 +1723,7 @@ base_sha: 1234567890abcdef1234567890abcdef12345678
 source_expert: env-expert
 normalized_to: debug-expert
 source_context: issue-routing
-source_id: "null"
+source_id: null
 reason: env-expert is planned; fallback to debug-expert
 applied_at: 2026-05-09T10:00:00Z
 controller: op-run

@@ -1,7 +1,8 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-05-03
-notes: 初版。schema_version 導入時点でのスナップショット (Primary Stack / Out of scope / 検証コマンドの現行仕様)。
+notes: 2026-07-29 追記 — `OP_MERGE_UI_PATH_PATTERN` 節の実装 SSoT を Rust (op merge verify live builder) へ訂正 (corrective、version 据置)。
+       初版。schema_version 導入時点でのスナップショット (Primary Stack / Out of scope / 検証コマンドの現行仕様)。
 -->
 
 # プロジェクトプロファイル: 検証コマンド & スタック前提
@@ -264,22 +265,31 @@ path での判定が不確実な場合 (新規ファイル / リネーム途中)
 - hidden marker `<!-- op-post-check-expert: ux-ui-audit-expert -->` が本文にある
 - ラベル `pro-designer-expert` または `pro-ux-ui-audit-expert` が付与されている
 
-### bash 実装 (`OP_MERGE_UI_PATH_PATTERN`) との対応
+### bash 実装 (`OP_MERGE_UI_PATH_PATTERN`) との対応 (歴史的参考)
 
 /**
- * 機能概要: op-merge の bash 実装が使う `OP_MERGE_UI_PATH_PATTERN` 環境変数の
- *           default 値・上書き手順・bash escape 例を集約する。
- * 作成意図: Stage 1 (PR #97) で bash 側を SSoT として確定したが、project-profile.md
- *           の glob 記法との対応関係が文書化されていなかった (Stage 2-A, #109)。
- * 注意点: bash 実装の SSoT は op-merge SKILL.md の `OP_MERGE_UI_PATH_PATTERN` 変数宣言行
- *         (Stage 1 PR #97 で確定)。本節は参照ドキュメントであり、実値は bash 側が正本。
- *         op-merge SKILL.md L729 の prose 整合は Stage 2-B (別 PR) で行う。
+ * 機能概要: 旧 op-merge bash 実装が使っていた `OP_MERGE_UI_PATH_PATTERN` 環境変数の
+ *           default 値・上書き手順・bash escape 例を歴史的参考として保存する。
+ * 作成意図: Stage 1 (PR #97) で bash 側を SSoT として確定した経緯の記録 (Stage 2-A, #109)。
+ * 注意点: op-merge の gate 判定が `op merge verify` (Rust) へ移行したことに伴い、
+ *         `OP_MERGE_UI_PATH_PATTERN` bash 変数は op-merge SKILL.md から撤去済み
+ *         (2026-07 時点で参照する実装は存在しない)。実装 SSoT は下記の Rust 側を参照する。
  */
 
-**実装 SSoT**: op-merge SKILL.md の `OP_MERGE_UI_PATH_PATTERN` bash 変数 (Stage 1 PR #97 で確定)。
-本節はその default 値と上書き手順の **参照ドキュメント** である。bash 実装側が正本。
+**実装 SSoT (2026-07 更新)**: op-merge の UI 影響判定は `op merge verify` の live builder
+(`op-tools/crates/op-core/src/merge/live_input.rs` の `determine_ui_affected`) が実装 SSoT。
+現行実装は **label (`pro-designer-expert` / `pro-ux-ui-audit-expert`) + hidden marker
+(`op-domain: ux-ui` / `op-domain: design` / `op-post-check-expert: ux-ui-audit-expert`) のみ**で
+判定し、**path-based 判定 (`OP_MERGE_UI_PATH_PATTERN`) は行わない** — out-of-scope 宣言は
+`op-tools/docs/specs/merge-verify.md` の「担当しない (out-of-scope)」節 (path-based 判定は
+caller が別途 OR して渡す拡張余地として残されている)。
 
-#### default 正規表現 (bash escape 済み)
+旧 bash 変数 `OP_MERGE_UI_PATH_PATTERN` は op-merge SKILL.md から撤去済みで、**現在これを読む
+実装は存在しない**。以下の default regex / 上書き手順 / escape 例は、path-based 判定を caller
+拡張で復活させる場合の素材としての **歴史的参考** である (op-architect / op-run が使う path 判定の
+正本は本ファイル上位の glob 節のまま)。
+
+#### default 正規表現 (bash escape 済み) — 歴史的参考
 
 ```bash
 ^(frontend/|src/(components|pages|layouts|views|routes)/|.*\.(vue|svelte|jsx|tsx|css|scss|less)$|src-tauri/.*/(window|menu|tray)\.|lib/.*/(widgets|screens|pages)/)

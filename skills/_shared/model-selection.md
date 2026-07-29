@@ -23,7 +23,7 @@ notes: v4.1 相当 (2026-07-29) — §5.5 の invoke 先を built-in `/code-revi
        degrade 不在」の 5 条件 AND を満たす **狭い** PR に限り Sonnet へ opt-down する例外節
        (§7.1〜§7.1.6) を additive に追加。§6 controller 決定フローに step 2a (narrow opt-down 評価)
        を挿入。**破壊的変更の所在**: §7.1.4 で `small ∩ non-sensitive ∩ --quality low` を Sonnet
-       にする挙動が、現行 §7 L312-317 の「`--quality low` でも review-expert は Opus 維持」という
+       にする挙動が、現行 §7 の「`--quality low` でも review-expert は Opus 維持」という
        既存 invariant を small∩non-sensitive PR に限り意図的に解除する (§10「--quality flag 値の
        挙動変更」に該当)。consumer (op-run / expert-spawn.md) の pin を (>=3) に同期すること。
        v2 (2026-05-21) — §5.5「code-review effort-level 自動判定」新設 (Refs #367)。
@@ -520,7 +520,7 @@ investigate phase のみ Sonnet に段階下げできる (verify / gate / 最終
 | large | Opus | Opus | Opus (§7 既存例外) |
 
 **重要 (意図的破壊変更の明示)**: `small ∩ non-sensitive ∩ --quality low` を Sonnet にする挙動は、
-§7 L312-317 の「`--quality low` でも review-expert は Opus 維持」という **既存 invariant を
+§7 の「`--quality low` でも review-expert は Opus 維持」という **既存 invariant を
 small∩non-sensitive PR に限り意図的に解除** する破壊的変更である (§10「`--quality` flag 値の挙動変更」
 に該当 → schema_version v3 bump で正当化)。op-run / `expert-spawn.md` の consumer が「small PR の
 `--quality low` は Opus」を前提にしている可能性があるため、両ファイルの pin を `(>=3)` に同期する。
@@ -550,13 +550,11 @@ small∩non-sensitive PR に限り意図的に解除** する破壊的変更で�
 - **post-merge hotfix が 30 日内 3 件以上** → 即時 `OP_REVIEW_OPT_DOWN_DISABLE=1` kill switch、
   root cause 分析後に解除
 
-### §7.1.6 shadow mode (設計のみ、default OFF)
+### §7.1.6 shadow mode (検討の上不採用)
 
-精度懸念が顕在化した場合の後付け observability オプションとして設計だけ残す (現状 **未実装 / default OFF**)。
-shadow mode は「opt-down 判定では Sonnet を選ぶが、実 spawn は Opus で行い、Sonnet が出したであろう
-判定との差分を marker に記録する」観測モードを想定する。op-merge ログの構造化自動集計 (§7.1.5 の
-観測インフラ) が整った時点で有効化を検討する。本 v3 では default 本番化 + kill switch を採用したため、
-shadow mode は経由しない。
+観測目的の shadow mode (opt-down 判定は Sonnet を選ぶが実 spawn は Opus で行い差分を記録する案) を
+精度懸念への後付けオプションとして検討したが、v3 では §7.1 の 5 条件 AND + kill switch (本節末尾) を
+default 本番化で採用したため **不採用** (経由しない、本節冒頭の「運用方針 (確定)」と同じ結論)。
 
 ### §7.1.7 lens-modular per-phase model (ADR-0011)
 

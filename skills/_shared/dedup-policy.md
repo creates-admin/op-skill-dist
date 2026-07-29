@@ -170,7 +170,7 @@ optimize:optimize-bundle-bloat:packages/web
 - 通常 finding (Issue 1 件 = 1 問題) → 4-seg
 - bulk Issue (Issue 1 件 = N 個の同種問題) → 3-seg
 
-bulk Issue の起票テンプレは `pr-templates.md:355-380 周辺` 参照。
+bulk Issue の起票テンプレは `pr-templates.md`「op-scan: バッチ Issue 起票テンプレ」節参照。
 
 ---
 
@@ -206,6 +206,10 @@ gh issue list --label "auto-report" --state open \
   発生率を計測し、必要なら閾値見直しは future work
 
 正本実装: `op-tools/crates/op-core/src/dedup.rs::classify_dedup` および同 mod の test 群。
+
+> **Single Canonical Source**: 上記 Levenshtein 閾値・算法は `issue-enrichment.md` §7.5 Query 3
+> (cross-instance collision gate、起票直前レイヤー) からも同種判定に使われる。本節が閾値の正本であり、
+> 変更時は本節のみを更新する (issue-enrichment.md §7.5 側は追従のみ)。
 
 ---
 

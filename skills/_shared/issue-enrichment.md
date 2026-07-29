@@ -7,7 +7,10 @@ last_breaking_change: 2026-05-16
 作成意図: 「ADR 不要だが Issue 品質・UI 設計はほしい」中量級 Issue を底上げする共通基盤。
          Single Canonical Source Rule: 本ファイルが正本 (Design Plan + gate + cross-review)。
 注意点: 本層は「起票前 (pre-create) 専用」。apply / 起票 / scope 推定 / severity 判定は呼び出し側担当。
-notes: v2 据置 (2026-07-22, ADR-0024 Phase 3 第二波) — §7.5 に mcp channel の素材注記を additive 追加
+notes: v2 据置 (2026-07-29) — §7.5 に「op-collision-warning / op:potential-collision の name + core semantics は
+       labels-and-markers.md に登録済み (field schema は本節が正本)」の pointer 注記を additive 追加
+       (marker 正本一覧への未登録欠落を labels-and-markers.md 側で corrective 登録したことに伴う相互参照)。
+       v2 据置 (2026-07-22, ADR-0024 Phase 3 第二波) — §7.5 に mcp channel の素材注記を additive 追加
        (`mcp__github__search_issues` 経由の `EXISTING` 取得)。非破壊のため schema_version 据え置き。
        v2 据置 (2026-06-03, #642/#647/#648) — labels_to_add pro-* 制限 / cross-review graceful degrade /
        a11y-only Design Plan skip carve-out。全 additive。
@@ -583,6 +586,11 @@ EXISTING=$(gh issue list --state open --label auto-report \
 両条件 AND にする理由: Levenshtein 単独では短い汎用 verb (`add` / `fix` / `update`) で誤検知が
 多発するため、同義語パターン辞書を AND 条件に加えて精度を確保する。
 
+> **閾値・算法の正本は `dedup-policy.md`「priority 4 の title 類似度算法 (固定)」節** (op-scan/op-patrol
+> 起票前 dedup レイヤー)。本 collision gate は別レイヤー (起票直前) で同義語パターン AND を追加した
+> 独立実装だが、Levenshtein 距離 ≤ 3 の閾値自体は正本に追従する。閾値変更時は正本のみを更新し、
+> 本節は追従すること (両方で独立に変更しない)。
+
 ```
 判定: warn
 理由: タイトルが類似した Issue が既に存在 (Levenshtein 距離 N + 同義語パターン一致)
@@ -639,6 +647,9 @@ gate_version: 1
 ```
 
 また `enriched_issue.labels_to_add` に `needs:triage` と `op:potential-collision` を追加する。
+
+> marker / label の name + core semantics は `markers/labels-and-markers.md` (正本一覧) に登録済み。
+> `op-collision-warning` の field schema と Query 1〜4 の判定条件は本節 (§7.5) が正本 (Single Canonical Source Rule)。
 
 ---
 
@@ -1061,7 +1072,7 @@ skip して直接起票することができる (本層は呼び出し義務を�
 
 ### 破壊的変更の判定基準
 
-`_shared/version-check.md` L46-58 に従う。本ファイルの場合は具体的に以下を破壊的変更と扱う:
+`_shared/version-check.md`「メタデータ block の形式」節の「破壊的変更の判定基準:」箇条書きに従う。本ファイルの場合は具体的に以下を破壊的変更と扱う:
 
 - Input contract (`issue_draft` / `options`) の必須 field 削除 / rename / 型変更
 - Output contract (`result` / `enriched_issue` / `post_create_comments` / `review_summary` /

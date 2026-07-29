@@ -1,7 +1,9 @@
 <!--
 schema_version: 3
 last_breaking_change: 2026-05-29
-notes: v3 (2026-05-29) — 新節「フェーズ0 git/gh env check 標準手順」を追加。
+notes: v3 追記 (2026-07-29) — 「基本 check」に mcp channel 分岐 (ADR-0024) を追従反映、
+       「各 SKILL.md での現状」表の行番号 citation を節名参照へ全置換 (corrective、version 据置)。
+       v3 (2026-05-29) — 新節「フェーズ0 git/gh env check 標準手順」を追加。
        6 OP skill (op-scan / op-patrol / op-run / op-merge / op-architect / op-plan) に
        散在していたフェーズ0 env precheck (git rev-parse + gh auth status) を
        canonical source として本ドキュメントに集約。各 skill の挙動差分表を明示。
@@ -235,19 +237,30 @@ OP-managed Mode の subagent が `needs_human_decision` を返した場合、com
 全 OP skill は起動フェーズ0 で以下の 2 つを確認する。
 
 ```bash
-# git リポジトリ確認
+# git リポジトリ確認 (channel 非依存)
 git rev-parse --is-inside-work-tree || { echo "not a git repo"; exit 1; }
 
-# gh 認証確認
-gh auth status || { echo "gh login が必要"; exit 1; }
+# gh 認証確認 (mcp channel = call-spec 経路では gh 不要 — _shared/github-channel.md / ADR-0024)
+if [ "${OP_GITHUB_CHANNEL:-gh}" = "mcp" ]; then
+  echo "[channel] mcp — GitHub write は call-spec 経路 (gh 認証不要)"
+else
+  gh auth status || { echo "gh login が必要"; exit 1; }
+fi
 ```
 
 **git リポジトリ判定が失敗した場合**: 全 OP skill は中断する。
 `exit 1` で停止し、ユーザーに git リポジトリ内で実行するよう案内する。
 
+**channel 分岐 (ADR-0024)**: gh auth check は **gh channel (`OP_GITHUB_CHANNEL` 未設定含む) のみ**
+実行する。mcp channel では GitHub write が call-spec 経路 (`_shared/github-channel.md` が正本) で
+成立するため、gh auth を必須にしない (`gh auth login` 案内もスキップする)。
+この分岐は op-scan / op-patrol / op-run / op-merge / op-plan の現行フェーズ0 fence で実装済みの
+確立形であり、本テンプレはそれに追従する。
+
 ### gh auth なし時の OP skill 別挙動差分表
 
-各 OP skill は gh auth 未認証時に以下の挙動を取る。
+各 OP skill は **gh channel での** gh auth 未認証時に以下の挙動を取る
+(mcp channel では gh auth check 自体を skip するため本表は適用外)。
 この差分は **意図的に設計されたもの** であり、統一しない。
 
 | OP skill | gh auth なし時の挙動 | 備考 |
@@ -256,8 +269,8 @@ gh auth status || { echo "gh login が必要"; exit 1; }
 | **op-patrol** | 通常実行は `exit 1`。**`--dry-run` 時は続行可能 (暫定 plan モード)** | Ledger オフライン巡回の意図的差分。詳細は下記 |
 | **op-run** | `exit 1` (中断) | worktree / PR 作成に gh 必須 |
 | **op-merge** | `exit 1` (中断) | PR マージに gh 必須 |
-| **op-architect** | `exit 1` (中断) | Issue 起票 / ADR 起票に gh 必須 (ADR フォルダ検出は別途) |
-| **op-plan** | `exit 1` + 案内メッセージ表示 (`2>/dev/null` 付きで静かに失敗検出) | `--dry-run` で起票なしの計画立てのみ続行を案内 |
+| **op-architect** | 中断せず通知。「Issue 起票時に認証が必要」と案内し `--adr-only` / `--issue-md` を提案 | ADR 化のみなら gh 不要 (ADR フォルダ検出は別途)。実挙動は同 SKILL.md フェーズ0 の「判定:」節が正 |
+| **op-plan** | 中断せず案内メッセージ表示 (`2>/dev/null` 付きで静かに失敗検出)。`--dry-run` で起票なしの計画立てのみ続行を提案 | 実挙動は同 SKILL.md「0-2. git / gh / 対象リポジトリ確認」の「判定:」節が正 |
 
 ### op-patrol の `--dry-run 続行可` について (意図的差分)
 
@@ -278,16 +291,22 @@ op-patrol は **定期巡回ルーチン** として設計されており、GitH
 
 現時点 (Stage 1) では各 SKILL.md は独自の bash fence を保持している。
 Stage 2-6 (各 SKILL.md の全面書き換え wave) で本節への pointer に置換予定。
+参照は **節名ベース** (行番号は SKILL.md の頻繁な改版で必ず drift するため使わない)。
 
-| SKILL.md | 現状の実装形式 | Stage 2-6 で変更予定 |
-|----------|--------------|---------------------|
-| `op-scan/SKILL.md` (L216-225) | `git rev-parse ... || exit 1` + `gh auth status || exit 1` | 本節への pointer |
-| `op-patrol/SKILL.md` (L206-251) | `git rev-parse ...` + `gh auth status` + `--dry-run 続行可` 節 | 本節への pointer (差分明示部分は残す) |
-| `op-run/SKILL.md` (L189-190) | `git rev-parse ... || exit 1` + `gh auth status || exit 1` | 本節への pointer |
-| `op-merge/SKILL.md` (L160-161) | `git rev-parse ... || exit 1` + `gh auth status || exit 1` | 本節への pointer |
-| `op-architect/SKILL.md` (L142-156) | `git rev-parse ... 2>/dev/null` + `gh auth status` + ADR フォルダ検出 | git/gh 部分のみ本節への pointer (ADR 検出は残す) |
-| `op-plan/SKILL.md` (L223-228) | `git rev-parse ... 2>/dev/null` + `gh auth status 2>/dev/null` + 案内メッセージ | 本節への pointer |
+| SKILL.md | 該当節 (実在見出し) | 現状の実装形式 | Stage 2-6 で変更予定 |
+|----------|--------------------|--------------|---------------------|
+| `op-scan/SKILL.md` | 「フェーズ0: 環境確認」>「0-1. git / gh 確認」 | git/gh check + channel 分岐実装済み | 本節への pointer |
+| `op-patrol/SKILL.md` | 「フェーズ0: 環境確認 + Patrol Ledger ロード」>「0-1. git / CLAUDE.md / gh」および「gh auth なしの場合」 | git/gh check + channel 分岐実装済み + `--dry-run 続行可` 節 | 本節への pointer (差分明示部分は残す) |
+| `op-run/SKILL.md` | 「フェーズ0: 環境確認」>「0-1. git / gh」 | git/gh check + channel 分岐実装済み | 本節への pointer |
+| `op-merge/SKILL.md` | 「フェーズ0: 環境確認」>「0-1. git / gh precheck (channel 分岐)」 | git/gh check + channel 分岐実装済み (fence 冒頭に #372 完了後削除予定の注記あり) | 本節への pointer |
+| `op-architect/SKILL.md` | 「フェーズ0: 環境確認」>「0-cap. Dynamic Workflows capability preflight」内の bash fence | `git rev-parse ... 2>/dev/null` + `gh auth status` (無条件・channel 分岐なし) + ADR フォルダ検出 | git/gh 部分のみ本節への pointer (ADR 検出は残す)。pointer 化時に channel 分岐も本節準拠にする |
+| `op-plan/SKILL.md` | 「フェーズ0: 環境確認」>「0-2. git / gh / 対象リポジトリ確認」 | git/gh check + channel 分岐実装済み + 案内メッセージ | 本節への pointer |
 
-> **注意**: `env precondition (git / gh auth) は cwd ローカル前提のため CLI 化対象外`
-> (`op-scan/SKILL.md` L1055 の明示コメント)。本節の集約は markdown 集約であり、
-> op-tools CLI 化の対象ではない。このコメントの趣旨は変わらない。
+> **Stage 進行の現状 (2026-07-29 時点)**: Stage 2-6 の pointer 置換は **未着手**。一方で各 SKILL.md の
+> fence は本節集約 (v3, 2026-05-29) 後も独自進化しており、mcp channel 分岐 (ADR-0024/0028) は
+> SKILL.md 側が先行実装した (本節の「基本 check」テンプレは 2026-07-29 に追従修正済)。
+> pointer 置換を行う際は、各 SKILL.md の現行 fence と本節テンプレの差分を必ず突き合わせること。
+
+> **注意**: 「env precondition (git / gh auth) は cwd ローカル前提のため CLI 化対象外」
+> (`op-scan/references/from-merged-pr-mode.md`「Phase 0: 環境確認 + PR 状態確認」節の明示コメント)。
+> 本節の集約は markdown 集約であり、op-tools CLI 化の対象ではない。このコメントの趣旨は変わらない。

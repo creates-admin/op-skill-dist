@@ -11,6 +11,10 @@ notes: v1 (2026-06-14): 初版。対話型監督実装スキル (op-codev)。
        op-plan (計画のみ) と op-run (全自動) の間のギャップを埋める。
        Direct Mode 固定、並列 fan-out なし、checkpoint は実会話ターン。
        v2 (2026-06-21): ADR-0017 W4 IU1 grooming gate 追加 (フェーズ 1.5、正本 reconcile を着手前 gate 化)。
+       (2026-07-29, non-breaking): review_round 導出を旧 PR コメント awk 走査から `op review state pull`
+       (state 文書 attempts[]) ベースへ現行化 (global-review-spawn.md §4-2-pre / ADR-0027 6b に追従)。
+       フェーズ1 の op-plan 逐語再掲を pointer 化、Step D に mcp channel pointer 追加、
+       spawn fallback を spawn-prompt-common.md §4 の 5 択へ整合。schema_version 据置 (contract 不変)。
 -->
 
 <!--
@@ -61,6 +65,7 @@ op-codev の責務:
 - `~/.claude/skills/_shared/expert-spawn.md` — feature-expert spawn 規約、commits_added required
 - `~/.claude/skills/_shared/model-selection.md` — model 選択ルール (explore/verify=Sonnet、implement=Opus)
 - `~/.claude/skills/op-plan/SKILL.md` — Phase 0/Phase 1 方法論 (流用元)
+- `references/heavy-review-flow.md` — 「Review 選択 2: review-expert (7-lens)」を選んだ場合のみ読む詳細手順 (lens tier 判定 / review_round 導出 / spawn / publish-approval / needs-fix 処理)
 
 ---
 
@@ -123,29 +128,13 @@ git branch --show-current
 4. **動機 / 期待挙動**: なぜそれが必要か、どう振る舞えば成功か
 5. **既知の制約**: 触ってはいけない領域、互換性維持の必要など
 
-### 1-1. 仮整理の提示
+### 1-1. 仮整理の提示・深掘り (op-plan フェーズ1-1/1-2 に準拠)
 
-ユーザーが `/op-codev <自然文要望>` で起動した場合、要望文を解析して仮整理を提示する:
+仮整理の提示 (上記 5 項目 + 不明点を「あなたの要望を以下のように整理しました…この整理で進めますか?」形式で
+提示しユーザー確認) と、1 ラウンドあたり 2〜3 問にまとめた深掘り (最大 2 ラウンドで確定) の方法論は
+**op-plan フェーズ1-1 / 1-2 と同じ**。テンプレとラウンド規則の詳細はそちらを参照する (複製しない)。
 
-```
-あなたの要望を以下のように整理しました。
-
-- 何を: <要約>
-- どこに: <推定 path / モジュール>
-- 規模感: <単一 / 複数 / 新規モジュール>
-- 動機: <推定>
-
-不明点:
-1. <質問 1>
-2. <質問 2>
-
-この整理で進めますか? 修正があれば指示してください。
-```
-
-### 1-2. 1〜2 ラウンドの深掘り
-
-未確定項目を 1 ラウンドあたり 2〜3 問にまとめて質問する (1 問完全 1 ターン制ではない)。
-最大 2 ラウンドで確定させる。3 ラウンド以上が必要そうなら ADR 必要レベルの可能性を検討し、
+op-codev 固有の分岐: 3 ラウンド以上が必要そうなら ADR 必要レベルの可能性を検討し、
 `/op-architect` への切り替えを提案する。
 
 ヒアリングで「何を / どこに (対象 path・モジュール)」が固まったら、作業分解 (フェーズ 2) に入る前に
@@ -165,7 +154,7 @@ op-codev の plan-mode-first フローへ具体化した段。**作業に入る�
 > よって本 gate は **「read-only CLI で正本 state を検出 → 提示 → ユーザーに選択させる」soft-presentation 型**にする。
 > 処理を強制中断する hard block にはしない (決定 10 の hard gate を op-codev の plan-mode-first フローに整合させたもの)。
 
-> **責務分離 (重要)**: 正本の構築・育成 (write) は **`op-spec` の専任** (op-spec/SKILL.md L51-52)。op-codev は正本を write しない。
+> **責務分離 (重要)**: 正本の構築・育成 (write) は **`op-spec` の専任** (op-spec/SKILL.md の「DO / DON'T (位置づけの境界)」節)。op-codev は正本を write しない。
 > ゆえに gate の第一推奨は **「先に `/op-spec` を回して正本を起こす / reconcile してから op-codev を再開する」**。
 > 「op-codev 内で spec-expert を spawn してその場構築」は責務分離と plan mode 制約の両方に反するため、**第一級の選択肢にしない**。
 
@@ -176,7 +165,7 @@ op-codev の plan-mode-first フローへ具体化した段。**作業に入る�
 ### 1.5-1. 正本 state の検出 (read-only)
 
 フェーズ 1 で確定した「対象 path / モジュール」を、`op spec-patrol list-specs` の各 entry の `paths` glob と照合して
-所属 feature を引き、正本 state を `exists` / `stale` / `missing` の 3 値で判定する (op-spec/SKILL.md L177 の state 定義と同じ)。
+所属 feature を引き、正本 state を `exists` / `stale` / `missing` の 3 値で判定する (op-spec/SKILL.md の「1-2. feature 主役での構造化」節の state 定義と同じ)。
 
 | state | 判定 | gate の挙動 |
 |-------|------|-----------|
@@ -367,7 +356,8 @@ Agent({
 
     Read-only です。コードを変更しないでください。
     You must not ask interactive questions.
-    If information is missing, return assumptions[] or needs_human_decision.
+    情報不足時の fallback は spawn-prompt-common.md §4 の 5 択
+    (assumptions[] / needs_human_decision / blocked_actions[] / verification_not_run / manual_review_bucket) に従う。
   `
 })
 ```
@@ -423,7 +413,8 @@ Agent({
     手本ファイルパスと再利用した既存資産をコミットメッセージに記載してください。
 
     You must not ask interactive questions.
-    If information is missing, return assumptions[] or needs_human_decision.
+    情報不足時の fallback は spawn-prompt-common.md §4 の 5 択
+    (assumptions[] / needs_human_decision / blocked_actions[] / verification_not_run / manual_review_bucket) に従う。
   `
 })
 ```
@@ -517,6 +508,11 @@ Agent({
 
 全 IU の実装が branch に順次コミットされた後、PR を作成する:
 
+> **GitHub write channel (Cloud)**: 本節以降の GitHub 書き込み (PR 作成 / 後述 publish-approval /
+> `op pr comment`) は、Cloud 環境では `~/.claude/skills/_shared/github-channel.md` (`OP_GITHUB_CHANNEL=mcp`) の
+> call-spec protocol に従う (gh subprocess の代わりに call-spec を emit → 司令官が MCP tool を verbatim 実行)。
+> 既定 (`gh`) 環境では下記のまま gh / op が直接 fetch する。
+
 ```bash
 # PR 作成 (feature branch → main)
 gh pr create \
@@ -576,201 +572,14 @@ checkpoint で各 diff を確認済みです。
 
 #### Review 選択 2: review-expert (7-lens)
 
-##### PR 規模 / sensitive 判定 → active lens tier 決定 (spawn 前段判定)
+**選択 2 を選んだ場合のみ** `references/heavy-review-flow.md` を読んで実行する。
+lens tier 判定 → review_round 導出 → review-expert spawn → 結果提示 → approve 時の
+marker/label publish → needs-fix 時の再ループまでの詳細手順がそこにある
+(選択 1 の場合はこのファイルを読む必要はない)。
 
-review-expert を spawn する前に、PR の規模と sensitive path 該当有無から
-**active lens tier** (small=core 3 lens / large=7 lens) と **investigate model** を決定する。
-
-判定ロジックの正本は `skills/op-run/references/global-review-spawn.md` の以下 2 節:
-
-- **§4-1-b** — narrow opt-down 判定 (LOC/sensitive → `REVIEW_MODEL` / `REVIEW_LOC_COUNT` / `REVIEW_SENSITIVE_TOUCHED` を確定)
-- **§4-2-a-pre2** — active lens / bundle 解決 (`REVIEW_SENSITIVE_TOUCHED` + LOC tier → `REVIEW_ACTIVE_LENS_JSON` / `REVIEW_LENS_BUNDLES_JSON` を確定)
-
-op-codev は **§4-1-b と §4-2-a-pre2 の判定ブロックを共有する** (ロジックの複製禁止、Single Canonical Source Rule)。
-判定を実施してから `REVIEW_ACTIVE_LENS_JSON` / `REVIEW_MODEL` を確定させ、下記 spawn prompt の
-`active_lens_keys` / `models.investigate` に注入すること。
-
-安全弁 (下記は op-run と同一の不変則、必ず守ること):
-
-- **core lens (`security` / `spec` / `test-regression`) は全 tier で必須** — 省略・bundle 禁止
-- **sensitive PR は tier 分岐を無効化し 7-lens フル** — `REVIEW_SENSITIVE_TOUCHED != 0` のとき `REVIEW_ACTIVE_LENS_JSON='[]'` (workflow が全 7 lens に展開)
-- **lens gate は `REVIEW_SENSITIVE_TOUCHED` に key し `REVIEW_MODEL` には依存しない** (lens/model 別軸、ADR-0015 constraint 7)
-
-##### PR-wide review_round 導出 (spawn 前必須、§4-2-pre 同型)
-
-**review_round の導出正本は `skills/op-run/references/global-review-spawn.md` §4-2-pre (L446-520)**。
-op-codev は当該ブロックと同型の算出を行う (ロジックの複製禁止、Single Canonical Source Rule — lens/model 判定の pointer 方式と同じ方針)。
-
-算出方針 (canonical):
-- trusted author の valid op-review-meta (`reviewer == review-expert` AND `global_review_expert == review-expert`) を **head SHA 問わず全件カウント**
-- `PREV_ROUND` = 過去の最大 `review_round` (= PR 通算 attempt 総数)
-- `REVIEW_ROUND = PREV_ROUND + 1` (新規 attempt)
-
-> **注意**: head SHA filter を round 算出から外す理由 — fix commit が head SHA を変えるため、
-> 旧設計 (reviewed_head_sha == 現 head のみ算入) だと PREV_ROUND が毎回 0 になり、
-> REVIEW_ROUND が永久に 1 のまま max_review_fix_rounds の安全弁が発火しない致命バグになる。
-> PR 全体の attempt 通算に統一することで round 1 → fix → round 2 → round 3 の正しい遷移が成立する。
-> session 跨ぎ / 別 session で fix しても PR 全体で累算されるため =1 にリセットされない。
-> 詳細は global-review-spawn.md L451-465 の rationale 節を参照。
-
-```bash
-# === PR-wide review_round の導出 (global-review-spawn.md §4-2-pre と同型) ===
-# op-codev は op-run の session_id 払い出し機構を通らないが、
-# review_round 導出は PR 全体の attempt 通算であるため同じロジックを適用する。
-: "${PR_NUMBER:?PR_NUMBER must be set before deriving REVIEW_ROUND}"
-
-TRUSTED_REVIEW_AUTHORS_DEFAULT="github-actions[bot] claude-bot op-bot"
-TRUSTED_REVIEW_AUTHORS="${OP_TRUSTED_REVIEW_AUTHORS:-$TRUSTED_REVIEW_AUTHORS_DEFAULT}"
-REPO_OWNER=$(op repo info 2>/dev/null | jq -r '.details.owner // empty' || echo "")
-[ -n "$REPO_OWNER" ] && TRUSTED_REVIEW_AUTHORS="${TRUSTED_REVIEW_AUTHORS} ${REPO_OWNER}"
-TRUSTED_AUTHORS_JSON=$(printf '%s\n' $TRUSTED_REVIEW_AUTHORS | jq -R . | jq -s .)
-
-PREV_ROUND=$(
-  op pr view "$PR_NUMBER" --include body-comments-commits |
-  jq -r --argjson allowed "$TRUSTED_AUTHORS_JSON" '
-    (.comment_details // [])
-    | map(select(.author_login as $a | $allowed | index($a)))
-    | map(select(.body | contains("<!-- op-review-meta -->")))
-    | sort_by(.created_at)
-    | .[].body
-  ' |
-  awk '
-    /<!-- op-review-meta -->/ { in_block=1; round=""; reviewer=""; gre=""; next }
-    in_block && /^[[:space:]]*$/ {
-      if (round != "" && reviewer == "review-expert" && gre == "review-expert" && (last == "" || round+0 > last+0)) last=round
-      in_block=0
-      next
-    }
-    in_block && /^<!--/ {
-      if (round != "" && reviewer == "review-expert" && gre == "review-expert" && (last == "" || round+0 > last+0)) last=round
-      in_block=0
-      next
-    }
-    in_block && /^review_round:/         { round=$2 }
-    in_block && /^reviewer:/             { reviewer=$2 }
-    in_block && /^global_review_expert:/ { gre=$2 }
-    END {
-      if (in_block && round != "" && reviewer == "review-expert" && gre == "review-expert" && (last == "" || round+0 > last+0)) last=round
-      print (last ? last : "")
-    }
-  '
-)
-
-# 数値以外 (空 / 非数値) は 0 扱い (= 初回 review) にフォールバック
-if ! printf '%s' "$PREV_ROUND" | grep -Eq '^[0-9]+$'; then
-  PREV_ROUND=0
-fi
-export REVIEW_ROUND=$((PREV_ROUND + 1))
-```
-
-```javascript
-// review-expert spawn (proportional lens gating 適用後、REVIEW_ROUND 確定後)
-Agent({
-  subagent_type: "op-skill:review-expert",
-  description: "op-codev review: <PR番号>",
-  prompt: `
-    invocation_mode: op_managed
-
-    以下の PR を レビューしてください:
-    PR: <URL>
-
-    active_lens_keys: <REVIEW_ACTIVE_LENS_JSON>   // §4-2-a-pre2 で確定した値 ([]= 全7lens, ["security","spec","test-regression"]= small tier 等)
-    // lens 削減はベストエフォート / recall floor は full 7-lens。honor 契約の正本は expert-review/SKILL.md「op-codev 単一 spawn モードでの active_lens_keys honor 契約」節を参照。
-    models: { investigate: "<REVIEW_MODEL>", verify: "opus", gate: "opus" }
-    review_round: ${REVIEW_ROUND}                 // §4-2-pre で算出した PR 通算 attempt 番号 (固定値にしない)
-
-    重要: 修正・commit・push は行わないでください。
-    review-expert の責務は global review のみです。
-    結果を op-review-meta / op-review-finding 形式で返してください。
-  `
-})
-```
-
-review-expert の結果を親に提示し、親が判断する:
-
-```
-## review-expert レビュー結果
-
-<op-review-meta の verdict>
-
-### 検出された Finding
-<op-review-finding の一覧>
-
----
-どうしますか?
-- Finding を修正する場合: 対象 IU の Step B に戻って修正してください
-- このままマージする場合: 下記 「approve 時の marker/label publish 手順」を実行してから `/op-merge` を起動してください
-```
-
-##### approve / approve_with_followup 時の marker/label publish 手順
-
-review_result が `approve` または `approve_with_followup` の場合、`/op-merge` を起動する前に
-以下の手順で `op-review-meta` marker を PR にコメント投稿し、`pro-reviewed` label を付与する。
-
-> **push 責務の不変則 (commit-only / controller-push)**: fix round で feature-expert / debug-expert 等の
-> expert を spawn した場合、**expert は commit-only** (push しない) 契約である。publish-approval を呼ぶ前に、
-> controller は **`commits_added` が non-empty かつ remote head ≠ local head なら必ず push** してから
-> publish-approval を呼ぶこと。push 漏れのまま marker を投稿すると、reviewed_head_sha と remote head が
-> 乖離して op-merge の stale gate が block する (#737 / #745 で 2 回再演した手動補完の構造 fix)。
-> 確認例: `git rev-parse HEAD` (local) と `op pr view <N> --include meta` の head_sha が一致するまで push する。
-
-op-codev は op-run controller の session_id 払い出し機構を通らないため、以下の形式で生成値を作成し、
-`op review publish-approval` (Issue #756) を呼ぶ。本 primitive が marker 組立 / marker-lint 自己検証 /
-コメント投稿 / `pro-reviewed` 付与を 1 コマンドで atomic に行う (途中失敗で部分状態を残さない)。
-これにより `review_result == approve` 時の marker / label publish は controller が **CLI を 1 回呼ぶだけ**で完了する。
-
-```bash
-# Step 1: op_run_session_id を生成する (空だと op-merge gate 3i が block するため必須)
-PR_NUMBER=<PR番号>
-SHORT_SHA=$(git rev-parse --short HEAD)
-SESSION_ID="opcodev-$(date -u +%Y%m%dT%H%M%SZ)-pr${PR_NUMBER}-${SHORT_SHA}"
-
-# Step 2: review-expert 返却 marker から review_round を抽出する (global-review-spawn.md L931 と同型)
-# review-expert は spawn prompt の review_round を op-review-meta に転写して返す。
-# 下記で返却 marker から RV_ROUND を取り出し publish-approval に渡すことで、
-# B 独立 (RV_ROUND 未設定のまま --review-round を省略するいわゆる hollow fix) を防ぐ。
-# A (PR-wide 導出) の結果が B に正しく伝搬することを確認する経路である。
-RV_ROUND=$(printf '%s' "<review-expert の返却 JSON>" | jq -r '.review_round')
-# 念のためフォールバック: review-expert が review_round を返さない場合は REVIEW_ROUND (A の算出値) を使う
-if ! printf '%s' "$RV_ROUND" | grep -Eq '^[0-9]+$'; then
-  : "${REVIEW_ROUND:?REVIEW_ROUND must be set (§4-2-pre PR-wide derivation)}"
-  RV_ROUND="$REVIEW_ROUND"
-fi
-
-# Step 3: review approve を atomic に publish する
-#   - marker 組立 (op-review-meta header 形式) → marker-lint 自己検証 → コメント投稿 → pro-reviewed 付与 を
-#     1 コマンドで実行する。marker-lint fail なら投稿せず非0 exit (fail-closed)。
-#   - op-codev は --source-hint pr-comment を明示指定する (op-run の review-comment と異なる。op-review-meta は
-#     両 SourceKind とも検証同一だが歴史的使い分けを尊重する)。
-#   - --rationale に review-expert の rationale / finding 要約を渡す。
-op review publish-approval \
-  --pr "$PR_NUMBER" \
-  --session "$SESSION_ID" \
-  --reviewer review-expert \
-  --verdict approve \
-  --review-round "$RV_ROUND" \
-  --source-hint pr-comment \
-  --rationale "<review-expert の rationale / finding 要約をここに記載>"
-```
-
-> **gotcha**: `--reviewer review-expert` は op-review-meta の必須フィールドであり、空だと CLI が即 error にする。
-> `--session` が空または `unknown` では op-merge gate 3i が block するため、必ず上記の生成値を渡す。
-> marker 形式 (header 形式 + 空行で block 終端、#583 教訓) と reviewed_head_sha 解決 (省略時 PR head を 1 fetch)、
-> marker-lint 自己検証 (fail なら投稿せず非0 exit) はすべて CLI 内部で担保される。
-> review approve publish の手続き正本は `op-run/references/global-review-spawn.md` §4-2-b、
-> 公開スキーマは `skills/_shared/markers/review-markers.md` L67-79、CLI 仕様は
-> `op-tools/docs/specs/review-publish-approval.md`。
-
-##### needs-fix 時の処理
-
-review_result が `needs-fix` の場合は marker/label を publish せず、Step B (fix round) に戻る。
-該当 IU の修正を完了してから再び review-expert を spawn する。
-
-再 spawn 前に **必ず上記の PR-wide PREV_ROUND 導出ブロックを再実行**すること。
-fix commit 後に PR コメントから改めて PREV_ROUND を取得することで `REVIEW_ROUND` が自動的に +1 される。
-session を跨いで別 session で fix した場合も、PR 全体の op-review-meta を通算するため
-`REVIEW_ROUND` は正しく累算される (= セッションをまたいでも 1 にリセットされない)。
-`review_round > max_review_fix_rounds + 1` (= 3) になると op-merge でブロックされるため注意。
+読む前に、フェーズ3 Step D で確定した `PR_NUMBER` (`gh pr create` で得た PR 番号) と
+`BRANCH_NAME` を把握しておくこと (references 側冒頭で前提として明記、ファイル内
+`${PR_NUMBER:?...}` ガードが未設定を検知する)。
 
 ---
 
@@ -796,84 +605,6 @@ session を跨いで別 session で fix した場合も、PR 全体の op-review
 ### 次のアクション
 - PR レビューが完了したら `/op-merge` でマージを実行してください
 - 残存リスク: <あれば列挙 / なければ「なし」>
-```
-
----
-
-## feature-expert フェーズ別スポーン — 参照テンプレート
-
-### Step A: Explore (read-only 探索)
-
-```javascript
-Agent({
-  subagent_type: "op-skill:feature-expert",
-  description: "op-codev explore: <goal>",
-  prompt: `
-    invocation_mode: op_managed
-
-    【探索フェーズ — コードを変更しないでください】
-
-    ゴール: <goal>
-    対象範囲 (推定): <scope_files>
-
-    以下を調査して structured code_map として返してください:
-    - similar_implementations: 類似既存実装 (path:line + 役割)
-    - pattern_to_follow: 模倣すべき手本パターン
-    - risks: 注意すべき制約・落とし穴・触ってはいけない領域
-    - suggested_approach: 推奨実装方針 (2〜4 文)
-
-    Read-only です。コードを変更しないでください。
-    You must not ask interactive questions.
-  `
-})
-```
-
-### Step B: Implement (実装 + commit)
-
-```javascript
-Agent({
-  subagent_type: "op-skill:feature-expert",
-  description: "op-codev implement: <goal>",
-  prompt: `
-    invocation_mode: op_managed
-
-    【実装フェーズ】
-
-    ゴール: <goal>
-    code_map: <code_map from Step A>
-    親フィードバック: <parent_feedback (空なら「承認 — そのまま進める」)>
-    branch: auto/codev-...
-
-    指示書に従い既存パターンを模倣して実装してください。
-    PR は作成せず、commit のみ行ってください。
-    commits_added を必ず返してください。
-    You must not ask interactive questions.
-  `
-})
-```
-
-### Step C: Verify (検証 read-only)
-
-```javascript
-Agent({
-  subagent_type: "op-skill:feature-expert",
-  description: "op-codev verify: <goal>",
-  prompt: `
-    invocation_mode: op_managed
-
-    【検証フェーズ — コードを変更しないでください】
-
-    worktree path: <WT_PATH>
-
-    以下を実行し結果を返してください:
-    - 適用可能な lint (cargo fmt --check / clippy / eslint 等)
-    - typecheck (cargo check / tsc 等)
-    - unit test (cargo test / npm test 等、既存テストのみ)
-
-    Read-only です。コードを変更しないでください。
-    You must not ask interactive questions.
-  `
-})
 ```
 
 ---
@@ -909,11 +640,10 @@ Q-A=main / Q-B=worktree 両方 PASS)。constitution (`.claude/rules/00-constitut
 ## Direct Mode 固定の制約
 
 本スキルは **Direct Mode 固定** であり、OP-managed 経路 (op-run / op-scan 等からの自動 spawn) はない。
+ユーザーが直接 `/op-codev` で起動することのみを想定する。判定・契約違反時の停止は フェーズ 0-1 (0-1. Invocation Mode 判定) を参照。
 
-- ユーザーが直接 `/op-codev` で起動することのみを想定する
-- spawn prompt に `invocation_mode: op_managed` が混入していた場合は契約違反として停止する
-- feature-expert へのスポーンは `invocation_mode: op_managed` を渡すが、
-  op-codev 自体は人間が起動する Direct Mode スキルである
+補足: feature-expert へのスポーンは `invocation_mode: op_managed` を渡すが、
+op-codev 自体は人間が起動する Direct Mode スキルである (spawn される側と spawn する本体で invocation mode が異なる)。
 
 ---
 
