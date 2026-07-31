@@ -15,6 +15,17 @@ notes: v1 (2026-06-14): 初版。対話型監督実装スキル (op-codev)。
        (state 文書 attempts[]) ベースへ現行化 (global-review-spawn.md §4-2-pre / ADR-0027 6b に追従)。
        フェーズ1 の op-plan 逐語再掲を pointer 化、Step D に mcp channel pointer 追加、
        spawn fallback を spawn-prompt-common.md §4 の 5 択へ整合。schema_version 据置 (contract 不変)。
+       v3 (2026-07-31, additive): 実装後レビューの配線を追加。(a) Step B prompt に自己検証
+       (Skill op-skill:op-code-review) を commit 前ステップとして明示注入 — 従来は agent.md →
+       expert-feature/SKILL.md → apply-completion-checklist.md の 2 ホップ間接参照のみで、
+       実測 (2026-07-31) では自走せず `code_review_invoked: false` + 事実誤認の skip_reason を
+       返した (同一 fixture / 同一 agent に op-run 相当の verbatim 注入を行った対照実験では
+       invoked: true で発火)。(b) Step B-2「独立レビュー spawn」を新設 — controller が
+       fresh context の debug-expert を spawn し op-code-review を実行させる (context 独立性 +
+       worker の自己申告に依存しない担保)。subagent は Agent tool を持たず子 agent を
+       spawn できない実測 (2026-07-31) のため、委任主体は worker ではなく controller。
+       (c) CHECKPOINT B に自己検証 / 独立レビューの結果欄を追加。schema_version 据置
+       (既存 contract の削除・変更なし、追加のみ)。
 -->
 
 <!--
@@ -63,7 +74,9 @@ op-codev の責務:
 
 - `~/.claude/skills/_shared/invocation-mode.md` — Direct Mode 判定 (本スキルは Direct Mode 固定)
 - `~/.claude/skills/_shared/expert-spawn.md` — feature-expert spawn 規約、commits_added required
-- `~/.claude/skills/_shared/model-selection.md` — model 選択ルール (explore/verify=Sonnet、implement=Opus)
+- `~/.claude/skills/_shared/model-selection.md` — model 選択ルール (explore/verify=Sonnet、implement=Opus、Step B-2 独立レビュー=Sonnet 既定 / 重い IU は Opus)
+- `~/.claude/skills/_shared/apply-completion-checklist.md` — apply 完了手順の正本。op-codev は Direct apply なので **Section 2 の 5 段階順序** (自己検証 → commit) を使う (op-run の Section 2-A = commit 先行 ではない)
+- `~/.claude/skills/op-code-review/SKILL.md` — Step B 自己検証 / Step B-2 独立レビュー が共通で使う correctness review の正本 (手順 / angle / verify 判定 / 出力形式)
 - `~/.claude/skills/op-plan/SKILL.md` — Phase 0/Phase 1 方法論 (流用元)
 - `references/heavy-review-flow.md` — 「Review 選択 2: review-expert (7-lens)」を選んだ場合のみ読む詳細手順 (lens tier 判定 / review_round 導出 / spawn / publish-approval / needs-fix 処理)
 
@@ -412,12 +425,97 @@ Agent({
 
     手本ファイルパスと再利用した既存資産をコミットメッセージに記載してください。
 
+    【自己検証 (Skill op-code-review) — commit 前に必ず実行】
+
+    順序の正本は _shared/apply-completion-checklist.md Section 2 (Direct apply の 5 段階順序)。
+    op-codev は op-run 経路ではないため Section 2-A (commit 先行) ではなく、
+    commit の前に自己検証を通すこと。
+
+    1. Static 検証 / unit test を pass させた後、commit を打つ前に
+       Skill({skill: "op-skill:op-code-review"}) を変更差分に対して実行する
+       (scope: 自分が変更した diff のみ。effort は指定不要 — skill 既定 = high)
+    2. Critical / High が検出された場合: 自己修正してから commit する
+       (再検証は 1 回まで。2 回目も残るなら self_check_blocked: true を付けて報告)
+    3. Medium / Low のみの場合: 自己修正せず commit し、後段の review 工程に委ねる
+    4. 完了報告に code_review_invoked / code_review_result を必ず含める
+
+    重要 — この skill は plugin 同梱で portable であり、対象 repo の CLAUDE.md /
+    op-tools / registry / op CLI に一切依存しない。「repo が小さい」「skill の
+    呼び出し環境がない」等を理由に skip してはならない。
+    skip が正当なのは _shared/apply-completion-checklist.md 「expert 固有 skip 条件」節
+    および expert-feature/SKILL.md「実装完了後の code-review invoke」節に
+    列挙された条件に該当する場合のみで、その場合は code_review_result: "skip" と
+    code_review_skip_reason を報告する (feature-expert は skip 条件なし = 必ず invoke する)。
+    skill 解決自体に失敗した場合のみ、skills/op-code-review/SKILL.md の
+    Angle A〜E + 3 値 verify を同一 context で手動一巡し、その旨を報告する。
+
+    なお本自己検証は Step B-2 の独立レビューを代替しない (両者は別レイヤー)。
+    自分が Agent tool で子 agent を spawn することはできない (harness 制約) —
+    レビューの委任は controller が Step B-2 で行う。
+
     You must not ask interactive questions.
     情報不足時の fallback は spawn-prompt-common.md §4 の 5 択
     (assumptions[] / needs_human_decision / blocked_actions[] / verification_not_run / manual_review_bucket) に従う。
   `
 })
 ```
+
+### Step B-2: 独立レビュー spawn (controller 実行、必須)
+
+Step B が `status: completed` で返ったら、**controller が自分で** レビュー agent を
+fresh context で spawn する。Step B の worker にレビューを委任させてはならない
+(subagent は Agent tool を持たないため子 agent を spawn できない = harness 制約)。
+
+本ステップの目的は **context 独立性の確保**である。実装した本人の自己検証
+(Step B prompt の「自己検証」節) は思い込みを共有するため、それだけでは代替にならない。
+また controller が自ら spawn することで、worker 側の申告に依存せずレビュー実行を担保する
+(worker の `code_review_invoked` 自己申告は controller 側で検証できない)。
+
+model は IU の重さで選ぶ (`_shared/model-selection.md` の task_complexity 基準に準じる):
+**Sonnet = 既定** (単一ファイル / 既存パターン模倣 / 定型追加)、
+**Opus = 重い IU** (複数ファイル横断 / 並行処理 / 状態機械 / 破壊的変更を含む)。
+
+```javascript
+// op-codev Step B-2 — 独立レビューフェーズ (controller が spawn)
+Agent({
+  subagent_type: "op-skill:debug-expert",
+  description: "op-codev review: <IU名>",
+  model: "sonnet",   // 重い IU は "opus"
+  prompt: `
+    invocation_mode: op_managed
+
+    【独立レビューフェーズ (read-only)】
+
+    あなたは実装者ではない。他者が書いた変更を初見でレビューする立場である。
+    実装意図の説明を鵜呑みにせず、diff と実コードだけを根拠に判断すること。
+
+    対象 diff: <Step B 開始時点の SHA>...HEAD
+    IU ゴール: <IU の goal>
+    変更ファイル: <Step B の files_modified>
+
+    1. Skill({skill: "op-skill:op-code-review", args: "diff: <BASE_SHA>...HEAD effort: high"})
+       を実行する (手順・angle・verify 判定・出力形式の正本は skills/op-code-review/SKILL.md)
+    2. 返却された findings をそのまま報告する。severity を独自に格下げしないこと
+    3. IU ゴールに対する未達 (実装漏れ / goal と挙動の食い違い) があれば
+       findings とは別に goal_gap[] として報告する
+
+    禁止事項:
+    - ファイル修正 / commit / push は一切行わない (read-only)
+    - findings をゼロ件に見せるための取り繕いをしない
+    - 質問で停止しない
+
+    報告に必ず含めること:
+    - code_review_invoked: true | false (false なら理由)
+    - findings: op-code-review の JSON 配列そのまま
+    - goal_gap: []
+    - review_verdict: "pass" | "needs_fix"  (Critical / High が 1 件でもあれば needs_fix)
+  `
+})
+```
+
+Critical / High が出た場合 (`review_verdict: "needs_fix"`) は CHECKPOINT B で
+親に提示し、承認を得てから Step B を再実行して修正させる (controller が直接修正しない)。
+Medium / Low は CHECKPOINT B に列挙するのみで、対応要否は親が決める。
 
 ### [CHECKPOINT B] Implement 結果を親に提示
 
@@ -436,6 +534,15 @@ Agent({
 ### 再利用した既存資産
 <再利用した crate / wrapper / component>
 
+### 自己検証 (実装者、Step B)
+<code_review_invoked / code_review_result。invoked: false の場合はその旨と理由を明示>
+
+### 独立レビュー (別 agent、Step B-2)
+<review_verdict と model>
+<Critical / High: 件数と各 finding の file:line + summary (0 件なら「なし」)>
+<Medium / Low: 件数のみ (詳細は求められたら提示)>
+<goal_gap: あれば列挙>
+
 ---
 変更内容は OK ですか?
 - OK の場合: 「はい」または「進めて」と返してください → Step C (検証) へ進みます
@@ -443,6 +550,10 @@ Agent({
 ```
 
 親が OK の場合は Step C へ進む。再実装の場合はフィードバックを注入して Step B を再実行する。
+
+> **`review_verdict: "needs_fix"` の場合**: controller は「そのまま進める」を既定の選択肢として
+> 提示しない。Critical / High の内容を提示した上で、修正して Step B 再実行 / 親判断で
+> 許容して Step C へ進む、を明示的に選ばせる。親が許容を選んだ場合はその判断を記録して進む。
 
 ### Step C: Verify spawn
 
