@@ -138,6 +138,10 @@ log(
   `op-survey: goal="${truncate(input.goal, 60)}" axes=${input.axes.length} ` +
     `preset=${input.preset || "(none)"} source=${input.axis_source}`
 );
+if (input.fable_guard_corrections.length)
+  log(
+    `[fable-guard] read-only spawn への fable 指定を opus へ矯正: ${input.fable_guard_corrections.join(", ")} (model-selection.md §7.2 F3)`
+  );
 
 // ---- survey stage: axis ごとに investigator を read-only 並列 spawn (各 investigator が {findings:[...]} を返す) ----
 // filter(Boolean) しない: axis↔結果を index で zip するため (finding に detected_by が無く、null は空 batch 扱い)。
@@ -215,6 +219,12 @@ function normalizeArgs() {
 
   // model: investigator は調査 (read-only discovery) のため既定 sonnet (探索並列は安価に。ceiling 課題でないため)。
   if (!a.model) a.model = "sonnet";
+  // §7.2 F3: investigator は read-only discovery ゆえ fable 禁止 (誤注入は opus へ矯正)
+  a.fable_guard_corrections = [];
+  if (a.model === "fable") {
+    a.model = "opus";
+    a.fable_guard_corrections.push("investigator");
+  }
   // axis が agentType を持たない場合の既定。新 active expert を増やさない (general-purpose)。
   if (!a.default_agent_type) a.default_agent_type = "general-purpose";
 

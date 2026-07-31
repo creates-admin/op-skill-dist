@@ -55,6 +55,10 @@ phase("discover");
 const BUILTIN_AGENTS = new Set(["general-purpose", "Explore", "Plan"]);
 const scopedAgentType = (n) => (n && !BUILTIN_AGENTS.has(n) ? `op-skill:${n}` : n);
 log(`op-run-discover: ${input.clusters.length} clusters (base ${input.base_sha} @ ${input.base_ref})`);
+if (input.fable_guard_corrections.length)
+  log(
+    `[fable-guard] read-only spawn への fable 指定を opus へ矯正: ${input.fable_guard_corrections.join(", ")} (model-selection.md §7.2 F3)`
+  );
 
 // 全 cluster を 1 turn 内で並列発火 (controller 人為 cap は撤廃、runtime の min(16,cores-2) が透過キューイング)。
 const reports = (
@@ -81,11 +85,21 @@ function normalizeArgs() {
     throw new Error("op-run-discover: args.clusters must be a non-empty array");
   if (!a.base_sha || !a.base_ref)
     throw new Error("op-run-discover: args.base_sha and args.base_ref are required");
+  // model-selection.md (>=5) §7.2 F3: 本 workflow の spawn はすべて read-only 経路のため `fable` 禁止
+  //   (write phase の承認 gate = op-run 1-2-g / op-codev 3-B-gate でのみ fable が載る)。controller が
+  //   誤注入しても silent 受理せず opus へ矯正し、矯正記録を fable_guard_corrections に残す (warning + 続行)。
+  a.fable_guard_corrections = [];
   for (const c of a.clusters) {
     if (!c.id || !c.expert || !Array.isArray(c.issues) || c.issues.length === 0)
       throw new Error("op-run-discover: each cluster needs id, expert, non-empty issues");
     if (!c.worktree_path)
       throw new Error(`op-run-discover: cluster ${c.id} missing pre-provisioned worktree_path`);
+    // §7.2 F3: investigation (探知) は read-only ゆえ fable 禁止。cluster が Fable 昇格を承認済でも
+    // 昇格は apply spawn (cluster.apply_model) にのみ載る契約であり、探知には波及させない。
+    if (c.model === "fable") {
+      c.model = "opus";
+      a.fable_guard_corrections.push(`cluster:${c.id}`);
+    }
   }
   return a;
 }

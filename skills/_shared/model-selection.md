@@ -1,7 +1,17 @@
 <!--
-schema_version: 4
-last_breaking_change: 2026-06-14
-notes: v4.1 相当 (2026-07-29) — §5.5 の invoke 先を built-in `/code-review` から plugin 同梱の
+schema_version: 5
+last_breaking_change: 2026-07-31
+notes: v5 (2026-07-31) — §1 に **Fable tier** を追加し、§7.2「Fable escalation gate」を新設。
+       **破壊的変更の所在**: (a) §6 controller 決定フローに step 2b (Fable escalation gate) を挿入し、
+       (b) step 3 explicit override の値域から `fable` を除外した (config / env から Fable を選べない)。
+       いずれも §10「override 優先順位 / §6 controller 決定フローの変更」に該当する。
+       不変則: worker (spawn される expert) の **自動選択の天井は Opus** — §5 mapping / `--quality high` /
+       degrade 復帰のいずれの経路も Fable を返さない (F1/F2)。**read-only spawn は承認があっても Fable 禁止**
+       (F3、audit / investigation / review 全 phase / post-check / enrichment / refute / spec-expert / scout)。
+       Fable の唯一の入口は **write phase (op-run apply / op-codev implement) での人間承認** (F4/F5)。
+       consumer pin を (>=5) に同期すること (op-run / op-codev / op-scan / op-patrol / op-plan /
+       op-architect / op-loop / op-merge / op-explore / expert-spawn.md / global-review-spawn.md)。
+       v4.1 相当 (2026-07-29) — §5.5 の invoke 先を built-in `/code-review` から plugin 同梱の
        `op-skill:op-code-review` へ差し替え (built-in は disable-model-invocation で model から
        invoke 不可と実測確定したため。apply-completion-checklist.md v5 と対)。effort 派生 mapping
        (§5.5.1 以降) と `code_review_effort` field は不変のため schema_version 据置。
@@ -64,13 +74,19 @@ canonical 正本。**Phase × Expert × complexity の 3 軸** で割当を決�
 
 ## §1 model 階層 (Opus / Sonnet / Haiku)
 
-3 model を以下の役割で使い分ける:
+3 model を以下の役割で使い分ける。加えて、**自動選択されない opt-in 専用の escalation tier** として
+Fable を持つ (§7.2 が正本):
 
 | Model | 具体 version (唯一正本) | 強み | 適用フェーズの特徴 |
 |---|---|---|---|
-| **Opus** | Opus 4.8 | cross-cutting 推論、仮説立て、全体調和判断、空間認識的推論 | 単発 / 判断不可逆 / 深い推論 / design 系生成・統合 |
+| **Fable** | Fable 5 | 最難度の write タスク向け escalation 先 (高コスト) | **自動選択しない (opt-in 専用)**。write phase (op-run apply / op-codev implement) で §7.2 の人間承認を得た spawn のみ |
+| **Opus** | Opus 4.8 | cross-cutting 推論、仮説立て、全体調和判断、空間認識的推論 | 単発 / 判断不可逆 / 深い推論 / design 系生成・統合。**worker 自動選択の天井** (§7.2 F1) |
 | **Sonnet** | Sonnet 4.6 | pattern マッチ + 軽い推論、rubric 適用、既存パターン模倣 | 広域並列 audit / routine 実装 / 検出系 |
 | **Haiku** | Haiku 4.5 | 形式照合、決定論的検査 | 慎重利用 — false negative 許容ケース (test rubric 適用等) のみ |
+
+> **Fable は §5 mapping の値域に入らない (v5 の中核不変則)**。§5 のどの cell も Fable に解決してはならず、
+> `--quality high` の昇格 ladder も Opus で止まる。Fable は §7.2 の承認 gate を通った write spawn にのみ
+> 現れる例外値であり、read-only spawn では承認があっても禁止される (§7.2 F3)。
 
 > **Single Canonical Source Rule (model tier の具体 version)**: 本 §1 table の「具体 version」列が
 > model tier の minor version の **唯一の正本**。本ファイルの他節 / 他ファイルは minor version を
@@ -144,6 +160,10 @@ spawn schema の `task_complexity:` field に格納する。
 ## §5 Phase × Expert × complexity → model mapping
 
 > 本節以降の `Opus` / `Sonnet` / `Haiku` は論理名 (minor version 省略)。具体 version は §1 table を参照。
+
+> **本節 mapping の値域は Opus / Sonnet / Haiku のみ (§7.2 F1)**。どの Phase × Expert × complexity の
+> 組合せも `Fable` に解決してはならない。controller は mapping lookup の結果として Fable を得ることが
+> 構造的にありえない。Fable が spawn に現れるのは §6 step 2b (承認 gate) を通った write spawn だけである。
 
 ### §5.1 主表 (Phase 単位)
 
@@ -362,10 +382,11 @@ OP-managed mode で controller (op-* skill) が model を決定する手順。st
 
 | step | 操作 | 入力 | 結果 |
 |---|---|---|---|
-| 1. base lookup | §5 mapping を Phase × Expert × complexity で引く | task_complexity / 区画 complexity | base model |
-| 2. quality flag | `--quality` flag / `OP_QUALITY` env を適用 (§7) | flag 値 | flag-adjusted model |
+| 1. base lookup | §5 mapping を Phase × Expert × complexity で引く | task_complexity / 区画 complexity | base model (Opus / Sonnet / Haiku のみ) |
+| 2. quality flag | `--quality` flag / `OP_QUALITY` env を適用 (§7) | flag 値 | flag-adjusted model (昇格は Opus 止まり) |
 | 2a. narrow opt-down | **global review (review-expert) のみ**。§7.1 の 5 条件 AND を満たす狭い PR を Sonnet へ opt-down (§7.1) | PR LOC / sensitive glob / `--quality` / kill switch / degrade | opt-down-adjusted model |
-| 3. explicit override | Issue / cluster に手動 model 指定があれば最終決定値とする (例: 緊急対応で明示昇格) | annotation | final model |
+| 2b. Fable escalation gate | **write phase (op-run apply / op-codev implement) のみ**。§7.2 の候補条件を満たす spawn を人間に提案し、**承認された場合のみ** Fable へ昇格 (既定は非承認 = Opus 維持) | 難度シグナル / 対話可否 / kill switch / degrade | escalated model (承認時のみ `fable`) |
+| 3. explicit override | Issue / cluster に手動 model 指定があれば最終決定値とする (例: 緊急対応で明示昇格)。**値域は `opus` / `sonnet` / `haiku` のみ — `fable` は無効値** (§7.2 F6) | annotation | final model |
 | 4. spawn | 確定値を spawn 引数に渡す | final model | `Agent({ model: ... })` |
 
 直列フローのため、「優先順位リスト」ではなく「上書き順序」として読む。例:
@@ -379,6 +400,11 @@ OP-managed mode で controller (op-* skill) が model を決定する手順。st
   Sonnet に opt-down する。step 3 の explicit override (`model_overrides.review-expert: opus`) が
   あれば step 2a の opt-down は打ち消される (override が最終決定値)。post-check / enrichment 層 spawn
   には step 2a を適用しない (review-expert 以外は §7 の merge gate 維持例外がそのまま生きる)
+- **step 2b は write phase spawn (op-run apply / op-codev implement) にのみ適用される** opt-in exception。
+  read-only spawn (audit / investigation / review 全 phase / post-check / enrichment / refute /
+  spec-expert / scout) は step 2b を **評価してはならない** (§7.2 F3 hard 禁止)。step 2b は controller が
+  勝手に昇格する step ではなく、**人間に提案して承認を得る step** である (無応答 / 曖昧 = 非承認)。
+  step 3 の explicit override は step 2b の結果を上書きできるが、override 値に `fable` は書けない (F6)
 
 ### Direct Mode (人間が直接 expert を呼ぶ場合)
 
@@ -398,7 +424,7 @@ OP skill 共通の品質モード切替:
 
 | flag 値 | 挙動 |
 |---|---|
-| `--quality high` | §5 mapping のすべての Sonnet 割当を **Opus に強制昇格**。CI で品質最優先する場合 |
+| `--quality high` | §5 mapping のすべての Sonnet 割当を **Opus に強制昇格**。CI で品質最優先する場合。**昇格 ladder は Opus で止まる — Fable には到達しない** (§7.2 F2) |
 | `--quality balanced` (default) | §5 mapping に従う |
 | `--quality low` | §5 mapping のすべての Opus 割当を **Sonnet に強制降格**。CI 量産で速度・コスト最優先 |
 
@@ -586,6 +612,154 @@ ADR-0011 (review lens-modular fan-out = ADR-0009 Phase C closeout) で op-run �
 
 ---
 
+## §7.2 Fable escalation gate (自動 spawn 禁止 / 人間承認 opt-in)
+
+<!--
+機能概要: worker (spawn される expert) の自動選択の天井を Opus に固定し、Fable は
+         「write phase で難度条件を満たした spawn を人間に提案し、承認された場合のみ」使う opt-in tier とする契約。
+作成意図: controller (OP skill) が難度を自己判定して最上位 tier を自動投入すると、コスト上振れが
+         人間の意思決定を経ずに発生する。特に read 系 (audit / investigation / review) は並列度が高く、
+         単価の上振れが総コストへ直撃する。judgement (どこまで払うか) は人間に残す。
+注意点: 本節は §5 mapping と独立した exception 層 (§6 step 2b)。承認は per-spawn-scope であり、
+       config / env に固定化できない (F6)。read-only spawn は承認があっても対象外 (F3、hard)。
+-->
+
+`Fable` は §5 mapping の値域外にある **escalation tier** であり、controller が自動で選ぶことはない。
+本節は「いつ提案してよいか / どう承認を取るか / どこでは絶対に使えないか」の canonical 契約を定める。
+
+### §7.2 F1 — worker 自動選択の天井は Opus (不変則)
+
+- OP skill (controller) が spawn する expert の model は、**自動決定の結果として Opus を超えない**。
+- §5 mapping / §7 `--quality` / §9.2 degrade からの復帰 のいずれの経路でも Fable は出力されない。
+- controller は「難度が高そうだから Fable にする」という判断を **単独で行ってはならない**。
+  難度の見立ては提案の材料であって、決定権ではない (決定は F5 の人間承認)。
+
+### §7.2 F2 — 昇格 ladder は Opus で止まる
+
+`--quality high` / `OP_QUALITY=high` / `quality_defaults.level: high` の昇格は
+`Haiku → Sonnet → Opus` で打ち止め。`Opus → Fable` の段は ladder に **存在しない**。
+§5.5 の `code_review_effort` ladder (`low → medium → high → xhigh`) は effort 軸であり、
+model 軸の本節とは独立 (混同しない)。
+
+### §7.2 F3 — read-only (非 write) spawn は Fable 禁止 (hard、承認があっても不可)
+
+以下の spawn は **人間が承認しても Fable を使ってはならない**。controller は F4 の候補判定自体を
+行わず、常に §5 mapping の結果 (Opus / Sonnet / Haiku) で spawn する。
+
+ここでの「read-only」は **repo のコードを変更しない spawn** を指す (enrichment の Design Plan 生成のように
+文章を生成するフェーズも、コードを書かない起票前工程なので本節に含む)。Fable を許すのは
+「worktree でコードを書き commit する spawn」だけである:
+
+| 経路 | 該当 spawn |
+|---|---|
+| op-scan / op-patrol | audit (パターン1)、統合 gate |
+| refute | skeptic spawn (`refute-contract.md`) |
+| op-run | investigation (`op-run-discover`)、post-check / aux post-check (フェーズ3.5)、global review 全 phase (prep / lens-audit / adversarial-verify / synthesize) |
+| enrichment | Design Plan 生成 / ux-ui-audit gate / cross-review (`issue-enrichment.md` §5) |
+| Utility Worker | `spec-expert` (op-spec / op-spec-patrol)、`scout` (op-report) |
+| op-codev | Step A (explore)、Step C (verify)、Review 選択 2 (review-expert 7-lens) |
+| op-explore | design 生成系 spawn (§5.4.2 の全役 Opus 固定を維持。craft ceiling は Opus で確保する方針を変えない) |
+
+根拠:
+
+- read 系は **breadth 型で並列度が高い** (region × expert / 7 lens / N 案)。単価の上振れが総コストに直撃する。
+  コストは「安いモデル」でなく「少ない spawn」で抑えるという §5.4.2 の方針とも整合する。
+- 判定の質は **gate 側が Opus 固定であること** で既に担保されている (§7.1.7 の verify / synthesize、
+  §7 の merge gate 維持例外)。調査層を最上位 tier に上げる必要がない。
+- **機械的裏付け**: global review の payload schema (`op-core::payload::review_finding` の `model_used`) は
+  enum `["opus", "sonnet"]` であり、review 経路で `fable` を申告すると schema validation で落ちる。
+  本節の禁止は prose だけでなく payload 層でも効いている。
+
+### §7.2 F4 — 提案してよい候補条件 (write phase 限定)
+
+Fable を **提案** できるのは以下 2 経路の write spawn のみ:
+
+- op-run フェーズ 2 の **apply spawn** (cluster 単位、`op-run/SKILL.md` 1-2-g)
+- op-codev フェーズ 3 の **Step B (implement)** (IU 単位、`op-codev/SKILL.md` 3-B-gate)
+
+提案の必要条件 (**AND**、1 つでも欠ければ提案しない = Opus で続行):
+
+1. base model (§6 step 1〜2 の結果) が **Opus** である (= `task_complexity ∈ {design, integration, api-design}`)
+2. **対話経路である** (`--auto` / 非対話 OP-managed 一括経路では提案しない → F7)
+3. kill switch 不在 — `OP_FABLE_DISABLE=1` が立っておらず、`op-config.yaml` の
+   `fable_escalation.enabled` が `false` でない
+4. `model_degraded` marker が残存していない (degrade 進行中に昇格提案しない → F8)
+5. 下記 **難度シグナル D1〜D6 のうち 2 つ以上** が立っている
+
+| id | 難度シグナル | 判定材料 |
+|---|---|---|
+| D1 | cross-module 横断 — 変更候補が 3 module 以上 または 10 file 以上に跨る | cluster.files / IU の scope_files |
+| D2 | 契約変更 — 公開 API / 後方互換 / migration 同時実装 (`task_complexity: api-design`) | Issue 本文 / enrichment 出力 |
+| D3 | silent fork 統合 — 重複実装の統合点設計 (`task_complexity: integration`) | enrichment 出力 / investigation report |
+| D4 | 並行性 / 状態機械 / トランザクション整合 が本質に絡む | Issue 本文 / enrichment 出力 / (実施済なら) investigation report の risks |
+| D5 | §7.1.3 の sensitive glob に該当するファイルを変更する | files 一覧 |
+| D6 | 再挑戦 — 同 cluster / IU で `review_round >= 2` または `requires_redo: true` が発生済 | review state / post-check 返却 |
+
+**例外 (人間起点)**: ユーザーが自分から「この作業は Fable で」と明示指示した場合は、D 条件の充足を問わず
+F5 の承認済みとして扱う (人間の明示指示そのものが承認)。ただし F3 の read-only 禁止は解除されない。
+
+**提案は各 skill が定める gate でのみ行う**: op-run = plan gate 直前の 1-2-g / op-codev = Checkpoint A 直後の
+3-B-gate。
+
+- **op-run (自動フロー)**: 提案は **1 run 1 回**。plan gate を通過して実行が始まった後、新情報
+  (investigation の risks / round 増加) で候補条件を満たしても **追加提案してはならない** — Opus のまま
+  完走し、完了報告に「次 run では Fable 昇格が有効な可能性」を 1 行残す。理由: 走っている自動フローを
+  人間承認待ちで中断させないため (不変則3 の OP-managed = 質問で停止しない、と整合)。
+- **op-codev (対話監督 skill)**: gate は **IU ごと** に通る (Checkpoint B 差し戻しによる Step B 再実行時も
+  同じ gate を再通過してよい)。checkpoint が元から人間の会話ターンである設計なので、これは
+  「実行中の自動フローを中断する追加提案」には当たらない。
+
+### §7.2 F5 — 承認 protocol
+
+- 提示は必ず **2 択**、**既定は Opus 維持**:
+  `1. Opus のまま続行 (既定) / 2. Fable へ昇格`
+- 提示に含める必須項目:
+  - 対象 spawn の識別子 (op-run = cluster id / op-codev = IU 名) と担当 expert
+  - base model (= Opus) と、昇格後 (= Fable)
+  - 立った難度シグナル (D1〜D6 の id と 1 行根拠)
+  - **コストが上振れる旨の明示** (定性で可)
+  - 承認 scope (下記)
+- 提示手段: op-run は `AskUserQuestion` (plan gate 前)、op-codev は Checkpoint の会話ターン。
+- **無応答 / 曖昧な返答は非承認**として扱い、Opus で続行する (fail-safe)。
+- **承認 scope**: 承認時に提示した **spawn 単位 (cluster / IU) の write spawn のみ**、**同 session 内**。
+  - 同 cluster / IU の review-fix loop に伴う再 apply は同一 scope として承認を引き継ぐ。
+  - **他の cluster / IU へ横展開しない** (cluster ごとに提案・承認する)。
+  - read-only spawn には F3 により一切適用されない (承認 scope 内であっても)。
+- **記録**: 承認された昇格は `<!-- op-model-escalated: <expert>:fable:<phase>:<scope-id> -->` marker を
+  PR body / apply report に埋め、plan file / 完了サマリにも 1 行明記する
+  (marker の正本は `markers/labels-and-markers.md` の「Spawn Metadata Markers」節)。
+
+### §7.2 F6 — config / env から Fable を選ぶことはできない
+
+- `op-config.yaml` の `model_overrides.*: fable` は **無効値**。controller は当該 override を無視し、
+  `fable_config_override_ignored_warning` を spawn metadata に記録して §5 mapping の値で spawn する。
+- `quality_defaults` / `OP_QUALITY` からも Fable は選べない (F2)。
+- 理由: 「人間の承認を得てから」という要件は **per-run の確認**である。config に固定化できると
+  controller の自動 spawn と実質的に区別できなくなり、F1 が空文化する。
+- 逆方向 (提案そのものを止める) の設定は許可する — `fable_escalation.enabled: false` および
+  `OP_FABLE_DISABLE=1` (kill switch)。安全側への設定だけが config で表現できる非対称設計。
+
+### §7.2 F7 — 非対話 / `--auto` 経路
+
+提案せず Opus で続行する。**停止しない**。plan / 実行 report に次の 1 行を記録する:
+
+```text
+[fable-gate] --auto (非対話) のため escalation 提案を skip しました。全 worker は Opus 天井で実行します。
+```
+
+`--auto` で最難度タスクを回したい場合の推奨経路は「対話モードで実行して承認する」であり、
+`--auto` 側に事前承認の抜け道を作らない (F6 と同じ理由)。
+
+### §7.2 F8 — degrade / unavailable との相互作用
+
+| 状況 | 挙動 |
+|---|---|
+| 承認済み Fable spawn が rate limit / unavailable | **Opus へ degrade** し `<!-- op-model-degraded: <expert>:unavailable:apply -->` を記録 (§9.2 apply 行と同じ扱い)。Fable への自動再試行はしない (Opus は worker 既定天井なので再承認も不要) |
+| Opus が degrade 中 (`model_degraded` 残存) | Fable 昇格を **提案してはならない** (F4 条件 4)。degrade 中の昇格提案は「不安定な API 状態でコストだけ上げる」ため |
+| 承認済み scope の再 apply (review-fix loop) | 承認を引き継ぐ (F5 scope)。ただし degrade が発生していれば当該 spawn は Opus |
+
+---
+
 ## §8 関連 (canonical pointer)
 
 - spawn schema (`model:` / `task_complexity:` field 定義) → `expert-spawn.md`
@@ -602,6 +776,11 @@ ADR-0011 (review lens-modular fan-out = ADR-0009 Phase C closeout) で op-run �
 - narrow opt-down 判定の controller 実装 (5 条件 AND の bash) → `op-run/references/global-review-spawn.md` §4-1-b
 - `model_degraded` hidden marker (degrade 発生記録) → `markers/labels-and-markers.md` の
   「Spawn Metadata Markers」節
+- **Fable escalation gate の controller 実装** → `op-run/SKILL.md` 1-2-g (cluster 単位、apply spawn) /
+  `op-codev/SKILL.md` フェーズ 3「3-B-gate」(IU 単位、implement spawn)
+- `op-model-escalated` hidden marker (承認済み Fable 昇格の記録) → `markers/labels-and-markers.md` の
+  「Spawn Metadata Markers」節
+- `fable_escalation` 設定 (提案の無効化のみ可能、承認の事前付与は不可) → `op-config-schema.md` (>=1) §5.1
 - 複雑度シグナルの op-core 実装 → `op-tools/` (別 Phase、§11 参照)
 - runtime spawn boundary contract (本ファイルを正本リストに含む) → `runtime-contract.md` §1
 
@@ -618,6 +797,9 @@ ADR-0011 (review lens-modular fan-out = ADR-0009 Phase C closeout) で op-run �
 | **両方 unset** (新規プロジェクト + enrichment 未通過) | `extension` ∩ `typical` の組合せ = 全 expert Sonnet。両 warning を spawn metadata に記録 |
 | `model:` field を controller が出せない (logic bug 等) | §5 lookup → default 適用。`model_decision_failed_warning` を出す |
 | Opus が rate limit / 不可用 | Sonnet に degrade、`model_degraded: true` を spawn metadata に記録。redo 判定は §9.2 |
+| `model_overrides` / spawn 引数に `fable` が現れた (F6 違反) | 当該値を **無視** して §5 mapping の値で spawn し、`fable_config_override_ignored_warning` を記録。hard fail はしない |
+| read-only spawn に `fable` が渡された (F3 違反) | contract error。**Opus に矯正して続行**し、`fable_readonly_violation_warning` を記録して人間に報告する (silent に受理しない) |
+| 承認済み Fable が unavailable | Opus へ degrade (§7.2 F8)。Fable への自動再試行はしない |
 
 ### §9.2 degrade 時の redo 判定
 
@@ -642,6 +824,9 @@ hidden marker (`markers/*.md` への追加、本 PR scope_out、§11 follow-up) 
 - §5 mapping table の列・行削除
 - `--quality` flag 値の挙動変更
 - override 優先順位 / §6 controller 決定フローの変更
+- **§7.2 の Fable 契約の緩和** (worker 天井 = Opus の解除 / read-only 禁止 (F3) の解除 /
+  config・env での事前承認の許可 (F6 の解除))。いずれも「人間承認なしにコストが上振れる」方向の
+  変更であり、schema_version bump + consumer pin 同期を必須とする
 
 非破壊的変更 (版上げ不要):
 

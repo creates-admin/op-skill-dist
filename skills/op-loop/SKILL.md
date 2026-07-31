@@ -80,7 +80,7 @@ op-loop の責務:
 | `~/.claude/skills/op-run/SKILL.md` (>=1) | フェーズ1 (Issue 取得・clustering) / フェーズ2-A (探知) / 2-B (Stage 2 競合検出) / 2-Orchestrate (CO 並列・直列起動) / 0-base (base 解決 guard)。**層内手順はこの pointer を適用する (コピー禁止)** |
 | `~/.claude/skills/_shared/worktree-ops.md` (>=3) | worktree ライフサイクル + 「外部 base 注入」節 (op-loop が層ごとに `OP_RUN_BASE_SHA` を export して前進させる契約、ADR-0019 D6)。`(>=3)`: 外部 base 注入節は schema_version 3 で additive 追加されたため |
 | `~/.claude/skills/_shared/markers/labels-and-markers.md` (>=9) | `op-depends-on` marker (工程依存の機械契約) / `milestone:initial` label の意味 |
-| `~/.claude/skills/_shared/model-selection.md` (>=4) | CO / expert の model 選択 (op-run と同一を継承、op-loop 固有 gating なし、D10) |
+| `~/.claude/skills/_shared/model-selection.md` (>=5) | CO / expert の model 選択 (op-run と同一を継承、op-loop 固有 gating なし、D10)。Fable escalation gate (§7.2) も op-run 1-2-g をそのまま継承 (層ごとの dispatch で提案。op-loop 独自の昇格経路は持たない) |
 | `~/.claude/skills/op-spec/SKILL.md` (>=1) | align→dispatch gate の文言・血統の手本 (present → align の流儀) |
 | `~/.claude/skills/_shared/invocation-mode.md` (>=1) | Direct Mode 判定 (本スキルは Direct Mode 固定) |
 | `~/.claude/skills/op-loop/references/relay-protocol.md` | `--relay` (工程内 relay、既定 OFF) の hardened protocol 詳細正本 (3 本柱 / cost / 手動 fallback)。SKILL.md 「監督深度オプション: --relay」節からこれを参照する |
@@ -467,6 +467,8 @@ op-loop は **専用 state marker を持たない** (ADR-0019 D9)。中断後に
 ## model / cost (op-run の model-selection を継承、D10)
 
 CO / expert の model は op-run と同一 (`model-selection.md` 継承)。op-loop 固有の model gating は持たない。
+Fable escalation gate (§7.2 / op-run 1-2-g) も継承する — 各層の dispatch 時に op-run と同じ条件で提案し、
+承認済み cluster の apply spawn にだけ `fable` が載る。層をまたいで承認を引き継がない (承認 scope = cluster)。
 
 - op-loop 固有コストは **層間 gate の controller 往復** と **dep-graph 構築** (op CLI、安価) のみ。
 - controller は薄く保つ (層完了 summary は terse relay、CO の raw finding を抱えない)。

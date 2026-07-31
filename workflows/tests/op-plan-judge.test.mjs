@@ -129,3 +129,13 @@ test("normalizeArgs は candidate_count: 3 注入で angles を 3 案に展開�
   const out = na.run({ requirement: { summary: "新機能を追加したい" }, candidate_count: 3 });
   assert.equal(out.angles.length, 3, `candidate_count=3 で angles は 3 案 (実際: ${out.angles.length})`);
 });
+
+// ---- fable guard (model-selection.md (>=5) §7.2 F3: judge-panel は read-only 経路ゆえ fable 禁止) ----
+test("normalizeArgs は models.generate / evaluate の fable を opus へ矯正する", () => {
+  const out = na.run({
+    requirement: { summary: "新機能を追加したい" },
+    models: { generate: "fable", evaluate: "fable" },
+  });
+  assert.equal(out.models.generate, "opus");
+  assert.equal(out.models.evaluate, "opus");
+});

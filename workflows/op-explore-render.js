@@ -203,6 +203,9 @@ function normalizeArgs() {
   if (!a.models || typeof a.models !== "object") a.models = {};
   if (!a.models.generate) a.models.generate = "opus";
   if (!a.models.judge) a.models.judge = "opus";
+  // model-selection.md (>=5) §7.2 F3 / §5.4.2: op-explore は全役 Opus 固定であり Fable 昇格の対象外。
+  //   controller が fable を注入しても opus に矯正する (craft ceiling は Opus で確保する方針を変えない)。
+  for (const k of ["generate", "judge"]) if (a.models[k] === "fable") a.models[k] = "opus";
 
   // pattern_count: 未注入時 default 2、絶対上限 3 (controller が 3 にクランプ)。
   let n = typeof a.pattern_count === "number" && a.pattern_count > 0 ? Math.floor(a.pattern_count) : 2;

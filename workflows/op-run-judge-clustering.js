@@ -293,6 +293,10 @@ function normalizeArgs() {
   if (!a.models) a.models = {};
   if (!a.models.generate) a.models.generate = "sonnet";
   if (!a.models.evaluate) a.models.evaluate = "opus";
+  // model-selection.md (>=5) §7.2 F3: 本 workflow の spawn は read-only (案出し / 評価 / 監査) 経路のため
+  //   `fable` 禁止。controller の誤注入を silent 受理せず opus へ矯正する (write phase の承認 gate =
+  //   op-run 1-2-g / op-codev 3-B-gate でのみ fable が載る)。
+  for (const k of ["generate", "evaluate"]) if (a.models[k] === "fable") a.models[k] = "opus";
   return a;
 }
 

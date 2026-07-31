@@ -102,3 +102,14 @@ test("normalizeArgs は N=2 ∩ self_critique は許容する (hard cap 非該�
   assert.equal(out.self_critique, true);
   assert.equal(out.budget_note, null);
 });
+
+// ---- fable guard (model-selection.md (>=5) §7.2 F3 / §5.4.2: op-explore は全役 Opus 固定) ----
+test("normalizeArgs は models.generate / judge の fable を opus へ矯正する", () => {
+  const out = na.run({
+    session_id: "s1",
+    requirement: "ダッシュボードの方向性を出したい",
+    models: { generate: "fable", judge: "fable" },
+  });
+  assert.equal(out.models.generate, "opus");
+  assert.equal(out.models.judge, "opus");
+});

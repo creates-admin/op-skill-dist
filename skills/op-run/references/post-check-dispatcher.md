@@ -128,7 +128,7 @@ spawn 境界でのみ `op-skill:` を前置する。正本は `_shared/expert-sp
 | フィールド | 値 |
 |-----------|---|
 | `expert` | `"ux-ui-audit-expert"` または `"security-expert"` (dispatch 判定の結果) |
-| `model` | `"opus"` (model-selection.md §5.1) |
+| `model` | `"opus"` (model-selection.md §5.1)。post-check は read-only 監査のため **`fable` 禁止** — cluster が Fable 昇格を承認済でも波及させない (§7.2 F3 (>=5)) |
 | `worktree_path` | フェーズ2-A で確定した apply worktree path を reuse 注入 (read-only 監査) |
 | `issues` | 元 Issue 番号配列 |
 | `prompt_text` | `post-check-prompts.md` 該当節の本文を ClusterOrchestrator が注入 |

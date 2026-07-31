@@ -428,3 +428,22 @@ test("resolveReviewers は Medium 以下 ∩ 非 UI ∩ routine で先頭 1 revi
   assert.equal(result.length, 1);
   assert.equal(result[0].name, "debug-expert");
 });
+
+// ---- fable guard (model-selection.md (>=5) §7.2 F3: enrichment は起票前 review 経路ゆえ fable 禁止) ----
+test("normalizeArgs は role_models の fable を opus へ矯正する", () => {
+  const out = na.run({
+    issue_draft: {
+      title: "t",
+      body: "b",
+      severity: "high",
+      domain: "design",
+      recommended_runner: "designer-expert",
+    },
+    options: { with_design_plan: true, with_cross_review: false, max_review_loops: 3, strict: false },
+    task_complexity: "moderate",
+    today: "2026-06-02",
+    role_models: { "token-curation": "fable", "layout-composition": "opus" },
+  });
+  assert.equal(out.role_models["token-curation"], "opus");
+  assert.equal(out.role_models["layout-composition"], "opus");
+});

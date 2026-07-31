@@ -18,6 +18,14 @@ notes: 2026-07-29 追記 (ADR-0029 Wave B1) — 「薄い入口 + references/」
        内容変更なし)。§2.5-4 (aggregateSurveyFindings の javascript fence) は
        `workflows/tests/op-plan.test.mjs` の sync-check が本ファイルを固定 path で読むため本文に残置。
        純粋な配置変更 (契約・挙動不変) のため schema_version 据え置き。
+       2026-07-31 訂正 (corrective) — フェーズ8 の「mcp channel (Cloud) では op-run は起動不可」注記が
+       第三波時点のスナップショットのまま stale 化していたため訂正。その後の ADR-0027 6b
+       (Cloud で `/op-run` を PR open → global review → approve → pro-reviewed まで完走、実 PR #59
+       verdict=approved) および ADR-0028 第七波 (Issue #61 → PR #63 → squash merge → close の
+       全ライフサイクルを mcp channel で完結) により Cloud 完走は実機検証済み。`op claim` の mcp 恒久
+       refuse は事実だが、op-run 側が claim skip して単一 instance 前提で続行するため「起動不可」の結論が
+       誤りだった。注記を「Cloud でも起動可 + 並行 op-run 禁止 (排他が効かない)」へ書き換え。
+       事実訂正のみでフェーズ構成・入出力契約・marker は不変ゆえ schema_version 据え置き。
        2026-07-23 追記 (ADR-0024 Phase 3 第三波) — Cloud (mcp channel) 対応。
        `github-channel.md (>=2)` を pin 追加、フェーズ0-2 の `gh auth status` に channel guard、
        既存 Issue 件数取得 (`op issue list`) の mcp fail-closed 注記、フェーズ4-4 dedup 素材の
@@ -160,7 +168,7 @@ EnterPlanMode 呼び出しを skip** する (冪等性確保)。
 - `~/.claude/skills/_shared/active-expert-registry.md` (>=2) — feature-expert audit spawn 時の active expert 確認
 - `~/.claude/skills/_shared/markers/labels-and-markers.md` — Issue / PR の hidden marker / label 名と意味の正本
 - `~/.claude/skills/_shared/dedup-policy.md` (>=3) — fingerprint 生成仕様 + 既存 Issue 重複除外手順 (フェーズ 4 で参照)
-- `~/.claude/skills/_shared/model-selection.md` (>=1) — expert spawn 時の model (Opus / Sonnet / Haiku、具体 version は §1) 選択 / task_complexity / 区画 complexity の canonical 正本。op-plan は対話計画フェーズで Opus、enrichment 経由で Issue の task_complexity を推論
+- `~/.claude/skills/_shared/model-selection.md` (>=5) — expert spawn 時の model (Opus / Sonnet / Haiku、具体 version は §1) 選択 / task_complexity / 区画 complexity の canonical 正本。op-plan は対話計画フェーズで Opus、enrichment 経由で Issue の task_complexity を推論。**op-plan は spawn する側がすべて計画・enrichment 層 (read-only) のため `fable` を渡さない** — 実装 model の昇格判断は起票後の op-run 1-2-g / op-codev 3-B-gate に委ねる (§7.2 (>=5))
 - `~/.claude/skills/_shared/read-economy.md` (>=1) — Read Economy 原則 (R1〜R5) + 「Controller への適用」節。controller は既読 Issue/PR/file の再 Read を避け、Issue/PR body は meta/list で取得し、subagent の completion_report 取り込みを圧縮する (読まなさすぎへの退行は避ける)
 - `~/.claude/skills/_shared/github-channel.md` (>=2) — GitHub I/O channel / call-spec protocol。mcp channel (Cloud) での素材注入手順 (§6) と司令官の call-spec 実行義務 (§3-§4) の正本
 - Claude Code 公式 [Choose a permission mode](https://code.claude.com/docs/en/permission-modes) — フェーズ -1 / フェーズ 6 の EnterPlanMode / ExitPlanMode 仕様、承認オプションと acceptEdits / auto 自動遷移の挙動 (v2 で参照)
@@ -1121,9 +1129,19 @@ op-run を起動して実装に進みますか?
 > `/op-loop --label <L>` で依存順 (DAG 層順) に監督付きで直列駆動できます (op-run はファイル競合のみで直列化するため
 > 論理工程依存を組めない / ADR-0019)。疎結合のため自動 handoff はせず、人間が `/op-loop` を起動します (ADR-0013 流儀)。
 
-> **mcp channel (Cloud) では op-run は起動不可** (`op claim` が mcp で恒久 refuse、ADR-0024 non-goals)。
-> 選択肢 2 (コマンド表示) または 3 (起票のみで終了) を選び、実装はローカル実行または op-run の
-> Cloud 対応 wave を待つ。
+> **mcp channel (Cloud) でも op-run は起動できる**。ADR-0027 6b で Cloud の `/op-run` が
+> PR open → global review → approve → `pro-reviewed` まで degrade せず完走することを実機検証済み
+> (実 PR #59、verdict = `approved`)。さらに ADR-0028 第七波で Issue → PR → squash merge → Issue close の
+> 全ライフサイクルを mcp channel で完結する連鎖 dogfood も通っている。
+>
+> 残る運用上の制約は **並行実行しないこと** の 1 点。`op claim` は mcp channel で恒久 refuse される
+> (ADR-0024 non-goals: push-race の atomic CAS が MCP 経路では保証できないため) ので、op-run は
+> claim acquire を skip して進む (`op-run/SKILL.md` 1-2-e)。排他が効かないため、**同一 repo に対して
+> Cloud セッションで op-run を並行起動しない** (単一 instance 前提)。
+>
+> なお Cloud では GitHub 書き込みが call-spec 経路になる (`_shared/github-channel.md` §3-§4) ため、
+> 司令官 / ClusterOrchestrator が MCP tool を verbatim 実行する往復が挟まる。これは体感の差であって
+> 機能制限ではない。
 
 ### 8-2. 起動する場合
 

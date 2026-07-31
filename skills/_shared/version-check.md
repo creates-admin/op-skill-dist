@@ -5,6 +5,14 @@ notes: 改訂メモ (2026-07-29): 「参照側 pin 規約 (Issue #382)」の pin
        apply-completion-checklist) を撤去 — CLAUDE.md 不変則 2 (「SKILL.md 側は (>=N) 形式の最低版を指定」)
        と実態 (op-spec / op-report / expert-scout 等が pin 済み) に矛盾する死文だったため。旧根拠
        (bump 追従コスト) は「pin 更新の運用注意」として存置。規約矛盾解消の corrective のため schema_version 据置。
+       参照先変更メモ (2026-07-31): model-selection.md が v4 → v5 に bump。§1 に Fable tier 追加 +
+       §7.2「Fable escalation gate」新設。§6 controller 決定フローに step 2b を挿入し、step 3 explicit
+       override の値域から `fable` を除外する破壊的変更 (§10「override 優先順位 / §6 決定フローの変更」)。
+       worker 自動選択の天井 = Opus / read-only spawn は承認があっても Fable 禁止 / Fable の入口は
+       write phase の人間承認のみ。consumer pin を (>=5) に同期 (op-run / op-codev / op-scan / op-patrol /
+       op-plan / op-architect / op-loop / op-merge / op-explore / expert-spawn.md / global-review-spawn.md)。
+       expert-spawn.md (v16 据置 / additive) / labels-and-markers.md (v9 据置 / `op-model-escalated` additive) /
+       op-config-schema.md (v1 据置 / `fable_escalation` additive) は本表の version 変更なし。
        参照先変更メモ (2026-06-14): model-selection.md が v3 → v4 に bump (Refs #720)。
        §7.1.3 に「sensitive ∩ doc-only small → investigate-phase のみ Sonnet」例外を追加。
        「sensitive glob 該当 = 全 phase Opus 強制」という既存 behavioral invariant を investigate phase に
@@ -395,7 +403,7 @@ mismatch を検出しても、subagent は質問で停止しない。以下の�
 | `ux-ui-markers.md` (markers/) | 2 | 2026-05-17 |
 | `merge-gate-markers.md` (markers/) | 2 | 2026-05-07 |
 | `invocation-mode.md` | 1 | 2026-05-04 |
-| `model-selection.md` | 4 | 2026-06-14 |
+| `model-selection.md` | 5 | 2026-07-31 |
 | `op-config-schema.md` | 1 | 2026-05-13 |
 | `pr-meta-helpers.md` | 2 | 2026-05-23 |
 | `project-profile.md` | 1 | 2026-05-03 |

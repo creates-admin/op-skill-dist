@@ -467,7 +467,11 @@ specialist は finding 単位で 1 block を出す。複数 finding を一度に
    再委任する。**再 apply の spawn は ClusterOrchestrator が apply-expert を再 spawn して行う**
    (cluster-orchestrator-directives.md フェーズ2 と同一経路)。ClusterOrchestrator は
    既存 apply worktree を再利用し、以下の入力 payload (cluster-orchestrator-directives.md フェーズ0) に従って渡す:
-   `{cluster_id, issues, expert, model, module, worktree_path, investigation_report, files_likely_to_modify, files_allowed, files_forbidden}` (`op-run-fanout` は ADR-0016 で削除済み)。
+   `{cluster_id, issues, expert, model, apply_model?, module, worktree_path, investigation_report, files_likely_to_modify, files_allowed, files_forbidden}` (`op-run-fanout` は ADR-0016 で削除済み)。
+   再 apply の spawn model は初回 apply と同じく `apply_model` (未指定なら `model`) を使う — 1-2-g の
+   Fable 承認 scope は「当該 cluster の apply spawn (review-fix loop の再 apply を含む)」であり、
+   再承認は要らない (`model-selection.md` (>=5) §7.2 F5)。**新たに難度が上がったからと言って
+   fix ループで昇格してはならない** (run 途中の追加提案は禁止、§7.2 F4 末尾)。
    `expert_directives_text` は controller が `references/apply-prompt-directives.md` の common 節 + 当該 apply expert の節を結合して注入する。apply bucket に入る finding は次のいずれか:
    - 元の `finding.result` が `needs-fix` (4.5-1A Step 2 で保留されていたもの)
    - 元の `finding.result` が `needs-specialist-review` で、4.5-2A の specialist 判断が `same-pr-fixable`

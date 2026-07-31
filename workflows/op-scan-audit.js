@@ -110,6 +110,10 @@ const scopedAgentType = (n) => (n && !BUILTIN_AGENTS.has(n) ? `op-skill:${n}` : 
 log(
   `op-scan-audit: mode=${input.mode} experts=${input.experts.length} scope=${input.scope} today=${input.today}`
 );
+if (input.fable_guard_corrections.length)
+  log(
+    `[fable-guard] read-only spawn への fable 指定を opus へ矯正: ${input.fable_guard_corrections.join(", ")} (model-selection.md §7.2 F3)`
+  );
 
 // ---- audit stage: expert を read-only 並列 spawn (各 expert が {findings:[scan-finding]} を返す) ----
 // filter(Boolean) しない: expert↔結果を index で zip するため (finding に detected_by が無く、null は空 batch 扱い)。
@@ -186,9 +190,17 @@ function normalizeArgs() {
   if (!a.scope) throw new Error("op-scan-audit: args.scope is required");
   if (!a.today)
     throw new Error("op-scan-audit: args.today (YYYY-MM-DD) required (agent 側 date 実行禁止 = F2 対策)");
+  // model-selection.md (>=5) §7.2 F3: 本 workflow の spawn はすべて read-only 経路のため `fable` 禁止
+  //   (write phase の承認 gate = op-run 1-2-g / op-codev 3-B-gate でのみ fable が載る)。controller が
+  //   誤注入しても silent 受理せず opus へ矯正し、矯正記録を fable_guard_corrections に残す (warning + 続行)。
+  a.fable_guard_corrections = [];
   for (const e of a.experts) {
     if (!e.name || !e.model)
       throw new Error(`op-scan-audit: expert ${e.name || "?"} missing name/model`);
+    if (e.model === "fable") {
+      e.model = "opus";
+      a.fable_guard_corrections.push(`expert:${e.name}`);
+    }
   }
   if (a.mode === "from-issue" && !a.from_issue_body)
     throw new Error("op-scan-audit: from-issue mode requires args.from_issue_body");

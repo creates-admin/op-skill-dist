@@ -122,7 +122,7 @@ record で seed する** = L318-319 の context 非継承規約に穴を開け�
 - `~/.claude/skills/_shared/issue-enrichment.md` (>=2) — Design Plan 生成 + ux-ui-audit gate のロジック正本 (フェーズ4.6 から移管)
 - `~/.claude/skills/_shared/clustering.md` (>=5) — expert label 完全形式
 - `~/.claude/skills/_shared/version-check.md` (>=2) — schema_version 整合性チェック手順 + Invocation Mode 上の責務分離
-- `~/.claude/skills/_shared/model-selection.md` (>=1) — expert spawn 時の model (Opus / Sonnet / Haiku、具体 version は §1) 選択 / task_complexity / 区画 complexity の canonical 正本。op-architect は ADR 起草・初期 Issue 生成・enrichment の Design Plan で Opus を使う
+- `~/.claude/skills/_shared/model-selection.md` (>=5) — expert spawn 時の model (Opus / Sonnet / Haiku、具体 version は §1) 選択 / task_complexity / 区画 complexity の canonical 正本。op-architect は ADR 起草・初期 Issue 生成・enrichment の Design Plan で Opus を使う。**judge-panel / Design Plan / enrichment はいずれも `fable` を使わない** (Opus 天井、§7.2 (>=5))
 - `references/project-type-checklists.md` (>=1) — フェーズ2 種別ごとの論点チェックリスト (2-A〜2-E)。フェーズ1 の種別判定直後に該当種別のみ参照
 - `references/adr-template.md` (>=1) — フェーズ3-2 の ADR ドラフトテンプレート (MADR ベース)。ADR を書き出す直前に参照
 - `references/scaffold-mode.md` (>=1) — フェーズ4.5 スケルトン雛形生成の全手順。`--scaffold` 指定時のみ参照

@@ -146,7 +146,7 @@ opt-in する典型タイミング:
 - `~/.claude/skills/_shared/dedup-policy.md` (>=3) — fingerprint 生成仕様 + 既存 Issue 重複除外 4 段優先順位 + `op-refactor-debt-key` (refactor の debt 追跡補助 marker、v3 から) (op-patrol と共通)
 - `~/.claude/skills/_shared/version-check.md` (>=2) — schema_version 整合性チェック手順 + Invocation Mode 上の責務分離
 - `~/.claude/skills/_shared/issue-enrichment.md` (>=2) — Issue draft → enriched Issue 変換層 (Design Plan 付与 + cross-review)。フェーズ 2-4 から呼び出す正本
-- `~/.claude/skills/_shared/model-selection.md` (>=1) — expert spawn 時の model (Opus / Sonnet / Haiku、具体 version は §1) 選択 / task_complexity / 区画 complexity の canonical 正本。op-scan の audit 並列 spawn で区画 complexity から model を決め、起票 gate (severity + enrichment) では Opus を割り当てる
+- `~/.claude/skills/_shared/model-selection.md` (>=5) — expert spawn 時の model (Opus / Sonnet / Haiku、具体 version は §1) 選択 / task_complexity / 区画 complexity の canonical 正本。op-scan の audit 並列 spawn で区画 complexity から model を決め、起票 gate (severity + enrichment) では Opus を割り当てる。**audit / refute / enrichment はいずれも read-only 経路のため `fable` 禁止** (§7.2 F3 (>=5))
 - `~/.claude/skills/_shared/op-config-schema.md` (>=1) — `op-config.yaml` schema 定義の canonical 正本。op-scan は本ファイルの `domain_tags` / `complexity_thresholds` を読んで区画 complexity / `region.audit_model` を決定する
 - `~/.claude/skills/_shared/read-economy.md` (>=1) — Read Economy 原則 (R1〜R5) + 「Controller への適用」節。controller は既読 Issue/PR/file の再 Read を避け、Issue/PR body は meta/list で取得し、subagent の completion_report 取り込みを圧縮する (読まなさすぎへの退行は避ける)
 - `~/.claude/skills/_shared/github-channel.md` (>=2) — GitHub I/O channel / call-spec protocol。mcp channel (Cloud) での素材注入手順 (§6) と司令官の call-spec 実行義務 (§3-§4) の正本

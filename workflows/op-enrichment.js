@@ -729,6 +729,9 @@ function normalizeArgs() {
         : ["token-curation", "component-selection", "layout-composition"]; // full 既定 3 役 (none でも参照されないが補完)
   }
   if (!a.role_models || typeof a.role_models !== "object") a.role_models = {};
+  // model-selection.md (>=5) §7.2 F3: enrichment 層 spawn (役 pipeline / gate / cross-review / integrate) は
+  //   起票前 review 経路であり `fable` 禁止。controller の誤注入は opus へ矯正する (gate 系は元より opus 固定)。
+  for (const k of Object.keys(a.role_models)) if (a.role_models[k] === "fable") a.role_models[k] = "opus";
   if (typeof a.foundation_exists !== "boolean") a.foundation_exists = false; // controller 注入の fallback (foundation 不在扱い)
   // ADR-0013 決定C: with_design_plan='gate_only' = 提示済 Design Plan を再生成せず gate のみ (op-explore handoff)。
   a.gate_only = o.with_design_plan === "gate_only";

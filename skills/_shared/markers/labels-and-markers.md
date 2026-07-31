@@ -1,7 +1,11 @@
 <!--
 schema_version: 9
 last_breaking_change: 2026-05-22
-notes: v9 末尾 (2026-07-29) — ADR-0026/0027 追従の corrective + additive 改訂。(1) `op-patrol-ledger-state` /
+notes: v9 末尾 (2026-07-31) — `op-model-escalated` marker を additive 新設 (model-selection.md v5 §7.2
+       Fable escalation gate の承認記録)。「Spawn Metadata Markers」節に登録。既存 marker の契約は不変で、
+       op-core inline.rs の marker 検証対象にも含めない (記録専用・gate 非関与) ため
+       schema_version は 9 のまま据置 (inline.rs SCHEMA_VERSION=9 と一致維持)。
+       v9 末尾 (2026-07-29) — ADR-0026/0027 追従の corrective + additive 改訂。(1) `op-patrol-ledger-state` /
        `op-review-state` (各 domain 正本 v2 の機械正本 marker) の entry を additive 新設。(2) review 系
        (`op-review-meta` / `op-review-finding` / `op-specialist-review-meta` / `op-review-controller-meta`) と
        `op-patrol-run` の記述を「comment marker = 人間向け監査ログ / 機械正本 = body state 文書」に整合。
@@ -1331,6 +1335,41 @@ Merge blocking effect:
 - `phase: audit` (scan / patrol) は merge gate 外。起票 gate (Opus 単発) は Opus 復旧で再実行
 
 詳細仕様: `_shared/model-selection.md` §9.2 / `_shared/runtime-contract.md` §11 (Merge-Blocking State Categories) と整合。
+
+### `<!-- op-model-escalated: <expert>:fable:<phase>:<scope-id> -->`
+
+Owner / producer:
+- ClusterOrchestrator (op-run) — 人間承認済みの Fable 昇格で apply spawn した場合、PR body に埋める
+- op-codev controller — 人間承認済みの Fable 昇格で Step B (implement) spawn した場合、PR body / 完了サマリに埋める
+
+Consumer:
+- 人間 (どの作業が最上位 tier のコストで実行されたかの監査)
+- op-merge (merge 前サマリに昇格の有無を表示。**gate 判定には使わない**)
+
+Value:
+- `<expert>:fable:<phase>:<scope-id>` 形式
+  - `expert` — 昇格して spawn した expert (例: `feature-expert`, `refactor-expert`)
+  - `fable` — 昇格先 tier (現状 `fable` のみ。将来 tier が増えたら値を拡張)
+  - `phase` — `apply` / `implement` のいずれか (**write phase のみ**。read-only phase は昇格自体が禁止)
+  - `scope-id` — 承認 scope の識別子 (op-run = cluster id / op-codev = IU 名)
+
+Meaning:
+- `model-selection.md` (>=5) §7.2 F5 の **人間承認を得た** Fable 昇格の記録。承認なしにこの marker が
+  現れることはない (controller が自動昇格しないため)。
+
+Not meaning:
+- controller が難度を自己判定して昇格した、ではない (F1 により自動昇格は禁止)。
+- read-only spawn (audit / investigation / review / post-check / enrichment / refute / Utility Worker) の
+  記録ではない。それらは承認があっても Fable 禁止 (F3) のため、本 marker が付くことはない。
+  `phase` に `review` / `post-check` / `audit` 等が現れたら **contract error** として扱う。
+
+Runtime spawn effect:
+- なし (記録 marker)。
+
+Merge blocking effect:
+- なし (merge gate には影響しない)。
+
+詳細仕様: `_shared/model-selection.md` (>=5) §7.2 (F5 承認 protocol / F3 read-only 禁止)。
 
 ### `model_used` / `model_decision_reason` (review-expert narrow opt-down 観測 field)
 

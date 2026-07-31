@@ -51,3 +51,18 @@ test("normalizeArgs は正しい args をそのまま返す", () => {
   assert.equal(out.base_sha, "abc");
   assert.equal(out.clusters.length, 1);
 });
+
+// ---- fable guard (model-selection.md (>=5) §7.2 F3: 探知は read-only ゆえ fable 禁止) ----
+test("normalizeArgs は cluster.model の fable を opus へ矯正する (apply 昇格を探知へ波及させない)", () => {
+  const out = na.run({
+    clusters: [
+      { id: "c1", expert: "feature-expert", issues: [1], worktree_path: "/wt/c1", model: "fable" },
+      { id: "c2", expert: "debug-expert", issues: [2], worktree_path: "/wt/c2", model: "opus" },
+    ],
+    base_sha: "abc123",
+    base_ref: "main",
+  });
+  assert.equal(out.clusters[0].model, "opus");
+  assert.equal(out.clusters[1].model, "opus");
+  assert.deepEqual(out.fable_guard_corrections, ["cluster:c1"]);
+});

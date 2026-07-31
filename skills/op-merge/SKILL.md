@@ -125,7 +125,7 @@ planned expert の active 化 (例: `env-expert` / `release-expert` 実装) に�
 - `~/.claude/skills/_shared/planned-experts.md` — planned / unavailable experts (`env-expert` / `release-expert` / `compatibility-expert`) の正本 (spec-expert は ADR-0017 W1b で Utility Worker として active 化済、active-expert-registry.md 参照)
 - `~/.claude/skills/_shared/invocation-mode.md` (>=1) — Direct Mode / OP-managed Mode の対話可否契約
 - `~/.claude/skills/_shared/version-check.md` (>=2) — schema_version 整合性チェック手順 + Invocation Mode 上の責務分離
-- `~/.claude/skills/_shared/model-selection.md` (>=1) — expert spawn 時の model 選択 / task_complexity / 区画 complexity の canonical 正本。op-merge の対話マージは司令官の model に従う
+- `~/.claude/skills/_shared/model-selection.md` (>=5) — expert spawn 時の model 選択 / task_complexity / 区画 complexity の canonical 正本。op-merge の対話マージは司令官の model に従う。PR に `op-model-escalated` marker があれば「承認済み Fable 昇格で実装された PR」としてマージ前サマリに 1 行示す (**gate 判定には使わない**、§7.2 F5 (>=5))
 - `~/.claude/skills/_shared/pr-meta-helpers.md` (>=2) — **historical reference**。PR コメントからの review meta / post-check meta / manual override 抽出は `op merge verify` の Rust 実装に内包済み。SKILL.md は本ファイルの bash helper を直接呼ばない (§7 の対応表のみ参照)
 - `op-tools/docs/specs/merge-verify.md` — **`op merge verify` の gate 1-21 仕様 / MergeGateInput schema / MergeGateReport envelope / gate ↔ primitive 対応 / §2 out-of-scope の正本**
 - `~/.claude/skills/_shared/github-channel.md` (>=2) — call-spec protocol の正本。mcp channel での write (`op pr ready` / `op pr merge` / `op issue close --comment`) 実行者義務 (verbatim 実行 / read-back / ingest) はここに従う

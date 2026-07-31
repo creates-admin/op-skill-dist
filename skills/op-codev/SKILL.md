@@ -26,6 +26,12 @@ notes: v1 (2026-06-14): 初版。対話型監督実装スキル (op-codev)。
        spawn できない実測 (2026-07-31) のため、委任主体は worker ではなく controller。
        (c) CHECKPOINT B に自己検証 / 独立レビューの結果欄を追加。schema_version 据置
        (既存 contract の削除・変更なし、追加のみ)。
+       v3.1 相当 (2026-07-31, additive): model-selection.md v5 §7.2 (Fable escalation gate) 実装。
+       フェーズ3 に 3-B-gate (Step B の model 決定 + Fable 昇格提案) を新設。Step A / Step C /
+       Step B-2 (v3 で新設された独立レビュー) の spawn に read-only 経路の `fable` 禁止 (§7.2 F3) を固定。
+       Step B のみ 3-B-gate 確定値 (人間承認済のときだけ fable)。参照 pin を (>=5) へ同期、
+       完了サマリに model 節を追加。契約は additive (既存フェーズの順序・checkpoint 構造は不変) ゆえ
+       schema_version 据置。
 -->
 
 <!--
@@ -74,7 +80,11 @@ op-codev の責務:
 
 - `~/.claude/skills/_shared/invocation-mode.md` — Direct Mode 判定 (本スキルは Direct Mode 固定)
 - `~/.claude/skills/_shared/expert-spawn.md` — feature-expert spawn 規約、commits_added required
-- `~/.claude/skills/_shared/model-selection.md` — model 選択ルール (explore/verify=Sonnet、implement=Opus、Step B-2 独立レビュー=Sonnet 既定 / 重い IU は Opus)
+- `~/.claude/skills/_shared/model-selection.md` (>=5) — model 選択ルール (explore/verify=Sonnet、implement=Opus、
+  Step B-2 独立レビュー=Sonnet 既定 / 重い IU は Opus)。
+  **§7.2 Fable escalation gate**: worker の自動選択は Opus 天井。`fable` は Step B (implement) で
+  3-B-gate の人間承認を得た IU のみ。**Step A (explore) / Step C (verify) / Step B-2 (独立レビュー) /
+  Review 選択 2 (review-expert) は read-only につき承認があっても `fable` 禁止**
 - `~/.claude/skills/_shared/apply-completion-checklist.md` — apply 完了手順の正本。op-codev は Direct apply なので **Section 2 の 5 段階順序** (自己検証 → commit) を使う (op-run の Section 2-A = commit 先行 ではない)
 - `~/.claude/skills/op-code-review/SKILL.md` — Step B 自己検証 / Step B-2 独立レビュー が共通で使う correctness review の正本 (手順 / angle / verify 判定 / 出力形式)
 - `~/.claude/skills/op-plan/SKILL.md` — Phase 0/Phase 1 方法論 (流用元)
@@ -352,6 +362,7 @@ echo "branch created: ${BRANCH_NAME}"
 // op-codev Step A — 探索フェーズ (read-only)
 Agent({
   subagent_type: "op-skill:feature-expert",
+  model: "sonnet",                 // read-only 経路につき `fable` 禁止 (model-selection.md (>=5) §7.2 F3)
   description: "op-codev explore: <IU名>",
   prompt: `
     invocation_mode: op_managed
@@ -400,7 +411,50 @@ Agent({
 (フィードバックは Step B の実装プロンプトに反映されます)
 ```
 
-親が OK またはフィードバックを返したら Step B へ進む。
+親が OK またはフィードバックを返したら **3-B-gate (model 判定)** を経て Step B へ進む。
+
+### 3-B-gate: Step B の model 決定と Fable escalation gate
+
+Step B (implement) の spawn model を確定する段。**worker の自動選択は Opus 天井**であり、
+controller が難度を自己判定して Fable を投入することはない (`model-selection.md` (>=5) §7.2 F1)。
+
+1. **base model を引く** — `model-selection.md` §5.3 (feature-expert × IU の task_complexity)。
+   `routine` / `extension` → Sonnet、`design` / `integration` / `api-design` → Opus。
+2. **Fable 提案の候補か判定する** (§7.2 F4 の AND。1 つでも欠ければ提案せず base model で Step B へ):
+   - base model が **Opus**
+   - kill switch 不在 (`OP_FABLE_DISABLE=1` なし、op-config `fable_escalation.enabled` が `false` でない)
+   - degrade 中でない
+   - **難度シグナル D1〜D6 が 2 つ以上** — 判定材料は Checkpoint A の code_map:
+     D1 = 対象が 3 module 以上 / 10 file 以上、D2 = 公開 API・後方互換・migration (`api-design`)、
+     D3 = 既存重複実装の統合 (`integration`)、D4 = `risks` に並行性・状態機械・トランザクション整合、
+     D5 = §7.1.3 の sensitive glob 該当、D6 = 同 IU で Step B 再実行 2 回目以降 (Checkpoint B 差し戻し済)
+3. **候補なら Checkpoint A の返答直後に 2 択で提案する** (既定は Opus 維持):
+
+```
+## model 提案 (IU: <IU名>)
+
+この IU は難度シグナルが複数立っています:
+- D<n>: <1 行根拠>
+- D<n>: <1 行根拠>
+
+実装 (Step B) の model をどうしますか?
+1. **Opus のまま実装する** (推奨・既定)
+2. **Fable へ昇格する** — コストが上振れします
+
+昇格しても影響するのは **この IU の Step B (実装) だけ**です。
+Step A (探索) / Step C (検証) / review-expert は read-only のため Opus 以下で固定されます。
+```
+
+- **無応答 / 曖昧な返答は非承認**として扱い、Opus で実行する (§7.2 F5)。
+- ユーザーが自分から「この IU は Fable で」と言った場合は D 条件を問わず承認扱い (F4 例外)。
+- 承認 scope は **当該 IU の Step B のみ** (Checkpoint B 差し戻しによる Step B 再実行を含む)、同 session 内。
+  **他の IU には引き継がない** — IU ごとに判定し、候補なら都度提案する。
+- 本 gate は **IU ごとに通る**。Checkpoint B から差し戻して Step B を再実行する場合も本 gate を再通過する
+  (D6 が立つのはこの経路)。op-codev は元から checkpoint が会話ターンである設計のため、これは
+  §7.2 F4 が禁じる「走っている自動フローを中断する追加提案」には当たらない。
+- 承認したら Step D の PR body と フェーズ4 完了サマリに
+  `<!-- op-model-escalated: feature-expert:fable:implement:<IU名> -->` を残す。
+- 承認済み Fable が rate limit / unavailable なら Opus へ degrade し、Checkpoint B でその旨を伝える (§7.2 F8)。
 
 ### Step B: Implement spawn
 
@@ -408,6 +462,7 @@ Agent({
 // op-codev Step B — 実装フェーズ
 Agent({
   subagent_type: "op-skill:feature-expert",
+  model: "<3-B-gate で確定した値: sonnet | opus | (承認済のときのみ) fable>",
   description: "op-codev implement: <IU名>",
   prompt: `
     invocation_mode: op_managed
@@ -480,7 +535,7 @@ model は IU の重さで選ぶ (`_shared/model-selection.md` の task_complexit
 Agent({
   subagent_type: "op-skill:debug-expert",
   description: "op-codev review: <IU名>",
-  model: "sonnet",   // 重い IU は "opus"
+  model: "sonnet",   // 重い IU は "opus"。read-only レビューにつき `fable` 禁止 (model-selection.md (>=5) §7.2 F3)
   prompt: `
     invocation_mode: op_managed
 
@@ -561,6 +616,7 @@ Medium / Low は CHECKPOINT B に列挙するのみで、対応要否は親が�
 // op-codev Step C — 検証フェーズ (read-only)
 Agent({
   subagent_type: "op-skill:feature-expert",
+  model: "sonnet",                 // read-only 経路につき `fable` 禁止 (model-selection.md (>=5) §7.2 F3)
   description: "op-codev verify: <IU名>",
   prompt: `
     invocation_mode: op_managed
@@ -687,6 +743,8 @@ checkpoint で各 diff を確認済みです。
 #### Review 選択 2: review-expert (7-lens)
 
 **選択 2 を選んだ場合のみ** `references/heavy-review-flow.md` を読んで実行する。
+review-expert は read-only 監査のため **`fable` 禁止** — model は `model-selection.md` §5.1 / §7.1
+(Opus default、narrow opt-down 該当時のみ Sonnet) に従う (§7.2 F3)。
 lens tier 判定 → review_round 導出 → review-expert spawn → 結果提示 → approve 時の
 marker/label publish → needs-fix 時の再ループまでの詳細手順がそこにある
 (選択 1 の場合はこのファイルを読む必要はない)。
@@ -715,6 +773,12 @@ marker/label publish → needs-fix 時の再ループまでの詳細手順がそ
 
 ### ループ回数
 - Step B 再実行: <N 回> (checkpoint B でフィードバックを注入した回数)
+
+### model
+- Step A / C / B-2 (read-only): Sonnet 固定 (重い IU の B-2 は Opus)
+- Step B: <IU ごとに sonnet / opus、Fable 昇格があれば「<IU名>: Fable (承認済、D1/D4)」と明示。
+  昇格なしなら「全 IU Opus 天井 (Fable 昇格なし)」>
+- degrade があればその旨 (例: `<IU名>: Fable 承認済だが unavailable のため Opus で実行`)
 
 ### 次のアクション
 - PR レビューが完了したら `/op-merge` でマージを実行してください

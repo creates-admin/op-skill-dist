@@ -6,7 +6,13 @@ additive_only_policy:
   - breaking change (既存フィールドの削除 / 型変更 / required 化 / marker 仕様変更) のみ schema_version を bump する
   - 現行 schema_version 一覧は `~/.claude/skills/_shared/version-check.md` の
     「## _shared ファイル 現行 schema_version 一覧」節を参照する
-notes: v16 (2026-07-29, additive) — ADR-0030 決定3 (A) B3a: 「scan 出力 envelope 契約」節と
+notes: v16 (2026-07-31, additive) — model-selection.md v5 (Fable escalation gate) 追従。
+       「model / task_complexity routing」節に `fable` の取り扱い (自動選択禁止 = worker 天井 Opus /
+       write phase での人間承認 opt-in / read-only spawn は承認があっても禁止 / config override 無効) を
+       要約追記し、spawn 3 パターン template に該当注記を追加。参照 pin を (>=5) へ同期。
+       `model` field の値域に optional な新値を 1 つ追加する additive 変更であり、既存 field の型・必須性・
+       marker schema は不変ゆえ schema_version 据置 (additive_only_policy に従う)。
+       v16 (2026-07-29, additive) — ADR-0030 決定3 (A) B3a: 「scan 出力 envelope 契約」節と
        「scan scope mode 契約 (3 モード)」節を新設 (L1/L2 に散在していた重複記述の抽出先正本)。
        canonical scan schema に `scope_origin` を optional 追加。refute (skeptic) 契約は
        _shared/refute-contract.md へ分離 (本ファイルは肥大回避のため保持しない)。
@@ -70,10 +76,13 @@ op-scan / op-run / op-merge は、ドメイン作業を `~/.claude/agents/` の 
   (spec-expert は ADR-0017 W1b で active 化済)。
 - `_shared/markers/labels-and-markers.md` — Issue / PR / Review コメントに埋める hidden marker と
   GitHub label の正本一覧および semantics。
-- `_shared/model-selection.md` (>=3) — expert spawn 時の model (Opus / Sonnet / Haiku、具体 version は §1) 選択ルール
+- `_shared/model-selection.md` (>=5) — expert spawn 時の model (Opus / Sonnet / Haiku、具体 version は §1) 選択ルール
   および `task_complexity` 区分の正本。本ファイルの spawn schema は `model:` / `task_complexity:` field
   を持つが、その意味論・mapping table・override 優先順位はすべて本 pointer 先に集約される。
   パターン3 (review) の `model: "opus"` 注釈は §7.1 narrow opt-down 適用時に Sonnet になる ((>=3) で追加)。
+  **`fable` は controller が自動選択しない opt-in 専用 tier** — write phase (apply / implement) で
+  §7.2 の人間承認を得た spawn のみが渡せる。**read-only spawn (パターン1 / パターン3 / post-check /
+  investigation / enrichment / refute / Utility Worker) は承認があっても `fable` 禁止** ((>=5) で追加)。
 
 ---
 
@@ -209,6 +218,7 @@ plugin 内の component は **`op-skill:` prefix 付き**で登録されるた�
 Agent({
   subagent_type: "op-skill:<domain>-expert",   ← plugin scoped 名 (「Plugin scoped-name 規約」節)
   model: "<from model-selection.md §5.2 by area complexity (single/typical→sonnet, complex/critical→opus)>",
+                                    ← read-only 経路につき `fable` 禁止 (model-selection.md §7.2 F3)
   description: "scan: <domain>",
   prompt: """
     invocation_mode: op_managed
@@ -236,6 +246,7 @@ Agent({
 Agent({
   subagent_type: "op-skill:<domain>-expert",   ← plugin scoped 名 (「Plugin scoped-name 規約」節)
   model: "<from model-selection.md §5.3 by cluster.task_complexity (routine/extension→sonnet, design/integration/api-design→opus)>",
+                                    ← write 経路。§7.2 の承認を得た cluster のみ "fable" になりうる (既定は Opus)
   isolation: "worktree",            ← 必須
   description: "apply: cluster-<id>",
   prompt: """
@@ -283,6 +294,7 @@ Agent({
 Agent({
   subagent_type: "op-skill:review-expert",   ← plugin scoped 名 (「Plugin scoped-name 規約」節)
   model: "opus",                    ← global review は Opus default。§7.1 narrow opt-down 適用時は Sonnet (model-selection.md §5.1 / §7.1、具体 version は §1)
+                                    ← read-only 経路につき `fable` 禁止 (§7.2 F3。payload の model_used enum も opus/sonnet のみ)
   isolation: "worktree",            ← 別 worktree で PR ブランチを checkout
   description: "global review PR #<N>",
   prompt: """
@@ -324,7 +336,7 @@ spawn 時に渡す追加 field:
 
 | field | 値 | 用途 |
 |---|---|---|
-| `model` | `"opus"` \| `"sonnet"` \| `"haiku"` | `Agent({ model: ... })` に渡す。OP-managed mode では agent frontmatter `model:` より優先 |
+| `model` | `"opus"` \| `"sonnet"` \| `"haiku"` (自動選択の値域) / `"fable"` (承認済み write spawn のみ、下記) | `Agent({ model: ... })` に渡す。OP-managed mode では agent frontmatter `model:` より優先 |
 | `task_complexity` | `routine` \| `extension` \| `design` \| `integration` \| `api-design` | apply spawn 時に prompt 内へ埋め、agent が task の重さを把握できるようにする |
 
 controller の決定経路:
@@ -333,7 +345,20 @@ controller の決定経路:
    `区画 complexity` を `op-patrol` の区画スコアリングから取得 (scan / patrol audit 経路)
 2. `model-selection.md` §5 mapping table を引いて model を決定
 3. `--quality high/balanced/low` flag / `OP_QUALITY` env で override
-4. 決定値を `Agent({ model: ... })` に渡す
+4. **write phase (apply / implement) のみ**: `model-selection.md` §7.2 の Fable escalation gate を評価。
+   候補条件を満たしたら人間に提案し、**承認された場合のみ** `"fable"` へ昇格する (既定は非承認 = Opus)
+5. 決定値を `Agent({ model: ... })` に渡す
+
+**`fable` の扱い (model-selection.md (>=5) §7.2 が正本、ここは要約)**:
+
+- controller は `fable` を **自動選択しない**。§5 mapping / `--quality high` / degrade 復帰のどの経路も
+  `fable` を返さない (worker 自動選択の天井 = Opus)
+- `fable` を渡してよいのは **op-run apply / op-codev implement の write spawn** で、§7.2 F5 の
+  人間承認を得たものだけ。承認 scope は提示した cluster / IU、同 session 内に限る
+- **パターン1 (scan / audit) / パターン3 (review) / post-check / investigation / enrichment /
+  refute / Utility Worker (scout / spec-expert) は `fable` 禁止** (承認があっても不可、§7.2 F3)。
+  review 経路は payload schema の `model_used` enum (`["opus","sonnet"]`) でも弾かれる
+- `op-config.yaml` の `model_overrides.*: fable` は無効値 — 無視して mapping 値で spawn し warning を残す (§7.2 F6)
 
 Direct Mode (人間が直接 expert を呼ぶ場合) は controller を介さないため、`agents/*.md` の frontmatter
 `model:` が default になる。OP-managed mode と Direct Mode の挙動分離は `_shared/invocation-mode.md` を

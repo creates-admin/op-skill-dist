@@ -456,7 +456,7 @@ designer-expert に再注入される (決定C handoff 配線、handoff loss 緩
 - `~/.claude/skills/_shared/active-expert-registry.md` (>=2) — spawn 前の active expert 確認 (designer-expert / ux-ui-audit-expert)。
 - `~/.claude/skills/_shared/issue-enrichment.md` (>=2) — handoff の Input contract (`issue_draft` / `options`)、`with_design_plan='gate_only'` (§4)、spawn cost ledger (§11)。
 - `~/.claude/skills/_shared/op-config-schema.md` (>=1) — `playground` (§12 max_patterns / pattern_count) / `design_system_baseline` (§11 craft floor baseline)。
-- `~/.claude/skills/_shared/model-selection.md` (>=3) — op-explore は決定K で全役 Opus 固定 (§5.4.x の op-explore 例外注記)。
+- `~/.claude/skills/_shared/model-selection.md` (>=5) — op-explore は決定K で全役 Opus 固定 (§5.4.x の op-explore 例外注記)。**Fable 昇格の対象外** (§7.2 F3: craft ceiling は Opus で確保する方針を変えない)。
 - `~/.claude/skills/_shared/version-check.md` (>=2) — schema_version 整合性チェック (フェーズ0)。
 - `~/.claude/skills/expert-design/references/visual-craft-tiers.md` — craft floor / craft Tier の方法論 (ADR-0013 決定I)。
 - `~/.claude/skills/expert-design/references/visual-quality-rubric.md` — craft floor Hard blocker 正本。

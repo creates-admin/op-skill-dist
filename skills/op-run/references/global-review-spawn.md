@@ -64,6 +64,10 @@ notes: v3 additive (2026-07-29, Wave A3 F07/G4): §4-1-b smoke test (dev-time �
        §4-2 spawn template の `model: "opus"` を `model: "${REVIEW_MODEL}"` に変更し、review-expert に
        model_used / model_decision_reason を渡して op-review-meta に転写させる。canonical 仕様は
        `_shared/model-selection.md` (>=3) §7.1。op-run/SKILL.md の参照 pin を (>=2) に同期すること。
+       v3 additive (2026-07-31): model-selection.md v5 §7.2 (Fable escalation gate) 追従。§4-1-b に
+       「`REVIEW_MODEL` の値域は opus / sonnet のみ」を明記 (global review は全 phase read-only ゆえ
+       cluster の Fable 昇格が波及しない = §7.2 F3)。判定ロジック・bash 実装・payload schema は不変で、
+       本ファイルの参照 pin を (>=5) へ同期する記述追加のみ (schema_version 据置)。
        v3 additive (2026-06-14, Refs #720): §4-1-b に sensitive ∩ doc-only small PR の investigate-phase
        Sonnet 段階下げ判定 (CUMULATIVE_NONDOC / SENSITIVE_INVESTIGATE_SONNET) を追加。§4-2-a-pre の
        investigate model 分岐に対応。canonical 仕様は `_shared/model-selection.md` (>=4) §7.1.3
@@ -201,8 +205,12 @@ test "$CURRENT_HEAD" = "$PR_HEAD_SHA" || {
 
 ### 4-1-b. review_model 決定 (narrow opt-down judgment)
 
-司令官は review-expert spawn 前に、対象 PR が `model-selection.md` (>=4) §7.1 の narrow opt-down
+司令官は review-expert spawn 前に、対象 PR が `model-selection.md` (>=5) §7.1 の narrow opt-down
 5 条件 AND を満たすかを判定し、`REVIEW_MODEL` (`opus` / `sonnet`) と `REVIEW_MODEL_REASON` を確定させる。
+
+> **`REVIEW_MODEL` の値域は `opus` / `sonnet` のみ (§7.2 F3 (>=5))**。global review は全 phase が
+> read-only 監査であり、cluster が Fable 昇格 (op-run 1-2-g) を承認済であっても review 側へは波及しない。
+> payload schema の `model_used` enum も `["opus","sonnet"]` であり、`fable` は schema validation で落ちる。
 判定の canonical 仕様は `_shared/model-selection.md` (>=4) §7.1 (5 条件 / LOC 正規化 / sensitive glob /
 `--quality` 相互作用 / §7.1.3 investigate-phase 例外) を参照する。本節はその bash 実装を提供する。
 

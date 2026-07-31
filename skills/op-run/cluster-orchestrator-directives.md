@@ -1,7 +1,13 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-06-14
-notes: v1.4.1 相当 (2026-07-24, Issue #61): フェーズ4 の auto-fix label 付与 step を
+notes: v1.5 相当 additive (2026-07-31): model-selection.md v5 §7.2 (Fable escalation gate) 追従。
+       ClusterOrchestratorInput に optional `apply_model` を追加し、フェーズ2 の apply-expert spawn は
+       `apply_model` (未指定なら `model`) を使うことを明記。CO は model を自分で昇格・降格しない
+       (承認 gate は controller の op-run 1-2-g のみ = §7.2 F1)。post-check / global review /
+       aux post-check への `fable` 波及禁止 (§7.2 F3) と unavailable 時の Opus degrade (§7.2 F8) を明記。
+       optional field 追加のみで ClusterSummary schema・verdict union は不変ゆえ schema_version 据置。
+       v1.4.1 相当 (2026-07-24, Issue #61): フェーズ4 の auto-fix label 付与 step を
        `op issue edit-labels "$PR_NUMBER"` から `op pr edit-labels --pr "$PR_NUMBER"` へ差し替え。
        前者は mcp channel で call-spec が issue_labels kind に載り、ingest の url_matches_issue が
        PR の /pull/N を必ず拒否して block する構造的欠陥 (Issue #61) を持つため。後者は pr_labels kind
@@ -94,7 +100,11 @@ interface ClusterOrchestratorInput {
 
   // apply-expert 情報
   expert:          string;     // active apply expert 名 (1-2-d 正規化済)
-  model:           string;     // model-selection.md §6 で controller が決定
+  model:           string;     // model-selection.md §6 で controller が決定 (CO 自身の spawn model と同値)
+  apply_model?:    string;     // optional。フェーズ2 の apply-expert spawn に使う model。
+                               //   未指定なら model と同値。controller が op-run 1-2-g (Fable escalation gate) で
+                               //   **人間承認を得た cluster のみ** "fable" が入る (model-selection.md (>=5) §7.2)。
+                               //   CO はこの値を自分で書き換えない (自動昇格・自動降格ともに禁止)。
   module:          string;     // ドメイン / モジュール名 (clustering 由来)
   worktree_path:   string;     // op run worktree-provision 済みのパス
 
@@ -185,9 +195,22 @@ compact summary に記録して ClusterOrchestrator のライフサイクルを�
 ### 入力
 
 - `worktree_path` (provision 済み)
-- `expert` / `model`
+- `expert` / `apply_model` (未指定なら `model`)
 - フェーズ1 で抽出した `issue_directives_text`
 - `files_allowed` / `files_forbidden`
+
+> **model の扱い (model-selection.md (>=5) §7.2)**: apply-expert の spawn model は
+> **payload の `apply_model` をそのまま使う** (`Agent({ model: "${APPLY_MODEL:-$MODEL}" })`)。
+> - CO は model を **自分で決め直さない**。難度が高く見えても `fable` へ昇格してはならない
+>   (昇格の決定権は人間、承認 gate は controller の 1-2-g だけ = §7.2 F1)。
+> - `apply_model == "fable"` の場合は **人間承認済み**の意味なので、そのまま spawn してよい。
+>   その場合フェーズ4 の PR body に
+>   `<!-- op-model-escalated: ${EXPERT}:fable:apply:${CLUSTER_ID} -->` を埋める。
+> - **本フェーズ以外に `fable` を波及させない**: フェーズ3.5 post-check / フェーズ5-6 global review /
+>   aux post-check は read-only 監査であり `fable` 禁止 (§7.2 F3)。これらは従来どおり
+>   `post-check-dispatcher.md` / `global-review-spawn.md` の model 決定に従う (Opus / narrow opt-down)。
+> - `apply_model` が `fable` かつ rate limit / unavailable の場合は **Opus へ degrade** し
+>   `<!-- op-model-degraded: ${EXPERT}:unavailable:apply -->` を記録する (§7.2 F8)。fable への再試行はしない。
 
 ### 実行
 

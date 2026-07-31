@@ -162,3 +162,10 @@ test("normalizeArgs は goal のみ (axes/preset 無し) で goal-derived 単一
   assert.equal(out.axis_source, "goal-derived");
   assert.equal(out.axes.length, 1);
 });
+
+// ---- fable guard (model-selection.md (>=5) §7.2 F3: investigator は read-only ゆえ fable 禁止) ----
+test("normalizeArgs は investigator model の fable を opus へ矯正する", () => {
+  const out = na.run({ repo_root: "/repo", goal: "横断調査したい", model: "fable" });
+  assert.equal(out.model, "opus");
+  assert.deepEqual(out.fable_guard_corrections, ["investigator"]);
+});

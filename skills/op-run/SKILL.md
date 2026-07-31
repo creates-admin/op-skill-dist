@@ -10,7 +10,14 @@ effort: max
 <!--
 schema_version: 3
 last_breaking_change: 2026-06-15
-notes: v3.2 相当 additive (2026-07-29, Wave A2 F03/F01): orphan だった references/parallel-dispatch-policy.md
+notes: v3.3 相当 additive (2026-07-31): model-selection.md v5 §7.2 (Fable escalation gate) 実装。
+       フェーズ1 に 1-2-g (apply spawn の Fable 昇格提案 gate) を新設し、承認済み cluster にのみ
+       `apply_model: "fable"` を載せる。CO 自身 / investigation (2-A) / post-check (3.5) /
+       global review (4) は従来どおり Opus 天井 (read-only 側は §7.2 F3 で Fable 禁止)。
+       ClusterOrchestratorInput に optional `apply_model` を additive 追加、plan file の実行サマリと
+       フェーズ5 完了報告に model 昇格の 1 行を追加。参照 pin を model-selection.md (>=5) へ同期。
+       既存 field 不変・非対話経路 (--auto) の挙動不変ゆえ schema_version 据置。
+       v3.2 相当 additive (2026-07-29, Wave A2 F03/F01): orphan だった references/parallel-dispatch-policy.md
        を削除し、一意情報 (min(16,cores-2) / 探知は partition 不要 / max-parallel は hard cap でない) を
        実行モード節 + 2-B-partition 節へ吸収 (並列 dispatch 方針の正本は両節と明記)。1-2-judge / 2-A-2 の
        Workflow 呼出に `_shared/workflow-calling.md` §1-§2 pointer と防御的 `.result` unwrap を追記。挙動不変。
@@ -172,7 +179,7 @@ partition (parallel_clusters / serial_chains) が意味を持つのは write を
 - `~/.claude/skills/_shared/pr-templates.md` (>=13) — PR 本文 (二層構造必須) ・review コメント (op-review-meta + op-review-finding 必須) ・UX/UI post-check (op-ux-ui-audit) ・Security post-check (op-security-post-check, 8 観点 + usable_security / aux post-check 状態) ・op-post-check-meta header ・op-security-requires-aux-post-check hidden marker ・op-manual-override block (gate 12〜13 / 15〜16 例外運用) ・pro-review-expert は Issue routing 対象外 ・pro-env-expert ラベル ・Needs Human Decision テンプレ
 - `~/.claude/skills/_shared/common-setup.md` (>=2) — Invocation Mode Overrides
 - `~/.claude/skills/_shared/version-check.md` (>=2) — schema_version 整合性チェック手順 + Invocation Mode 上の責務分離
-- `~/.claude/skills/_shared/model-selection.md` (>=4) — expert spawn 時の model (Opus / Sonnet / Haiku、具体 version は §1) 選択 / task_complexity / 区画 complexity の canonical 正本。op-run は apply spawn 時に Issue の task_complexity と expert から model を決定 (主 consumer)。post-check (フェーズ 3.5) は常に Opus。global review (フェーズ 4) は Opus default だが §7.1 narrow opt-down 5 条件 AND を満たす狭い PR は Sonnet、さらに §7.1.3 (>=4) sensitive ∩ doc-only small PR は investigate phase のみ Sonnet に段階下げ (verify/gate は Opus 固定)。`--quality` flag による上書き対応
+- `~/.claude/skills/_shared/model-selection.md` (>=5) — expert spawn 時の model (Opus / Sonnet / Haiku、具体 version は §1) 選択 / task_complexity / 区画 complexity の canonical 正本。op-run は apply spawn 時に Issue の task_complexity と expert から model を決定 (主 consumer)。post-check (フェーズ 3.5) は常に Opus。global review (フェーズ 4) は Opus default だが §7.1 narrow opt-down 5 条件 AND を満たす狭い PR は Sonnet、さらに §7.1.3 (>=4) sensitive ∩ doc-only small PR は investigate phase のみ Sonnet に段階下げ (verify/gate は Opus 固定)。`--quality` flag による上書き対応。**§7.2 (>=5) Fable escalation gate**: worker の自動選択は Opus 天井で、`fable` は 1-2-g で人間承認を得た cluster の **apply spawn のみ**。investigation (2-A) / post-check (3.5) / global review (4) / ClusterOrchestrator 自身は read-only 側 or orchestrator であり **`fable` 禁止**
 - `~/.claude/skills/_shared/op-config-schema.md` (>=1) — `op-config.yaml` schema 定義の canonical 正本。op-run は本ファイルの `model_overrides` / `quality_defaults` を読み、§6 controller 決定フロー step 2-3 で適用する
 - `~/.claude/skills/op-run/references/plan-mode-gate.md` (>=1) — フェーズ -1 (EnterPlanMode) / フェーズ 1-3 (ExitPlanMode + plan file) の詳細仕様。SKILL.md 本体 god file 抑制のため分離 (v2 で追加)
 - `~/.claude/skills/op-run/references/issue-health-check.md` (>=1) — フェーズ1.5 (Issue 健全性判定 + 正規化委譲 + 派生 Issue 取り込み + ループ防止 + タイムアウト) の詳細仕様。SKILL.md 本体 god file 抑制のため分離 (Issue #425 Stage 2)
@@ -660,6 +667,84 @@ export EFFECTIVE_MAX_PARALLEL OP_RUN_MAX_PARALLEL_DYN
 `op issue create` / `op pr create` / `op issue comment` の **並列化は禁止** (controller sequential ループ維持)。
 worktree hard cap は `_shared/worktree-ops.md (>=3)` の hard gate (32) と soft warning (16) で別レイヤから防御する。
 
+### 1-2-g. Fable escalation gate (apply spawn の昇格提案、model-selection.md (>=5) §7.2)
+
+/**
+ * 機能概要: cluster manifest 確定後・plan gate (1-3) 直前に、難度の高い cluster の **apply spawn** を
+ *           Fable へ昇格するかを人間に提案し、承認された cluster にだけ `apply_model: "fable"` を持たせる。
+ * 作成意図: worker の自動選択は Opus 天井 (§7.2 F1) とし、最上位 tier のコストは人間の承認を経てのみ
+ *           発生させる。難度の見立ては controller が出すが、支払うかどうかの決定権は人間に残す。
+ * 注意点: 提案対象は apply spawn のみ。ClusterOrchestrator 自身 / investigation (2-A) /
+ *         post-check (3.5) / global review (4) は対象外 (§7.2 F3 の read-only 禁止 + orchestrator は base model)。
+ *         提案は本 gate の 1 回に閉じる — 実行開始後に候補条件を満たしても追加提案しない (F4 末尾)。
+ */
+
+`op cluster max-parallel` (1-2-f) まで終わった cluster manifest を入力に、**apply spawn の model 昇格**を
+提案する。controller は自動昇格しない (§7.2 F1: 難度の見立ては提案材料であって決定権ではない)。
+
+#### 1-2-g-1. gate skip 判定 (いずれか true なら提案せず全 cluster Opus 天井)
+
+| 条件 | 挙動 |
+|---|---|
+| `--auto` (非対話) | 提案 skip。plan / 実行 report に §7.2 F7 の 1 行を記録して続行 (停止しない) |
+| `OP_FABLE_DISABLE=1` | 提案 skip (kill switch) |
+| op-config `fable_escalation.enabled: false` | 提案 skip (`op-config-schema.md` §5.1) |
+| 候補 cluster が 0 件 (1-2-g-2 の結果) | 提案せず次段へ (無言で通過してよい) |
+
+#### 1-2-g-2. 候補判定 (cluster ごと、§7.2 F4 の AND)
+
+1. `cluster.model == "opus"` (= dominant `task_complexity ∈ {design, integration, api-design}`)
+2. `model_degraded` marker が残存していない (degrade 中は昇格提案しない、F8)
+3. **難度シグナル D1〜D6 が 2 つ以上**成立 (定義の正本は §7.2 F4)
+
+Phase 1 末時点で controller が持つ材料からの判定対応:
+
+| id | op-run での判定材料 (この時点で入手済のもの) |
+|---|---|
+| D1 | `cluster.files_declared` の module 数 >= 3 または file 数 >= 10 |
+| D2 | cluster 内 Issue の `task_complexity` に `api-design` を含む |
+| D3 | 同じく `integration` を含む |
+| D4 | Issue 本文 / enrichment 出力の risks に並行性・状態機械・トランザクション整合が現れる |
+| D5 | `files_declared` が `model-selection.md` §7.1.3 の sensitive glob に該当 (判定式は `global-review-spawn.md` §4-1-b の `SENSITIVE_PATTERNS` を流用) |
+| D6 | 当該 Issue 群が前 run で `requires_redo` / `review_round >= 2` を経験している (Issue コメントの review state から判る場合のみ。判らなければ不成立として扱う) |
+
+**investigation (2-A) 以降に判明する新情報での再提案は行わない** (§7.2 F4 末尾)。実行中に「昇格すべきだった」と
+判明した場合は Opus のまま完走し、フェーズ 5 の完了サマリに 1 行残す
+(`次 run で #<issues> は Fable 昇格の候補: <理由>`)。
+
+#### 1-2-g-3. 提案と承認 (AskUserQuestion、既定は Opus)
+
+候補が 1 件以上あれば **plan gate (1-3) を呼ぶ前に** `AskUserQuestion` で提案する。
+候補 cluster ごとに 2 択、**既定 (推奨) は Opus 維持**:
+
+```
+質問: cluster <id_short> (#<issues>) の実装 model を Fable へ昇格しますか?
+  1. Opus のまま実行する (推奨・既定)
+  2. Fable へ昇格する — コストが上振れします
+説明に必ず含める: 担当 expert / base model (opus) / 成立した難度シグナル (D<n>: 1 行根拠) /
+                  昇格の影響範囲 (この cluster の apply spawn のみ。review・post-check・investigation は Opus 固定)
+```
+
+- 複数候補がある場合は cluster 単位で選ばせる (`multiSelect: true` で「昇格する cluster」を選択させてよい)。
+- **無応答 / 曖昧な返答は非承認** (Opus 維持、§7.2 F5)。
+- ユーザーが起動時から「この Issue は Fable で」と明示指示していた場合は、その cluster は D 条件を
+  問わず承認済みとして扱う (F4 例外)。
+
+#### 1-2-g-4. 承認結果の反映
+
+```text
+承認された cluster:   cluster.apply_model = "fable"   (cluster.model は "opus" のまま据え置く)
+非承認 / skip の cluster: cluster.apply_model = cluster.model  (= "opus")
+```
+
+- `cluster.model` は **ClusterOrchestrator 自身の spawn model** として使う値であり、昇格させない
+  (orchestrator は調整役であって write worker ではない)。昇格は `apply_model` にだけ載せる。
+- 承認 scope は当該 cluster の apply spawn (review-fix loop の再 apply を含む)、同 session 内 (§7.2 F5)。
+  他 cluster へ横展開しない。
+- 承認された cluster は 1-3 の plan file に 1 行明示する (1-3-1 項目 1 の直下)。
+- ClusterOrchestrator は PR body に `<!-- op-model-escalated: <expert>:fable:apply:<cluster_id> -->` を
+  埋める (`cluster-orchestrator-directives.md` フェーズ2 / フェーズ4)。
+
 ### 1-3. ユーザー承認 (対話モード、v2: ExitPlanMode + plan file)
 
 クラスタリング (1-2) 完了後、司令官は **plan file を書き出して `ExitPlanMode` tool を呼び**、
@@ -678,6 +763,9 @@ worktree hard cap は `_shared/worktree-ops.md (>=3)` の hard gate (32) と sof
 **詳細は末尾へ折りたたむ** (progressive disclosure)。司令官は以下の順で書き出す:
 
 1. **実行サマリ** (1 行: N issue → M cluster ・並列 k ・推定 t ＋ 起動モード `--auto` 未使用 / `--normalize` on|off) + **wave タイムライン** (並列/直列を ASCII で視覚化)
+   - **model 行 (1 行)**: 1-2-g の結果を明示する。昇格ゼロなら `model: 全 cluster Opus 天井 (Fable 昇格なし)`、
+     承認があれば `model: <id_short> のみ Fable 昇格 (承認済) / 他は Opus`。skip した場合は理由
+     (`--auto` / kill switch / 候補なし) を併記する
 2. 健全性チェック結果 (フェーズ1.5 ダイジェスト) ＋ **未トリアージ複数なら soft nudge を 1 行転記** (1.5-1-b、文言正本は `references/issue-health-check.md`)
 3. **Issue 一覧 (1 行)** — 各 issue は `#NN <title> <verdict emoji> [op-spec-ref link]` の 1 行 (内容解説は正本へ委譲)。**未トリアージ (verdict / op-spec-ref なし) は title のみで degrade** (op-spec 非依存・後方互換)
 4. クラスタ一覧 (最優先 blocking / 並列実行候補 / 直列化対象 / 人間判断待ち の 4 セクション、下記テーブル形式、**confidence と根拠を必ず含める**)
@@ -1010,6 +1098,7 @@ for each cluster in parallel_clusters:
     --argjson issues   "$(printf '%s\n' "${cluster.issues[@]}" | jq -R . | jq -s .)" \
     --arg expert       "${cluster.expert}" \
     --arg model        "${cluster.model}" \
+    --arg apply_model  "${cluster.apply_model:-${cluster.model}}" \
     --arg module       "${cluster.module}" \
     --arg worktree     "${cluster.worktree_path}" \
     --argjson inv_rep  "${cluster.investigation_report_json}" \
@@ -1021,12 +1110,14 @@ for each cluster in parallel_clusters:
     --arg ts           "${RUN_TS}" \
     --arg session_id   "${OP_RUN_SESSION_ID}" \
     '{cluster_id:$cluster_id, id_short:$id_short, issues:$issues,
-      expert:$expert, model:$model, module:$module, worktree_path:$worktree,
+      expert:$expert, model:$model, apply_model:$apply_model, module:$module, worktree_path:$worktree,
       investigation_report:$inv_rep, files_likely_to_modify:$files_m,
       files_allowed:$files_a, files_forbidden:$files_f,
       base_sha:$base_sha, base_ref:$base_ref, ts:$ts, session_id:$session_id}')
 
   # Agent tool で ClusterOrchestrator を spawn (1 メッセージに全 parallel cluster 分を並べる)
+  # CO 自身の model は常に cluster.model (= Opus 天井)。1-2-g で承認された昇格は payload の
+  # apply_model にのみ載り、CO がフェーズ2 の apply-expert spawn で使う (model-selection.md §7.2 F1/F3)
   Agent({
     subagent_type: "op-skill:feature-expert",
     description: "ClusterOrchestrator: ${cluster.id_short}",
@@ -1372,6 +1463,12 @@ controller は `verdict: "terminal_new_pr"` と `new_pr_url` を compact summary
 ### approve_with_followup クラスタ
 - forms-1: Medium/Low finding が残存。follow-up Issue: <URL>
   ClusterOrchestrator が起票済み。マージ後に対応検討
+
+### model 昇格 (1-2-g Fable escalation gate)
+- 承認された昇格: `auth-1: feature-expert を Fable で apply (承認済、D1/D5)` / 無ければ「なし (全 cluster Opus 天井)」
+- skip した場合はその理由 (`--auto` / kill switch / 候補なし) を 1 行
+- **次 run 向けメモ**: 実行中に昇格が有効だったと判明した cluster があれば
+  `次 run で #<issues> は Fable 昇格の候補: <理由>` を 1 行残す (run 途中では追加提案しない、§7.2 F4)
 
 ### follow-up 候補 (Issue 自動起票はしない — approve_with_followup 時を除く)
 apply report に `recommended_followup_experts` / `needs_human_decision` (opt-out 経路) /

@@ -114,6 +114,10 @@ const scopedAgentType = (n) => (n && !BUILTIN_AGENTS.has(n) ? `op-skill:${n}` : 
 log(
   `op-patrol-audit: regions=${input.regions.length} run_id=${input.run_id} today=${input.today}`
 );
+if (input.fable_guard_corrections.length)
+  log(
+    `[fable-guard] read-only spawn への fable 指定を opus へ矯正: ${input.fable_guard_corrections.join(", ")} (model-selection.md §7.2 F3)`
+  );
 
 // ---- audit stage: region × expert を flat に read-only 並列 spawn ----
 // flat (region, expert) pair。各 spawn は {findings:[scan-finding]} を返す。
@@ -248,6 +252,10 @@ function normalizeArgs() {
   if (!a.today)
     throw new Error("op-patrol-audit: args.today (YYYY-MM-DD) required (agent 側 date 実行禁止 = F2 対策)");
   if (!a.run_id) throw new Error("op-patrol-audit: args.run_id is required");
+  // model-selection.md (>=5) §7.2 F3: 本 workflow の spawn はすべて read-only 経路のため `fable` 禁止
+  //   (write phase の承認 gate = op-run 1-2-g / op-codev 3-B-gate でのみ fable が載る)。controller が
+  //   誤注入しても silent 受理せず opus へ矯正し、矯正記録を fable_guard_corrections に残す (warning + 続行)。
+  a.fable_guard_corrections = [];
   for (const r of a.regions) {
     if (!r.id || !r.area)
       throw new Error(`op-patrol-audit: region ${r.id || "?"} missing id/area`);
@@ -256,6 +264,11 @@ function normalizeArgs() {
     for (const e of r.expert_list) {
       if (!e.name || !e.model)
         throw new Error(`op-patrol-audit: region ${r.id} expert ${e.name || "?"} missing name/model`);
+      // §7.2 F3: 区画 audit は read-only ゆえ fable 禁止 (誤注入は opus へ矯正して記録)
+      if (e.model === "fable") {
+        e.model = "opus";
+        a.fable_guard_corrections.push(`${r.id}:${e.name}`);
+      }
     }
   }
   return a;

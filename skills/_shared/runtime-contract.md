@@ -58,6 +58,8 @@ pointer で降りる構造であり、列挙先を二重管理しない。
 - `skills/_shared/model-selection.md`
   - model selection rules (Phase × Expert × complexity → Opus / Sonnet / Haiku、具体 version は model-selection.md §1),
     task_complexity / area complexity 区分, override 優先順位, `--quality` flag 仕様
+  - Fable escalation gate (§7.2、(>=5)): worker 自動選択の天井は Opus。`fable` は write phase
+    (op-run apply / op-codev implement) で人間承認を得た spawn のみ。read-only spawn は承認があっても禁止
 - `skills/_shared/op-config-schema.md`
   - `op-config.yaml` schema (complexity_thresholds / domain_tags / model_overrides / quality_defaults)
 

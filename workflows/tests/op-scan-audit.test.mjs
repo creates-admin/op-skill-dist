@@ -97,3 +97,19 @@ test("normalizeArgs は正しい normal mode args をそのまま返す", () => 
   assert.equal(out.mode, "normal");
   assert.equal(out.scope, "src/");
 });
+
+// ---- fable guard (model-selection.md (>=5) §7.2 F3: read-only 経路は fable 禁止) ----
+test("normalizeArgs は audit expert の fable 指定を opus へ矯正し矯正記録を残す", () => {
+  const out = na.run({
+    mode: "normal",
+    experts: [
+      { name: "debug-expert", model: "fable" },
+      { name: "security-expert", model: "sonnet" },
+    ],
+    scope: "src/",
+    today: "2026-06-02",
+  });
+  assert.equal(out.experts[0].model, "opus", "audit は read-only ゆえ fable を受理してはならない");
+  assert.equal(out.experts[1].model, "sonnet", "fable 以外の指定は素通しする");
+  assert.deepEqual(out.fable_guard_corrections, ["expert:debug-expert"]);
+});

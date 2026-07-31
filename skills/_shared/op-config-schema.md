@@ -6,6 +6,9 @@ notes: 初版 (2026-05-13) — `op-config.yaml` の schema 定義 canonical 正�
        model_overrides / quality_defaults を 1 ファイルに集約する。
        op-tools (Rust CLI) での parse / validate 実装は Phase 1 (別 PR) で coordinate。
        field 追加は非破壊。field 削除 / 意味変更は本ファイルの schema_version を bump。
+       追加メモ (2026-07-31): model-selection.md v5 (Fable escalation gate) 追従で §5.1
+       `fable_escalation` を additive 新設し、§5 `model_overrides` の value に「`fable` は無効値」を明記。
+       新規 field 追加 + 既存 field の値域外を明示する clarification のため schema_version 据置。
 -->
 
 # op-config.yaml schema
@@ -180,6 +183,29 @@ phase / complexity の意味は `model-selection.md` §2 / §3 / §5 に従う�
 
 - `opus` / `sonnet` / `haiku` のいずれか
 - `null` で override 削除 (継承を打ち切らない場合)
+- **`fable` は無効値** — `model-selection.md` (>=5) §7.2 F6 により config から Fable を選ぶことはできない。
+  記述されていても controller は当該 override を無視し、`fable_config_override_ignored_warning` を
+  記録して §5 mapping の値で spawn する (hard fail はしない)。Fable の唯一の入口は §7.2 F5 の会話承認
+
+---
+
+## §5.1 `fable_escalation`
+
+`model-selection.md` (>=5) §7.2 の Fable escalation gate を **抑止する方向にだけ** 設定できる knob。
+「提案を止める」ことは config で表現できるが、「事前に承認しておく」ことは表現できない (F6 の非対称設計)。
+
+```yaml
+fable_escalation:
+  enabled: true      # false にすると op-run / op-codev は Fable 昇格を一切提案しない (全 worker Opus 天井)
+```
+
+| key | 型 | default | 意味 |
+|---|---|---|---|
+| `enabled` | bool | `true` | `false` で §7.2 F4 の候補判定を skip し、提案自体を行わない |
+
+- 環境変数 `OP_FABLE_DISABLE=1` は本 key と同じ効果を持つ kill switch (env が優先)。
+- `enabled: true` は「提案してよい」という意味であって「承認済み」ではない。承認は常に per-run の
+  会話 gate (§7.2 F5) で取る。
 
 ---
 
