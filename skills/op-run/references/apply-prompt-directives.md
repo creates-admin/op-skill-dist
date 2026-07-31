@@ -97,9 +97,9 @@ Issue コメント化は op-run / commander 側が後段で必要に応じて行
 
 ### 自己検証 (Skill op-code-review)
 
-> 順序の正本は `_shared/apply-completion-checklist.md` **Section 2-A (op-run 経路の例外分岐)**。
+> 順序の正本は `_shared/apply-completion-checklist.md` **Section 2-A (commit 先行経路)**。
 > op-run 経路は commit 先行 (commit → 自己検証 → Critical/High 時のみ追加 commit)、
-> Direct apply は Section 2 の 5 段階順序 (code-review → commit) を使う。
+> op-run / op-codev 以外の Direct apply は Section 2 の 5 段階順序 (code-review → commit) を使う。
 
 実装・commit が完了したら、PR 作成前に以下を実行すること (ClusterOrchestrator フェーズ3、push は ClusterOrchestrator がフェーズ4 で行う)。
 自己検証の手順・angle・verify 判定・出力形式の正本は `skills/op-code-review/SKILL.md` (plugin 同梱の自前 correctness review skill)。

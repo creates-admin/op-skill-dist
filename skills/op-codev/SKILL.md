@@ -5,8 +5,8 @@ effort: max
 ---
 
 <!--
-schema_version: 1
-last_breaking_change: 2026-06-14
+schema_version: 2
+last_breaking_change: 2026-07-31
 notes: v1 (2026-06-14): 初版。対話型監督実装スキル (op-codev)。
        op-plan (計画のみ) と op-run (全自動) の間のギャップを埋める。
        Direct Mode 固定、並列 fan-out なし、checkpoint は実会話ターン。
@@ -32,7 +32,24 @@ notes: v1 (2026-06-14): 初版。対話型監督実装スキル (op-codev)。
        Step B のみ 3-B-gate 確定値 (人間承認済のときだけ fable)。参照 pin を (>=5) へ同期、
        完了サマリに model 節を追加。契約は additive (既存フェーズの順序・checkpoint 構造は不変) ゆえ
        schema_version 据置。
+       v4 (2026-07-31): **commit 取りこぼし対策**。実測事故 (2026-07-31, IU1 Step B 再実行) で
+       agent が「実装 → 自己検証 → High 検出 → 自己修正」まで完遂しながら **commit だけを落とし**、
+       完了報告として op-code-review の findings JSON 配列のみを返した (commits_added フィールド
+       自体が無い)。原因は 3 つとも op-codev 固有だったため以下を同時に是正する:
+       (a) Step B を **commit 先行** (実装 → Static/unit → commit → 自己検証 → 修正時は追加 commit) へ変更。
+       従来の Section 2 (自己検証 → commit) は、op-run が ADR-0030 CX-03 で「code-review 後に commit を
+       忘れる」failure mode を理由に Section 2-A (commit 先行) へ移した、まさにその順序だった。
+       op-codev だけが旧順序で取り残されており、同じ穴を踏んだ。
+       (b) Step B 直後に **controller verify gate (`op apply verify-commit --base-sha`) を必須配線**。
+       従来 op-codev には commit 実在を検証する gate が一つも無く、commits_added は自己申告のまま
+       CHECKPOINT B へ流れていた。gate 未配線だったのは、既存 primitive が `origin/<ref>..HEAD`
+       前提で op-codev のローカル branch 経路では使えなかったため (本 PR で `--base-sha` を新設して解消)。
+       (c) Step B prompt に **完了報告 schema の乗っ取り禁止**を明示。Step B-2 の報告契約が
+       「findings: op-code-review の JSON 配列そのまま」であり、同一 SKILL.md 内で隣接するため
+       Step B 側がこれに引きずられた。
+       schema_version bump (Step B の実行順序という既存 contract を変更するため)。
 -->
+
 
 <!--
 機能概要: 親 Claude が計画コンテキストを保ちながら、実装を explore/implement/verify
@@ -85,7 +102,10 @@ op-codev の責務:
   **§7.2 Fable escalation gate**: worker の自動選択は Opus 天井。`fable` は Step B (implement) で
   3-B-gate の人間承認を得た IU のみ。**Step A (explore) / Step C (verify) / Step B-2 (独立レビュー) /
   Review 選択 2 (review-expert) は read-only につき承認があっても `fable` 禁止**
-- `~/.claude/skills/_shared/apply-completion-checklist.md` — apply 完了手順の正本。op-codev は Direct apply なので **Section 2 の 5 段階順序** (自己検証 → commit) を使う (op-run の Section 2-A = commit 先行 ではない)
+- `~/.claude/skills/_shared/apply-completion-checklist.md` (>=6) — apply 完了手順の正本。op-codev は
+  **Section 2-A の commit 先行順序** を使う (v4 で Section 2 の 5 段階順序から変更。理由は下記)
+- `~/.claude/skills/_shared/apply-completion-verify.md` (>=4) — controller 側 verify gate の正本。
+  Step B 直後の `op apply verify-commit` 配線はこれに従う
 - `~/.claude/skills/op-code-review/SKILL.md` — Step B 自己検証 / Step B-2 独立レビュー が共通で使う correctness review の正本 (手順 / angle / verify 判定 / 出力形式)
 - `~/.claude/skills/op-plan/SKILL.md` — Phase 0/Phase 1 方法論 (流用元)
 - `references/heavy-review-flow.md` — 「Review 選択 2: review-expert (7-lens)」を選んだ場合のみ読む詳細手順 (lens tier 判定 / review_round 導出 / spawn / publish-approval / needs-fix 処理)
@@ -458,6 +478,15 @@ Step A (探索) / Step C (検証) / review-expert は read-only のため Opus �
 
 ### Step B: Implement spawn
 
+**spawn 前に IU の base SHA を記録する** (Step B-1 の verify gate と Step B-2 の
+レビュー対象 diff がこの値を使う。spawn 後に取ると実装コミットを含んでしまい、
+どちらも成立しない)。
+
+```bash
+export IU_BASE_SHA="$(git rev-parse HEAD)"
+echo "IU base SHA: ${IU_BASE_SHA}"
+```
+
 ```javascript
 // op-codev Step B — 実装フェーズ
 Agent({
@@ -480,19 +509,40 @@ Agent({
 
     手本ファイルパスと再利用した既存資産をコミットメッセージに記載してください。
 
-    【自己検証 (Skill op-code-review) — commit 前に必ず実行】
+    【実行順序 — commit 先行 (必ずこの順で)】
 
-    順序の正本は _shared/apply-completion-checklist.md Section 2 (Direct apply の 5 段階順序)。
-    op-codev は op-run 経路ではないため Section 2-A (commit 先行) ではなく、
-    commit の前に自己検証を通すこと。
+    順序の正本は _shared/apply-completion-checklist.md Section 2-A (commit 先行)。
+    自己検証より先に commit を打つこと。理由: 自己検証を先にすると、検証結果に
+    意識が向いた時点で commit を落とす事故が実測で発生している (2026-07-31)。
 
-    1. Static 検証 / unit test を pass させた後、commit を打つ前に
-       Skill({skill: "op-skill:op-code-review"}) を変更差分に対して実行する
+    1. 実装完了 (スコープ内ファイルの変更)
+    2. Static 検証 pass 確認 (project-profile.md のスタック別コマンド)
+    3. unit test pass 確認 (該当する Level のみ)
+    4. commit                          ← ここが先。この時点で必ず打つ
+    5. Skill({skill: "op-skill:op-code-review"}) を変更差分に対して実行する
        (scope: 自分が変更した diff のみ。effort は指定不要 — skill 既定 = high)
-    2. Critical / High が検出された場合: 自己修正してから commit する
-       (再検証は 1 回まで。2 回目も残るなら self_check_blocked: true を付けて報告)
-    3. Medium / Low のみの場合: 自己修正せず commit し、後段の review 工程に委ねる
-    4. 完了報告に code_review_invoked / code_review_result を必ず含める
+    6. Critical / High が検出された場合: 自己修正して **追加 commit を打つ**。
+       そのうえで自己検証を 1 回だけ再実行する
+       (2 回目も Critical/High が残るなら self_check_blocked: true を付けて報告)
+       Medium / Low は自己修正せず、後段の review 工程に委ねる
+    7. 完了報告に code_review_invoked / code_review_result を必ず含める
+
+    【commit 取りこぼしの禁止 (contract violation)】
+
+    - 自己修正したのに **追加 commit を打たない** ことは contract violation である
+    - **worktree に uncommitted 変更を残したまま完了報告することは contract violation** である。
+      未 commit の変更は後続工程に渡らず失われる
+    - 完了報告を返す直前に `git status --porcelain` が空であることを必ず確認すること。
+      空でなければ、まだ完了していない
+    - controller は `op apply verify-commit` で実際の commit 集合と worktree の
+      dirty 状態を機械的に検証する。自己申告は検証される
+
+    【完了報告の形式 (重要 — 他の出力形式で代替しないこと)】
+
+    完了報告は canonical completion_report (_shared/expert-spawn.md) の形式で返すこと。
+    **op-code-review が返す findings JSON 配列を、そのまま完了報告として返してはならない。**
+    findings は完了報告の一部 (code_review_result 等) に要約して載せるものであり、
+    完了報告そのものではない。commits_added フィールドを含まない報告は invalid である。
 
     重要 — この skill は plugin 同梱で portable であり、対象 repo の CLAUDE.md /
     op-tools / registry / op CLI に一切依存しない。「repo が小さい」「skill の
@@ -514,6 +564,52 @@ Agent({
   `
 })
 ```
+
+### Step B-1: commit verify gate (controller 実行、必須)
+
+Step B が返ったら、**Step B-2 に進む前に** controller が commit の実在と worktree の
+clean 状態を機械的に検証する。worker の `commits_added` 自己申告をそのまま信じてはならない。
+
+> **なぜ必須か**: 2026-07-31 の実測事故では、agent が実装 → 自己検証 → 自己修正まで
+> 完遂しながら commit だけを落とし、完了報告として findings JSON のみを返した。
+> このとき op-codev には commit 実在を検証する gate が一つも無く、
+> CHECKPOINT B まで気付けなかった。gate はその再演を構造的に塞ぐ。
+
+`IU_BASE_SHA` は **Step B spawn の直前**に controller が記録した SHA を使う
+(Step B-2 の「Step B 開始時点の SHA」と同一値。ここで確定させて以降で使い回す)。
+
+```bash
+# Step B spawn の直前に記録しておく
+# export IU_BASE_SHA="$(git rev-parse HEAD)"
+
+: "${IU_BASE_SHA:?IU_BASE_SHA must be recorded before Step B spawn}"
+: "${COMMITS_ADDED_JSON:?Step B の completion_report.commits_added を JSON 配列で渡す}"
+
+op apply verify-commit \
+  --worktree "$(pwd)" \
+  --base-sha "${IU_BASE_SHA}" \
+  --reported-json "${COMMITS_ADDED_JSON}"
+VERIFY_EXIT=$?
+```
+
+> `--base-sha` を使う (`--base-ref` ではない)。op-codev は main checkout 上の
+> ローカル branch で作業するため `origin/<ref>..HEAD` が成立しない。
+
+判定別の分岐:
+
+| 判定 | 挙動 |
+|---|---|
+| `decision: pass` (exit 0) | Step B-2 へ進む |
+| `UNCOMMITTED_CHANGES` | **取りこぼし**。`details.uncommitted_files` を添えて Step B の worker に SendMessage し、残りを commit させる。再検証して pass なら続行。応答がない / 2 回目も dirty なら CHECKPOINT B で親に提示して判断を仰ぐ |
+| `COUNT_ZERO` | commit が 1 件も無い。worktree が dirty なら上と同じ retry。clean なら真に no-op の可能性があるため、`status: blocked` / `partial` + `needs_human_decision` の有無を確認し、無ければ CHECKPOINT B で親に提示 |
+| `FABRICATED_SHA` / `NOT_IN_COMMIT_SET` | 報告 SHA が捏造 / 範囲外。SendMessage で実 SHA の再報告を要求。失敗なら CHECKPOINT B で親に提示 |
+| exit 99 (内部エラー) | 判定不能。fail-closed で Step B-2 に進まず、入力 (`IU_BASE_SHA` / `COMMITS_ADDED_JSON`) を確認して再実行 |
+
+**完了報告が canonical schema でない場合** (例: `commits_added` フィールド自体が無い /
+findings JSON 配列だけが返る) は、`COMMITS_ADDED_JSON` を `[]` として本 gate を実行する。
+worktree に変更が残っていれば `UNCOMMITTED_CHANGES` で、残っていなければ `COUNT_ZERO` で
+確実に block される。**schema 違反を理由に gate を skip してはならない** — 実測事故は
+まさにこの形 (schema 違反 + commit 落ち) だったため、ここが最後の防波堤になる。
 
 ### Step B-2: 独立レビュー spawn (controller 実行、必須)
 
@@ -544,11 +640,11 @@ Agent({
     あなたは実装者ではない。他者が書いた変更を初見でレビューする立場である。
     実装意図の説明を鵜呑みにせず、diff と実コードだけを根拠に判断すること。
 
-    対象 diff: <Step B 開始時点の SHA>...HEAD
+    対象 diff: <IU_BASE_SHA>...HEAD   (Step B spawn 直前に記録した値)
     IU ゴール: <IU の goal>
     変更ファイル: <Step B の files_modified>
 
-    1. Skill({skill: "op-skill:op-code-review", args: "diff: <BASE_SHA>...HEAD effort: high"})
+    1. Skill({skill: "op-skill:op-code-review", args: "diff: <IU_BASE_SHA>...HEAD effort: high"})
        を実行する (手順・angle・verify 判定・出力形式の正本は skills/op-code-review/SKILL.md)
     2. 返却された findings をそのまま報告する。severity を独自に格下げしないこと
     3. IU ゴールに対する未達 (実装漏れ / goal と挙動の食い違い) があれば
@@ -579,6 +675,10 @@ Medium / Low は CHECKPOINT B に列挙するのみで、対応要否は親が�
 
 ### コミット
 <commits_added の SHA と要約>
+
+### commit verify (Step B-1、機械検証)
+<op apply verify-commit の decision。block だった場合は blocking_reasons と、
+ retry で解消したか未解消かを明示する。未解消のまま進めてよいかは親の判断>
 
 ### 変更ファイル
 <修正ファイル一覧>

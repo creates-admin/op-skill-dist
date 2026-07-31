@@ -1,7 +1,16 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-06-14
-notes: v1.5 相当 additive (2026-07-31): model-selection.md v5 §7.2 (Fable escalation gate) 追従。
+notes: v1.6 相当 additive (2026-07-31): **commit 取りこぼし対策**。フェーズ4 の push 直前に
+       `op apply verify-commit` の commit verify gate を明示配線した。従来この fence は
+       `git push` を無条件実行しており、worktree に未 commit 変更が残っていても検出しなかった
+       (commits_added が正当なら既存 gate も pass するため、未 commit 分は push されず
+       worktree cleanup で永久に失われる silent loss になっていた)。
+       gate の契約・分岐の正本は `_shared/apply-completion-verify.md (>=4)` 側にあり、
+       本ファイルは配線位置 (push より前であること) と要点の再掲のみを持つ。
+       完了報告が canonical schema でない場合も `--reported-json '[]'` で gate を通す
+       (skip 禁止) を明記。ClusterSummary schema・verdict union は不変ゆえ schema_version 据置。
+       v1.5 相当 additive (2026-07-31): model-selection.md v5 §7.2 (Fable escalation gate) 追従。
        ClusterOrchestratorInput に optional `apply_model` を追加し、フェーズ2 の apply-expert spawn は
        `apply_model` (未指定なら `model`) を使うことを明記。CO は model を自分で昇格・降格しない
        (承認 gate は controller の op-run 1-2-g のみ = §7.2 F1)。post-check / global review /
@@ -187,8 +196,8 @@ compact summary に記録して ClusterOrchestrator のライフサイクルを�
 ## フェーズ2: apply-expert spawn
 
 > 決定3 (前半): apply-expert は実装・commit・push を完了し、その後 Skill(op-skill:op-code-review) 自己検証を行う。
-> 順序の正本は `_shared/apply-completion-checklist.md` **Section 2-A (op-run 経路の例外分岐)**
-> (Direct apply の 5 段階順序とは分岐する。ADR-0030 CX-03)。
+> 順序の正本は `_shared/apply-completion-checklist.md` **Section 2-A (commit 先行経路)**
+> (op-run / op-codev 以外の Direct apply の 5 段階順序とは分岐する。ADR-0030 CX-03)。
 > apply 指示書の詳細は `references/apply-prompt-directives.md` の common 節 +
 > 当該 expert 節を pointer 参照する (#739 で自己検証節が追記される前提)。
 
@@ -320,19 +329,53 @@ sub-agent でも Skill tool は利用可能)。
 ### 入力
 
 フェーズ3 が完了し `self_review_result` が `"pass"` / `"needs_fix"`(再検証済) / `"skip"`(code-review 非該当) のいずれかであること。
+あわせてフェーズ2 の `commits_added` を `COMMITS_ADDED_JSON` (JSON 配列文字列) として保持していること
+(下記 commit verify gate の入力。フィールドが無い / 空でも gate は実行する — 下記注記)。
 
 ### 実行
 
-ClusterOrchestrator が worktree から push し、PR を作成する。
+ClusterOrchestrator が **push 前に commit verify gate を通し**、worktree から push して PR を作成する。
+
+> **gate は push より前でなければならない**。push 後に検出しても、未 commit 分が push から
+> 漏れた事実は変わらず手遅れになる (worktree は後続の cleanup / 隔離で消える)。
+> gate の契約・分岐の正本は `_shared/apply-completion-verify.md (>=4)` gate 2 / gate 3。
 
 ```bash
-# push (ClusterOrchestrator の責務)
+# commit verify gate (push 前に必ず実行)
 : "${CLUSTER_ID:?}"
 : "${WORKTREE_PATH:?}"
 : "${BASE_SHA:?}"
+: "${COMMITS_ADDED_JSON:?フェーズ2 の completion_report.commits_added を JSON 配列で渡す}"
 
 export BRANCH_NAME="auto/${CLUSTER_ID}"
 export BASE_REF="${BASE_REF:-main}"  # フェーズ0 の base_ref を使用 (OP_RUN_BASE_REF)
+
+op apply verify-commit \
+  --worktree "${WORKTREE_PATH}" \
+  --base-ref "${BASE_REF}" \
+  --reported-json "${COMMITS_ADDED_JSON}"
+VERIFY_EXIT=$?
+```
+
+`VERIFY_EXIT` が 0 でない場合は **push に進まない**。`blocking_reasons` 別の分岐は
+`_shared/apply-completion-verify.md (>=4)` gate 3 の分岐表に従う。要点のみ再掲 (正本は同ファイル):
+
+- `UNCOMMITTED_CHANGES` — 未 commit 変更の残置 (**取りこぼし**)。このまま push するとその変更は
+  失われる。`details.uncommitted_files` を添えて apply-expert に SendMessage retry (§4-A の
+  取りこぼし版文面) を 1 回実施し、残りを commit させる。再検証 pass で push へ proceed。
+  retry 失敗 (無応答 / 2 回目も dirty) で `worktrees-failed/` 隔離
+- `COUNT_ZERO` — worktree の実 commit を確認し、在れば実 SHA を inject して warning ログ + push へ。
+  実 commit も 0 なら SendMessage retry → 失敗で隔離
+- `FABRICATED_SHA` / `NOT_IN_COMMIT_SET` — SendMessage retry 1 回 → 失敗で隔離
+- exit 99 — 判定不能。fail-closed で push に進まず入力を確認して再実行
+
+> フェーズ2 の完了報告が canonical schema でない場合 (`commits_added` フィールド自体が無い /
+> 自己検証 skill の findings JSON がそのまま返る等) も **gate を skip しない**。
+> `--reported-json '[]'` として実行すれば、worktree が dirty なら `UNCOMMITTED_CHANGES`、
+> clean なら `COUNT_ZERO` で確実に block される。
+
+```bash
+# push (ClusterOrchestrator の責務。gate pass 後にのみ実行する)
 git -C "${WORKTREE_PATH}" push origin "${BRANCH_NAME}"
 
 # PR タイトル / 本文の組み立て (_shared/pr-templates.md の「op-run: PR open テンプレ」に従う)
