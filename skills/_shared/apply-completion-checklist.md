@@ -12,6 +12,14 @@ notes: v6 (2026-07-31) — **commit 取りこぼし対策**。①Section 2-A (co
        完了報告として返さない。③Section 4 に取りこぼしが機械検証されること
        (`op apply verify-commit` の `UNCOMMITTED_CHANGES`) を明記。自己申告は検証される。
        schema_version bump (op-codev の実行順序という既存 contract を変更するため)。
+       v5 (2026-07-31, additive) — expert-spawn.md v17 (#96 / #84) 追従。§6 の見出しを
+       「v16 schema との対応」→「v17 schema との対応」へ更新し、対応表に `self_review_result` /
+       `self_check_blocked` (op-run 経路かつ `status: completed` 時必須) を追加。
+       `code_review_invoked` / `code_review_skip_reason` の行に v17 の必須条件を追記。
+       「schema 定義は変更しない」の記述を「本節は対応マップであり schema 定義そのものは持たない
+       (正本は expert-spawn.md の必須性表)」へ言い換え。§1 mode 表 / §5 skip 条件表は不変 (正本のまま)。
+       対応表の行追加のみで checklist 自身の手順・順序契約は不変ゆえ schema_version 据置
+       (v6 の bump に合流)。
        v5 (2026-07-29, additive) — ADR-0030 CX-03: Section 2-A「op-run 経路の例外分岐 (commit 先行)」を新設。
        ADR-0016 決定3 / cluster-orchestrator-directives.md / apply-prompt-directives.md の 3 面一致に prose を合わせ、
        op-run 経路のみ commit → Skill(op-skill:op-code-review) → (Critical/High 時のみ) 追加 commit とする。
@@ -199,7 +207,10 @@ commit を打つ前に以下を **全項目 yes** にしてから進む。
 
 ### 自己検証コマンド例
 
-commit 直後、完了報告を返す前に以下のコマンドで commits_added の正確性を self-check する:
+commit 直後、完了報告を返す前に以下のコマンドで commits_added の正確性を self-check する。
+
+> **`commits_added` は object でなく SHA 文字列そのものの配列が正** (例: `["abc1234","def5678"]`)。
+> `[{"sha": "...", "files": [...]}]` のように object でラップしない (契約は `expert-spawn.md`)。
 
 ```bash
 # worktree 作成時 (worktree-ops.md) に op-run controller が export した値であること
@@ -271,20 +282,28 @@ git log --format='%H' "${OP_RUN_BASE_SHA}..HEAD"
 | designer-expert | **あり**: Scan / Gate / Patrol モードは invoke なし | `~/.claude/skills/expert-design/SKILL.md` |
 | ux-ui-audit-expert | **あり**: apply 派生 (修正コミット発生) かつ修正ありの場合のみ invoke | `~/.claude/skills/expert-ux-ui-audit/SKILL.md` |
 
-## 6. 完了報告 v16 schema との対応
+## 6. 完了報告 v17 schema との対応
 
-完了報告 v16 schema の正本は `~/.claude/skills/_shared/expert-spawn.md` (schema 定義は変更しない)。
+完了報告 schema の正本は `~/.claude/skills/_shared/expert-spawn.md` の
+「修正完了報告 フィールドの必須性」表 (現行 v17)。**本節は対応マップであり、schema 定義そのものは持たない**
+(必須性・fail-closed 挙動の判定は必ず正本側を読む)。
 
-本チェックリストと v16 schema の対応:
+本チェックリストと v17 schema の対応:
 
 | チェックリスト項目 | 対応する schema フィールド |
 |------------------|--------------------------|
-| code-review invoke 完了 | `code_review_invoked: true` |
-| skip 時の理由確定 | `code_review_skip_reason: "<理由>"` |
+| code-review invoke 完了 | `code_review_invoked: true` (v17 以降、apply Run Mode では原則必須) |
+| skip 時の理由確定 | `code_review_skip_reason: "<理由>"` (v17 以降、`code_review_result: "skip"` 時に加えて apply Run Mode で `code_review_invoked: false` を返す場合も必須) |
 | code-review 結果 | `code_review_result: "pass" | "warning" | "skip"` |
 | controller から渡された effort | `code_review_effort: "low" | "medium" | "high" | "xhigh" | "max" | "auto" | null` |
 | commits_added SHA 配列取得 | `commits_added: ["<SHA1>", "<SHA2>", ...]` |
 | commit_sha (deprecated) | `commit_sha: "<SHA>"` (v13 以前との互換のみ、新規実装では commits_added を使う) |
+| 自己検証 (Section 2-A) の結果 | `self_review_result` = `"pass"` / `"needs_fix"` / `"skip"` (v17 以降、**op-run 経路かつ `status: completed` 時必須**。欠落は fail-closed = PR 作成に進まない) |
+| 自己検証で解消できない Critical/High の残置 | `self_check_blocked` = `true` / `false` (v17 以降、**op-run 経路かつ `status: completed` 時必須**。`false` でも省略しない。`true` は人間 gate / 再委任へ) |
+
+> `self_review_result` / `self_check_blocked` は op-run 経路 (Section 2-A の commit 先行分岐) の
+> フィールド。非 op-run 経路 (Direct apply) では省略可であり、`status` が `blocked` / `partial` 等の
+> escalation 報告でも必須にならない (詳細条件は正本の同表を参照)。
 
 > **v14 → v16 backward-compat**: v14 完了報告 (旧 `simplify_invoked` / `simplify_result` /
 > `simplify_skip_reason`) を controller に返した場合、controller は warning を出しつつ

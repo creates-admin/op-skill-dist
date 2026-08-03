@@ -486,7 +486,12 @@ specialist は finding 単位で 1 block を出す。複数 finding を一度に
    ```
 4. 再 verification は ClusterOrchestrator が apply-expert の commits_added 非空 + 自己検証 (Skill(op-skill:op-code-review, ${code_review_effort}))
    で apply 完了を確認する (cluster-orchestrator-directives.md フェーズ2-3)。ClusterOrchestrator は
-   project-profile.md の検証コマンド整合を確認する (`op-run-fanout` は ADR-0016 で削除済み)
+   project-profile.md の検証コマンド整合を確認する (`op-run-fanout` は ADR-0016 で削除済み)。
+   **再 apply の完了報告でも `self_review_result` / `self_check_blocked` を確認する** — 判定基準は
+   初回 PR 作成時と同一で、正本は `cluster-orchestrator-directives.md` フェーズ4「入力」節
+   (fail-closed 条項を含む。条件をここに複製しない)。同節の入力条件を満たさない場合は
+   手順 5 以降 (post-check 再 spawn / 再 review) へ進まず、完了扱いにせず人間 gate /
+   apply-expert への再委任へ回す
 5. required post-check 担当 expert を再 spawn (フェーズ3.5 を再実行)
 6. REVIEW_ROUND を再計算し、REVIEW_TERMINAL gate を評価してから review-expert を再 review する。
    **再 review の spawn は ClusterOrchestrator が review-expert を Agent tool で再 spawn して行う**

@@ -383,7 +383,7 @@ mismatch を検出しても、subagent は質問で停止しない。以下の�
 
 | ファイル | current_version | last_breaking_change |
 |---------|-----------------|----------------------|
-| `expert-spawn.md` | 16 | 2026-05-21 |
+| `expert-spawn.md` | 17 | 2026-07-31 |
 | `pr-templates.md` | 13 | 2026-05-17 |
 | `labels-and-markers.md` (markers/) | 9 | 2026-05-22 |
 | `active-expert-registry.md` | 3 | 2026-05-08 |

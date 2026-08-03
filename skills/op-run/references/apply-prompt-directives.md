@@ -1,7 +1,12 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-05-30
-notes: v1.1 相当 (2026-07-29): 自己検証節の invoke 先を built-in `code-review` (disable-model-invocation
+notes: v1.2 相当 additive (2026-07-31): expert-spawn.md v17 (#84) 追従。自己検証節の完了報告手順に
+       「self_check_blocked を true / false のどちらでも必ず含める」を追加 (従来は `true` の場合のみの
+       指示だったため、正常完了時に省略され consumer 側 (フェーズ4 入力条件) が fail-closed する
+       構造欠落があった)。`true` になる条件の記述 (2 回目の Critical/High / 修正不可能) は不変。
+       enum・既存指示の削除はなく手順追加のみのため schema_version 据置。
+       v1.1 相当 (2026-07-29): 自己検証節の invoke 先を built-in `code-review` (disable-model-invocation
        のため subagent から呼べず実測で不成立) から plugin 同梱の自前 skill `op-skill:op-code-review`
        (skills/op-code-review/SKILL.md、correctness 専任・single-pass) へ差し替え。手動 fallback を明記し、
        checklist 正本は新 skill に置く。self_review_result enum 等の contract 不変のため schema_version 据置。
@@ -121,6 +126,13 @@ built-in `code-review` は disable-model-invocation のため subagent から in
    (過剰な自己ブロックを避ける)
 4. 完了報告に self_review_result: "pass" | "needs_fix" | "skip" を含める
    (cluster-orchestrator-directives.md フェーズ3 と同 enum)
+5. 完了報告に self_check_blocked: true | false を **必ず** 含める
+   (true / false のどちらでも省略しない。true は上記 2 が true を指示する 2 ケース
+    — 再実行後も Critical/High が残る / 修正不可能 — のみ。Critical/High を検出しても
+    再実行で解消できた場合は false を明示する。自己検証で何も出なかった場合も false。
+    ClusterOrchestrator はフェーズ4 (PR 作成) の入力条件としてこの値を参照し、
+    欠落は fail-closed = PR 作成に進まない。正本は expert-spawn.md の
+    「修正完了報告 フィールドの必須性」表 self_check_blocked 行)
 ```
 
 ### 完了手順
@@ -128,8 +140,11 @@ built-in `code-review` は disable-model-invocation のため subagent から in
 ```
 完了手順は `_shared/apply-completion-checklist.md` に集約 (op-run 経路は **Section 2-A** の
 commit 先行分岐、Direct apply は Section 2 の 5 段階順序)。各 expert は固有 skip 条件のみ
-自身の SKILL.md に持つ。完了報告 (`expert-spawn.md` v14 schema) には `code_review_invoked` /
-`code_review_result` を必ず含める (skip の場合は `code_review_skip_reason` も必須)。
+自身の SKILL.md に持つ。完了報告 (`expert-spawn.md` v17 schema) には `code_review_invoked` /
+`code_review_result` を必ず含める。`code_review_skip_reason` は `code_review_result: "skip"` の
+場合に加えて、**apply Run Mode で `code_review_invoked: false` を返す場合も必須** (v17 以降。
+理由を伴わない `code_review_invoked: false` は contract violation。必須トリガーの正本は
+`expert-spawn.md` の「修正完了報告 フィールドの必須性」表 `code_review_skip_reason` 行)。
 v14 / v15 完了報告 (旧 `simplify_*` フィールド) も controller の auto-translate で 1 release
 backward-compat (詳細は expert-spawn.md v16 の deprecation 節)。
 **commits_added: [SHA, ...]** (1 件以上) を完了報告に必ず含める。

@@ -1,12 +1,30 @@
 <!--
-schema_version: 16
-last_breaking_change: 2026-05-21
+schema_version: 17
+last_breaking_change: 2026-07-31
 additive_only_policy:
   - 新フィールド追加は optional スタートを default とする (additive 変更、schema_version bump 不要)
   - breaking change (既存フィールドの削除 / 型変更 / required 化 / marker 仕様変更) のみ schema_version を bump する
   - 現行 schema_version 一覧は `~/.claude/skills/_shared/version-check.md` の
     「## _shared ファイル 現行 schema_version 一覧」節を参照する
-notes: v16 (2026-07-31, additive) — model-selection.md v5 (Fable escalation gate) 追従。
+notes: v17 (2026-07-31, breaking) — 「修正完了報告 フィールドの必須性」表の改訂。
+       #96: apply Run Mode で `code_review_invoked: true` を原則必須化 (理由なき `false` は contract
+       violation。正当な `false` は exploration-only spawn と expert 固有 skip 条件の 2 つのみで、
+       mode 判定は apply-completion-checklist.md §1、skip 条件一覧は同 §5 が正本)。
+       #84: `self_review_result` / `self_check_blocked` を op-run 経路で条件付き required 化
+       (欠落時はフェーズ4 = PR 作成へ進まない fail-closed。非 op-run 経路は省略可のまま)。
+       #97: `commits_added` の `string[]` 明確化 (object ラップ不可の悪い例 + 短縮 SHA 許容を追記)。
+       これは既存 field の明確化のみで契約変更ではなく、単体では bump 要因にならない。
+       #96 / #84 の required 化が additive_only_policy の breaking change に該当するため bump。
+       v17 follow-up (2026-07-31, 同一 bump 内): 独立レビュー指摘の反映。
+       (a) `code_review_skip_reason` の必須トリガーを `code_review_result: "skip"` に加えて
+       「apply Run Mode で `code_review_invoked: false`」へ拡張し、#96 の例外 (b) を必須列の上で
+       enforce する (理由なき `false` が必須列の照合だけで violation と判定できるようにする)。
+       (b) `self_review_result` / `self_check_blocked` の必須条件に `status: completed` を付与し、
+       escalation 報告 (`blocked` / `partial`) が誤って fail-closed されないようにする
+       (`modified_files` 行の status 条件に倣う)。いずれも v17 の意図を完遂する修正であり、
+       v17 未 release ゆえ追加 bump はしない。L3 側 (op-run) の配線は
+       cluster-orchestrator-directives.md / apply-prompt-directives.md を参照。
+       v16 (2026-07-31, additive) — model-selection.md v5 (Fable escalation gate) 追従。
        「model / task_complexity routing」節に `fable` の取り扱い (自動選択禁止 = worker 天井 Opus /
        write phase での人間承認 opt-in / read-only spawn は承認があっても禁止 / config override 無効) を
        要約追記し、spawn 3 パターン template に該当注記を追加。参照 pin を (>=5) へ同期。
@@ -942,16 +960,16 @@ op-run フェーズ 2-C 修正フェーズで各 expert が司令官に返す完
 |-----------|------|------|
 | `issue` / `cluster_id` / `status` | ✓ | 司令官の進捗管理に必要 |
 | `modified_files` | `status: completed` 時必須 | 変更ファイル一覧 |
-| `commits_added` | ✓ (v14 以降) | apply spawn が追加した commit の SHA 配列。apply では `[SHA, ...]` (1 件以上) 必須。exploration-only spawn (investigation / post-check / review) では `[]` が正解。`commits_added: []` のまま apply 完了報告を返すことは contract violation |
+| `commits_added` | ✓ (v14 以降) | apply spawn が追加した commit の **SHA 文字列そのものの配列** (`string[]`)。apply では `["<SHA1>", "<SHA2>"]` の形で 1 件以上必須。exploration-only spawn (investigation / post-check / review) では `[]` が正解。`commits_added: []` のまま apply 完了報告を返すことは contract violation。**悪い例 (不可): `[{"sha": "...", "files": [...]}]` のように object でラップした形** — 要素は SHA 文字列に限る。短縮 SHA (7 桁以上) は `op apply verify-commit` が prefix-match で membership 判定するため許容される |
 | `commit_sha` | **deprecated** (v14 以降) | v13 以前との backward-compat のため optional として残置。新規実装では `commits_added` を使う。v14 以降は `commits_added[0]` が事実上の正本 |
 | `verification_executed` | ✓ | 実行した検証ステップ一覧 (`e2e_verification_plan` に対応) |
 | `verification_results` | ✓ | Verification Ladder Level 1〜3 の PASS / FAIL |
-| `code_review_invoked` | ✓ (v16 以降) | code-review skill (旧 simplify) を呼び出したか否か |
-| `code_review_result` | `code_review_invoked: true` 時必須 | `"pass"` / `"warning"` / `"skip"` |
-| `code_review_skip_reason` | `code_review_result: "skip"` 時必須 | skip 理由を明記 (`"expert-review (read-only)"` / `"benchmark unstable revert"` / `"security finding 残置"` 等) |
+| `code_review_invoked` | ✓ (v16 以降。v17 以降 apply では原則 `true` 必須) | code-review skill (旧 simplify) を呼び出したか否か。**apply Run Mode では原則 `true` が必須**であり、理由を示さずに `false` を返すことは `commits_added: []` と同水準の contract violation。`false` が正当なのは (a) apply を伴わない exploration-only spawn、または (b) 各 expert の SKILL.md が明示する expert 固有 skip 条件に該当し `code_review_skip_reason` に理由を明記した場合、の 2 つに限る。どの mode が apply Run Mode かは `_shared/apply-completion-checklist.md` §1 の mode 表、expert 固有 skip 条件の一覧は同 §5 が正本 (ここでは列挙しない) |
+| `code_review_result` | `code_review_invoked: true` 時必須 | `"pass"` / `"warning"` / `"skip"`。apply Run Mode では上行により `code_review_invoked: true` が原則必須のため、結果として実質必須になる (上行 (b) の expert 固有 skip 条件に該当する場合のみ `code_review_skip_reason` で代替する) |
+| `code_review_skip_reason` | `code_review_result: "skip"` 時必須 / **apply Run Mode で `code_review_invoked: false` を返す場合も必須** (v17 以降) | skip 理由を明記 (`"expert-review (read-only)"` / `"benchmark unstable revert"` / `"security finding 残置"` 等)。必須トリガーは 2 つあり、(1) invoke した上で結果が `"skip"` だった場合と、(2) そもそも invoke しなかった場合 (`code_review_invoked: false`) の両方を覆う。(2) は `code_review_invoked` 行の例外 (b) を必須列の上で enforce するためのもので、これにより **apply Run Mode で理由を伴わない `code_review_invoked: false`** (= `code_review_result` も `code_review_skip_reason` も欠落した報告) を、必須列の照合だけで contract violation と判定できる。exploration-only spawn (例外 (a)) は apply Run Mode ではないため (2) の対象外 |
 | `code_review_effort` | optional (v16 以降) | controller が spawn 時に渡した effort-level の転写 (`"low"` / `"medium"` / `"high"` / `"xhigh"` / `"max"` / `"auto"` / `null`)。effort 自動派生ルールは `_shared/model-selection.md (>=2)` §5.5 を参照 |
-| `self_review_result` | optional (v16 additive) | apply フェーズ3 の自己検証 (code-review) 結果。`"pass"` / `"needs_fix"` (再検証済) / `"skip"` (code-review 非該当)。op-run 経路では ClusterOrchestrator が完了 gate として参照する (`skills/op-run/cluster-orchestrator-directives.md` フェーズ3 節 / `skills/op-run/references/apply-prompt-directives.md`)。非 op-run 経路では省略可 |
-| `self_check_blocked` | optional (v16 additive) | 自己検証の再実行 (1 回まで) 後も Critical/High が残り、apply agent 側で解消できなかった場合に `true`。既定は `false`。`true` の場合 controller は完了扱いにせず人間 gate / 再委任へ回す |
+| `self_review_result` | ✓ (op-run 経路かつ `status: completed` 時、v17 以降) | apply フェーズ3 の自己検証 (code-review) 結果。`"pass"` / `"needs_fix"` (再検証済) / `"skip"` (code-review 非該当)。op-run 経路では ClusterOrchestrator がフェーズ4 (PR 作成) の入力条件として参照するため必須で、**欠落時は fail-closed** — PR 作成に進まず completion を受理しない (`skills/op-run/cluster-orchestrator-directives.md` フェーズ3 返却 / フェーズ4 入力、`skills/op-run/references/apply-prompt-directives.md`)。fail-closed の対象は `status: completed` の完了報告に限る — `status` が `blocked` / `partial` 等の escalation 報告 (`needs_human_decision` でフェーズ3 の自己検証に到達していないケース) では本フィールドは必須にならず、controller は fail-closed せずそのまま人間 gate へ回す (`modified_files` 行と同じ status 条件の考え方)。非 op-run 経路 (Direct apply) では省略可 |
+| `self_check_blocked` | ✓ (op-run 経路かつ `status: completed` 時、v17 以降) | 自己検証の再実行 (1 回まで) 後も Critical/High が残り、apply agent 側で解消できなかった場合に `true`。既定は `false` (op-run 経路では `false` でも明示する。欠落は `self_review_result` と同じく fail-closed で、対象も同じく `status: completed` の完了報告に限る)。`true` の場合 controller は完了扱いにせず人間 gate / 再委任へ回す。非 op-run 経路 (Direct apply) では省略可。なお `true` かつ `commits_added` に自己修正 commit が反映されていない矛盾ケースの検知は本 schema の範囲外 (別 Issue で扱う) |
 | `assumptions` | 推奨 | OP-managed Mode で推定した前提条件 |
 | `needs_human_decision` | 推奨 | 判断不能な設計判断を構造化返却 |
 | `blocked_actions` | `needs_human_decision.required: true` 時必須 | scope 内の安全な実装のみ進めた場合の保留 action 一覧 |

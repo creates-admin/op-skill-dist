@@ -124,27 +124,11 @@ legitimate_workflow_preserved == false の検出、大規模 capability 再設�
 【入力】
 - PR diff: `cd <WT_PATH> && git diff "origin/${OP_RUN_BASE_REF}...HEAD"` で取得 (triple-dot, merge-base 差分)
 - 元 Issue 本文 (`gh issue view <N>`) の success_criteria / scope_in / scope_out / verification_steps / gotchas
-- `~/.claude/skills/expert-security/references/post-check-policy.md` の Issue 固有再監査 8 観点
 
 【検証 — Issue 固有再監査の 8 観点】
-1. **元 finding の解消**: Issue success_criteria を実装が満たしているか (静的に証跡を追える)
-2. **別の攻撃面増加チェック**: 修正で導入されたコード (新規 path / 新規 IO / 新規 IPC / 新規 shell call) に
-   未検証の入力経路がないか
-3. **入力検証**: path canonicalization / encoding / size limit / null byte / `..` rejection / Unicode 正規化 /
-   reserved name / ADS / device path / UNC reject
-4. **認可 / capability**: IPC command の権限境界 / shell 引数の escape (args 配列化) / file IO の root 制限 /
-   Tauri capability 追加の妥当性 / 過剰許可なし
-5. **エラーパス**: TOCTOU / privilege drop の漏れ / 失敗時の機密情報漏洩 (error message に
-   path / token / secret / document content が出ていないか) / panic 経路
-6. **scope_out 違反**: Issue scope_out で除外された箇所への redesign が混入していないか
-7. **正当なユーザー操作維持 (usable_security)**: legitimate_workflow_preserved == true か。
-   save_as / open_file / export / import / external_app_launch / batch_processing の UI が削除されていないか。
-   出力先 / 読込元の選択肢が強制的に絞られていないか。capability 全体 disable されていないか。
-   forbidden_shortcuts (do_not_remove_file_picker / do_not_force_fixed_output_directory 等) が守られているか。
-8. **UX/UI auxiliary post-check が必要か**: PR diff に frontend / vue / svelte / react / scss / css の変更があるか、
-   新規 dialog / Toast / button / menu / keyboard handler 追加があるか、a11y / focus / contrast / aria 属性が
-   変わったか、workflow step 数が変わったか。該当するなら requires_aux_post_check: true で
-   aux_post_check_experts: [ux-ui-audit-expert] を返す。
+`~/.claude/skills/expert-security/references/post-check-policy.md` の
+「8 観点 (post-check の核)」節に従い、観点 1〜8 をすべてチェックすること
+(観点 8 の `requires_aux_post_check` / `aux_post_check_experts` 返却仕様も同節に含まれる)。
 
 フェーズ4 の global review (review-expert が PR 全体を 7 lens で見る) とは役割が違う。
 本フェーズは **Issue 固有の security 深掘り再監査** に集中し、PR 全体観点の重複監査はしない。

@@ -520,52 +520,44 @@ const auditOut = await Workflow({
 installed check (フェーズ3 / `op core registry-verify`) で除外した planned/未登録 expert を `expert_list` に
 含めない・最終報告サマリへ併記する silent 除外禁止規約は `_shared/workflow-calling.md` **§3** が正本。
 
-> **Patrol Finding Policy / canonical schema の正本同期**: `buildAuditPrompt` は後述の Patrol Finding Policy と
-> recommended_runner / post_check_expert 規則を inline で埋め込む (workflow spawn された agent は本 SKILL.md を
-> 直接読めないため)。両者の drift を避けるため、Patrol Finding Policy を変更したら `op-patrol-audit.js` の
-> `buildAuditPrompt` も同期すること。
+> **Patrol Finding Policy / canonical schema の runtime 正本は `workflows/op-patrol-audit.js` の
+> `buildAuditPrompt`**: 同関数が Patrol Finding Policy と recommended_runner / post_check_expert 規則を
+> inline で埋め込む。workflow spawn された audit agent は本 SKILL.md を読まないため、**実行時に効くのは
+> js 側の inline 文字列だけ**であり、js が runtime 正本たらざるを得ない (CLAUDE.md 不変則1)。
+> 後述の「Patrol Finding Policy」節は**人間可読の要約**である。ポリシーを変更するときは
+> **js 側を先に確定し、本 SKILL.md の要約をそれに追従させる** (逆順にしない)。
 
 ---
 
 ## Patrol Finding Policy (op-scan より厳しい)
 
-巡回エージェントは指摘ノイズを生みやすい。op-patrol では以下を **完全禁止**:
+> **runtime 正本は `workflows/op-patrol-audit.js` の `buildAuditPrompt`**
+> (関数内の `【Patrol Finding Policy (op-scan より厳しい、完全禁止)】` ブロック)。
+> **禁止項目・許可項目・designer-expert 追加禁止事項の逐語列挙は runtime 正本側にある**
+> (個別項目を確認するときは必ず js を見る)。
+> audit agent は workflow から spawn されるため本 SKILL.md を読まず、実際に渡るのは js 側の文字列だけである。
+> **本節は人間可読の要約**であり別定義ではない。ポリシーを変更するときは js 側を先に確定し、本節を追従させる。
 
-| 禁止 | 理由 |
-|------|------|
-| 好みのリファクタ提案 | 区画選定が agent 主導なので、好みノイズが膨らむと Issue Tracker を汚す |
-| 命名・スタイルの好み | 巡回で命名指摘を作っても優先度が判断不能 |
-| 将来不安だけの指摘 | 到達経路・影響範囲が示せないなら起票しない |
-| Medium / Low の起票 | severity-rubric の Critical / High 定義を厳格適用 |
-| 根拠の薄いセキュリティ指摘 | security が「あるかも」を量産すると noise の源になる |
-| 全体設計の大改修提案 | 巡回スコープ外。op-scan で明示要請されてから |
-| 未読箇所の推測指摘 | 警備員は見たものだけ報告する |
+巡回エージェントは指摘ノイズを生みやすい。op-patrol は op-scan より厳格な gate を敷く
+(区画選定が agent 主導ゆえ、好みノイズが膨らむと Issue Tracker を汚すため)。
 
-許可 (Critical/High に限り):
+**禁止される大枠のカテゴリ**:
 
-- データ消失・データ破壊への到達経路
-- 認証 / 権限 / パス検証の明確な抜け
-- 確実に再現するクラッシュ・無限ループ
-- 観測可能な race condition
-- ファイル上書き事故・任意 IO
-- queue 詰まり・dead worker
-- IPC / Tauri command 境界の入力検証漏れ
-- 主要導線を完全に塞ぐ UX 障害
-- 構造的 false pass を生むテスト
-- design token bypass / 共通 component bypass の**蔓延** (画面横断で観測可能、theme 切替を物理的に不可能にしているレベル)
-- 同一用途 UI が**複数実装に分裂しユーザーに同じ操作と認識されない** (操作ミスの実害が観測可能)
+- 好み・主観の提案 (リファクタ / 命名 / スタイル)
+- 根拠の薄い指摘 (到達経路・影響範囲を示せない将来不安、「あるかも」のセキュリティ指摘)
+- **Medium / Low の起票** (severity-rubric の Critical / High 定義を厳格適用)
+- 巡回スコープ外の大改修提案 (全体設計の作り直しは op-scan で明示要請されてから)
+- 未読箇所の推測指摘 (警備員は見たものだけ報告する)
 
-### designer-expert への追加 Patrol Policy
+**許可されるのは Critical / High の観測可能な実害のみ** — データ消失・破壊への到達経路 /
+認証・権限・パス検証の明確な抜け / 確実に再現するクラッシュ / 観測可能な race condition /
+IPC・Tauri command 境界の入力検証漏れ / 主要導線を完全に塞ぐ UX 障害 /
+design system 破綻の蔓延 など。**個別項目の完全リストは上記 runtime 正本を参照する**。
 
-`designer-expert` は patrol で特にノイズを生みやすいため、以下を**完全禁止**:
-
-- 「もっとおしゃれにできる」「もう少し垢抜けさせたい」(主観・好み)
-- 「単発の余白が 2px ずれている」(影響が観測できない単発)
-- 既存 design system が**未定義な領域**での主観提案 (定義がないなら破綻ではない)
-- 「将来こうなったらおしゃれ」(観測事実 + 影響経路がない)
-- ux-ui-audit の領域 (使いやすさ・必須 state・a11y) への侵食 (責務違反)
-
-許可されるのは「**観測可能な design system 破綻**」のみ。詳細は `agents/designer-expert.md` の Scan Mode / patrol モード節を参照。
+**`designer-expert` には追加の禁止がある** (主観・好み / 影響が観測できない単発の余白ズレ /
+design system 未定義領域での主観提案 / ux-ui-audit 領域への侵食)。
+許可されるのは「**観測可能な design system 破綻**」のみ。
+判断基準は上記 runtime 正本と `agents/designer-expert.md` の Scan Mode / patrol モード節を参照。
 
 op-run が patrol 起票 Issue を実装するため、ノイズ起票は下流のコスト全てを汚す。
 **「報告しない判断」を恐れない。** 警備員は「異常なし」を報告できる。

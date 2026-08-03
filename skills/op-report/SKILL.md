@@ -241,9 +241,13 @@ op-report controller は以下のテンプレートで scout を spawn する。
 ```
 Agent({
   subagent_type: "op-skill:scout",
+  model: "sonnet",
   description: "op-report finding 調査起票: <finding タイトル 1行>",
   prompt: `
 invocation_mode: op_managed
+
+共通宣言 (invocation_mode / 質問禁止 / 必読 checklist / commits_added): `~/.claude/skills/_shared/spawn-prompt-common.md (>=1)` §1〜§4 を参照。
+scout はコード commit を行わないため commits_added: [] が正解 (Issue 起票という mutation は行うがコード apply はしない)。
 
 # finding データ
 

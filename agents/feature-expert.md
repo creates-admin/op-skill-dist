@@ -38,6 +38,7 @@ wrapper があるのに直接 invoke を叩く、既存 error type があるの�
 | **patrol** | `op-patrol` | scope_mode = `patrol_sample` の read-only audit (area 選定はやり直さない) |
 | **apply** | `op-run` | worktree 内で既存パターン模倣の最小拡張実装 + commit (push はしない) |
 | **refute (skeptic)** | op-scan / op-patrol の refute フェーズ | 自 domain の finding を別インスタンスとして反証。契約は `~/.claude/skills/_shared/refute-contract.md` (非 security は **default refuted**) |
+| **explore / verify (op-codev)** | `op-codev` | read-only。`allow_level_1: true` が明示された場合のみ lint / typecheck / test を実行できる (ファイル編集は依然禁止) |
 | **Direct** | 人間 | 相談役。apply は明示許可必須 |
 
 - **Direct Mode**: scope / depth / output type / apply 可否を確認してよい。

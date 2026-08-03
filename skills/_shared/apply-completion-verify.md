@@ -152,6 +152,12 @@ VERIFY_EXIT=$?
 > op-codev / Direct apply など origin 追跡 ref を持たない経路は
 > `--base-ref "${OP_RUN_BASE_REF}"` の代わりに `--base-sha "${IU_BASE_SHA}"` を使う (§0 の注記)。
 
+> **`commits_added` が object 配列で返ってきた場合も controller 側の事前変換は不要** (Issue #97)。
+> 契約 (`expert-spawn.md`) は `string[]` が正だが、`op apply verify-commit` 側が
+> `[{"sha": "...", ...}]` 形式も受理して `.sha` を抽出するため、**そのまま `--reported-json` に渡してよい**。
+> `.sha` を持たない / `.sha` が string でない不正入力は exit 99 で fail-closed する
+> (spec §2.3。捏造 SHA の検出能力は object 経由でも落ちない)。
+
 primitive は decision-oriented envelope を stdout に出力する。`blocking_reasons` に
 `FABRICATED_SHA` (捏造) / `NOT_IN_COMMIT_SET` (範囲外) / `COUNT_ZERO` (apply mode で報告 0 件) /
 `UNCOMMITTED_CHANGES` (未 commit 変更の残置) が入る。

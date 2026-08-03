@@ -1,7 +1,15 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-06-14
-notes: v1.6 相当 additive (2026-07-31): **commit 取りこぼし対策**。フェーズ4 の push 直前に
+notes: v1.7 相当 additive (2026-07-31): expert-spawn.md v17 (#84) 追従。`self_check_blocked` を
+       フェーズ2 返却 / フェーズ3 返却 / フェーズ4 (PR 作成) 入力条件に配線し、L1 で required +
+       fail-closed と定義したフィールドの consumer 実体を CO 側に持たせる (従来 CO 側に言及が 0 件で、
+       契約だけが宙に浮いていた)。`true` の場合はフェーズ4 へ進まず人間 gate / 再委任へ回す。
+       fail-closed の対象は `status: completed` の完了報告、および完了報告自体が返らないケース
+       (無限待ち禁止条項の例外) に限る (escalation 報告は従来どおり人間 gate)。
+       v1.6 の commit verify gate と併存し、フェーズ4 入力条件は両者を AND で満たす必要がある。
+       ClusterSummary schema・verdict union は不変ゆえ schema_version 据置。
+       v1.6 相当 additive (2026-07-31): **commit 取りこぼし対策**。フェーズ4 の push 直前に
        `op apply verify-commit` の commit verify gate を明示配線した。従来この fence は
        `git push` を無条件実行しており、worktree に未 commit 変更が残っていても検出しなかった
        (commits_added が正当なら既存 gate も pass するため、未 commit 分は push されず
@@ -270,6 +278,7 @@ apply-expert の完了報告から以下を抽出して保持する。
 
 - `commits_added: string[]` — 追加されたコミット SHA の配列 (空は contract violation)
 - `self_review_result: "pass" | "needs_fix" | "skip"` — フェーズ3 の自己検証結果
+- `self_check_blocked: boolean` — 自己検証で解消できない Critical/High が残ったか (既定 `false`。`status: completed` の完了報告では `false` でも明示される)
 
 ---
 
@@ -316,11 +325,25 @@ sub-agent でも Skill tool は利用可能)。
 > ClusterOrchestrator は無限待ちしない。git log / worktree 状態 / PR 情報から
 > フェーズ完了を確認できた場合はそれを根拠に次フェーズへ進む。
 > controller からの relay SendMessage に依存しない。
+>
+> **ただしフェーズ4 (PR 作成) へ進む場合のみ例外**: git log / worktree 状態 / PR 情報を根拠に
+> 進む場合でも、`self_review_result` / `self_check_blocked` を確認できない (完了報告がそもそも
+> 返っていない場合を含む) 状態でフェーズ4 へ進んではならない — fail-closed で apply-expert に
+> 再返却を求めるか人間 gate へ回す。本例外はフェーズ4 への進行にのみ適用され、
+> それ以外のフェーズ進行における無限待ち禁止は従来どおり有効。
 
 ### 返却
 
-`self_review_result: "pass" | "needs_fix" | "skip"` を compact summary に転記する。
+`self_review_result: "pass" | "needs_fix" | "skip"` と `self_check_blocked: true | false` を
+compact summary に転記する。
+
 - `skip`: code-review 非該当 (例: ドキュメントのみの変更) の場合に返す。フェーズ4 への進行は blocker なし。
+- `self_check_blocked`: 自己検証の再実行 (1 回まで) 後も Critical/High が残った場合に `true`。
+  正常完了時は `false` が明示される (apply-expert 側の指示は `references/apply-prompt-directives.md`
+  「自己検証」節、フィールド定義の正本は `_shared/expert-spawn.md` の「修正完了報告 フィールドの必須性」表)。
+  `status: completed` の完了報告で本フィールドが欠落している場合は fail-closed —
+  フェーズ4 へ進まず、apply-expert に再返却を求めるか人間 gate へ回す
+  (`status` が `blocked` / `partial` の escalation 報告は対象外。そのまま人間 gate へ回す)。
 
 ---
 
@@ -328,9 +351,20 @@ sub-agent でも Skill tool は利用可能)。
 
 ### 入力
 
-フェーズ3 が完了し `self_review_result` が `"pass"` / `"needs_fix"`(再検証済) / `"skip"`(code-review 非該当) のいずれかであること。
-あわせてフェーズ2 の `commits_added` を `COMMITS_ADDED_JSON` (JSON 配列文字列) として保持していること
-(下記 commit verify gate の入力。フィールドが無い / 空でも gate は実行する — 下記注記)。
+フェーズ3 が完了し、以下の 3 条件をすべて満たすこと。
+
+- `self_review_result` が `"pass"` / `"needs_fix"`(再検証済) / `"skip"`(code-review 非該当) のいずれかであること
+- `self_check_blocked` が `false` であること。`true` の場合は PR 作成へ進まず、
+  完了扱いにせず人間 gate / apply-expert への再委任へ回す
+  (フィールド定義の正本は `_shared/expert-spawn.md` の「修正完了報告 フィールドの必須性」表 `self_check_blocked` 行)
+- フェーズ2 の `commits_added` を `COMMITS_ADDED_JSON` (JSON 配列文字列) として保持していること
+  (下記 commit verify gate の入力。フィールドが無い / 空でも gate は実行する — 下記注記)
+
+`self_review_result` / `self_check_blocked` は、`status: completed` の完了報告で欠落している場合、
+および完了報告自体が返らず値を確認できない場合は fail-closed (無限待ち禁止条項を根拠に
+フェーズ4 へ進むことはできない。正本はフェーズ3 の返却節および同フェーズの無限待ち禁止 例外)。
+なお本条件と下記 commit verify gate は**別レイヤー**であり、両方を満たす必要がある —
+前者は「自己検証の結果が受理可能か」、後者は「報告されなかった変更が worktree に残っていないか」を見る。
 
 ### 実行
 
