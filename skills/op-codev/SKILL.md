@@ -48,6 +48,28 @@ notes: v1 (2026-06-14): 初版。対話型監督実装スキル (op-codev)。
        「findings: op-code-review の JSON 配列そのまま」であり、同一 SKILL.md 内で隣接するため
        Step B 側がこれに引きずられた。
        schema_version bump (Step B の実行順序という既存 contract を変更するため)。
+       v5 (2026-08-05, additive): **v4 が塞ぎきれなかった「完了報告の乗っ取り」の残り穴**。
+       実測 (IU-3) で v4 適用済 (plugin 0.1.25 = 本 SKILL.md とバイト一致) にもかかわらず、
+       worker が commits_added 無しの findings JSON のみを返す事故が再演した。
+       原因は v4 (c) の禁止文の「位置」と「形」:
+       (a) 禁止文は spawn prompt (t0) にあるが、乗っ取る側の指示は Step B 手順 5 の
+       Skill(op-skill:op-code-review) 実行時に注入される (最終メッセージ直前 = t_last)。
+       しかも op-code-review 側は「findings を JSON 配列のみで返す」という**排他的かつ具体的な
+       スケルトン付き**である一方、こちらは canonical schema を _shared/expert-spawn.md への
+       **ポインタでしか示していなかった** — context 内に対抗テンプレの実体が無い状態で
+       「X をするな」だけを置いても、直前に読んだ具体形が勝つ。
+       → Step B prompt に completion_report の**逐語テンプレを inline** した (正本は
+       expert-spawn.md のまま。inline は prompt 用の複製である旨を明記し二重正本化を避ける)。
+       (b) Step B prompt に spawn-prompt-common §1〜§4 の共通宣言 pointer と
+       【必読】apply-completion-checklist の Read 指示が **無かった** (§4 の fallback のみ参照)。
+       v6 で checklist に追加した乗っ取り禁止の 2 箇所 (Section 3 チェック項目 / Section 4 強警告) が、
+       op-codev worker が開くよう指示されていないファイルの中にあった。op-run 側は
+       cluster-orchestrator-directives.md に同 pointer があり、この非対称が op-codev だけの穴だった。
+       → 共通宣言 + 必読ブロックを追加し、apply Run Mode 該当を明示。Read 失敗時の
+       fallback (plugin root 探索 → inline テンプレ) も併記した。
+       契約の追加のみ (既存フェーズ順序・checkpoint 構造・Step B-1 gate は不変) ゆえ
+       schema_version 据置。関連: op-code-review/SKILL.md の Output contract 適用範囲節、
+       agents/feature-expert.md の apply (op-codev) 行。
 -->
 
 
@@ -102,6 +124,9 @@ op-codev の責務:
   **§7.2 Fable escalation gate**: worker の自動選択は Opus 天井。`fable` は Step B (implement) で
   3-B-gate の人間承認を得た IU のみ。**Step A (explore) / Step C (verify) / Step B-2 (独立レビュー) /
   Review 選択 2 (review-expert) は read-only につき承認があっても `fable` 禁止**
+- `~/.claude/skills/_shared/spawn-prompt-common.md` (>=1) — spawn prompt 共通必須ブロック
+  (§1 invocation_mode / §2 必読 checklist / §3 commits_added / §4 質問禁止 + fallback) の正本。
+  Step B は §1〜§4 すべて、Step A / Step C / Step B-2 は §1・§4 を pointer 参照する
 - `~/.claude/skills/_shared/apply-completion-checklist.md` (>=6) — apply 完了手順の正本。op-codev は
   **Section 2-A の commit 先行順序** を使う (v4 で Section 2 の 5 段階順序から変更。理由は下記)
 - `~/.claude/skills/_shared/apply-completion-verify.md` (>=4) — controller 側 verify gate の正本。
@@ -496,6 +521,18 @@ Agent({
   prompt: `
     invocation_mode: op_managed
 
+    【共通宣言層】
+    共通宣言 (invocation_mode / 質問禁止 / 必読 checklist / commits_added):
+    ~/.claude/skills/_shared/spawn-prompt-common.md (>=1) §1〜§4 を参照。
+    【必読】Read ~/.claude/skills/_shared/apply-completion-checklist.md (>=6) — 完了手順の正本。
+    **本フェーズは op-codev の apply Run Mode である** (同 §1 の mode 表で「apply Run Mode
+    (op-run / op-codev 経由 または Direct apply)」に該当する)。よって commits_added: [SHA, ...]
+    (1 件以上) を完了報告に必ず含める (§3)。順序は同 **Section 2-A (commit 先行)** を使う。
+    上記 2 ファイルが Read できない場合 (plugin 配布ではパスが異なることがある) は、
+    **skip せず** plugin root 配下の skills/_shared/ を探して読むこと。
+    それでも解決しないときは、本 prompt 内に逐語で埋め込んだ下記【完了報告の形式】が
+    完了報告の契約として有効であり、これに従って報告する。
+
     【実装フェーズ】
 
     ゴール: <IU の goal>
@@ -526,6 +563,9 @@ Agent({
        (2 回目も Critical/High が残るなら self_check_blocked: true を付けて報告)
        Medium / Low は自己修正せず、後段の review 工程に委ねる
     7. 完了報告に code_review_invoked / code_review_result を必ず含める
+    8. **最後に**、下記【完了報告の形式】のテンプレを開き、そのフィールドを埋める形で
+       完了報告を組み立てて返す。手順 5 で読んだ op-code-review の出力形式ではなく、
+       このテンプレが最終メッセージの形である (直前に読んだ形式に引きずられない)
 
     【commit 取りこぼしの禁止 (contract violation)】
 
@@ -539,10 +579,44 @@ Agent({
 
     【完了報告の形式 (重要 — 他の出力形式で代替しないこと)】
 
-    完了報告は canonical completion_report (_shared/expert-spawn.md) の形式で返すこと。
+    完了報告は canonical completion_report (正本: _shared/expert-spawn.md
+    「修正完了報告 schema」節) の形式で返すこと。**以下はその逐語テンプレであり、
+    schema の正本ではない** (必須性・enum の判定は必ず正本側を読む)。
+    あなたの最終メッセージは、この形を埋めたものでなければならない:
+
+    {
+      "status": "completed | blocked | partial",
+      "modified_files": ["<path>", ...],
+      "commits_added": ["<SHA1>", "<SHA2>"],
+      "verification_executed": ["<実行した検証ステップ>", ...],
+      "verification_results": {
+        "level1_lint_type": "pass | fail | skip",
+        "level2_unit_test": "pass | fail | skip",
+        "level3_build": "pass | fail | skip"
+      },
+      "code_review_invoked": true,
+      "code_review_result": "pass | warning | skip",
+      "code_review_skip_reason": null,
+      "self_review_result": "pass | needs_fix | skip",
+      "self_check_blocked": false,
+      "assumptions": [],
+      "needs_human_decision": { "required": false }
+    }
+
+    加えて op-codev 固有の必須節 (CHECKPOINT B が使う): 手本にした既存ファイル /
+    再利用した既存資産。この 2 つが空欄の完了報告は silent fork 兆候として不可。
+
+    commits_added は **SHA 文字列そのものの配列** (string[])。
+    [{"sha": "...", "files": [...]}] のように object でラップしない。
+
     **op-code-review が返す findings JSON 配列を、そのまま完了報告として返してはならない。**
-    findings は完了報告の一部 (code_review_result 等) に要約して載せるものであり、
-    完了報告そのものではない。commits_added フィールドを含まない報告は invalid である。
+    自己検証 skill の Output contract (「findings を JSON 配列のみで返す」) が規定するのは
+    **その skill の返却値の形**であって、あなたの最終報告の形ではない。
+    findings は完了報告の一部 (code_review_result / self_review_result 等) に要約して
+    載せるものであり、完了報告そのものではない。
+    commits_added フィールドを含まない報告は invalid である。
+    報告を書き始める前に、上のテンプレのフィールドを埋める形で組み立てること
+    (直前に読んだ出力形式に引きずられない)。
 
     重要 — この skill は plugin 同梱で portable であり、対象 repo の CLAUDE.md /
     op-tools / registry / op CLI に一切依存しない。「repo が小さい」「skill の

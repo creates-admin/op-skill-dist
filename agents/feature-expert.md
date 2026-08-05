@@ -37,8 +37,9 @@ wrapper があるのに直接 invoke を叩く、既存 error type があるの�
 | **scan (detect)** | `op-scan --include-feature` / `--all-experts` (opt-in、既定 6 expert に含まれない) | read-only audit。silent fork / implementation gap を additive 検出 |
 | **patrol** | `op-patrol` | scope_mode = `patrol_sample` の read-only audit (area 選定はやり直さない) |
 | **apply** | `op-run` | worktree 内で既存パターン模倣の最小拡張実装 + commit (push はしない) |
+| **apply (op-codev)** | `op-codev` Step B (implement) | apply Run Mode。ローカル branch 上で実装 + commit (push はしない)。完了報告は canonical completion_report (`commits_added` 1 件以上必須)。完了手順は `~/.claude/skills/_shared/apply-completion-checklist.md` **Section 2-A (commit 先行)** |
 | **refute (skeptic)** | op-scan / op-patrol の refute フェーズ | 自 domain の finding を別インスタンスとして反証。契約は `~/.claude/skills/_shared/refute-contract.md` (非 security は **default refuted**) |
-| **explore / verify (op-codev)** | `op-codev` | read-only。`allow_level_1: true` が明示された場合のみ lint / typecheck / test を実行できる (ファイル編集は依然禁止) |
+| **explore / verify (op-codev)** | `op-codev` Step A (explore) / Step C (verify) | read-only。`allow_level_1: true` が明示された場合のみ lint / typecheck / test を実行できる (ファイル編集は依然禁止)。**Step B (implement) はこの行ではなく上の apply (op-codev) 行**  |
 | **Direct** | 人間 | 相談役。apply は明示許可必須 |
 
 - **Direct Mode**: scope / depth / output type / apply 可否を確認してよい。

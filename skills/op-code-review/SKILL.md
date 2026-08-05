@@ -9,6 +9,16 @@ last_breaking_change: 2026-07-29
 notes: v1 (2026-07-29) 初版。built-in /code-review が disable-model-invocation のため
        model (subagent / main loop) から invoke できない問題を自前 skill で構造的に解決する。
        built-in の subagent 不可環境向け single-pass 変種を土台に、方法論を再構成した。
+       (2026-08-05, additive) Output contract に **適用範囲 (フレーム限定) 節**を追加。
+       本 skill は「同じ context 内で自分自身で実行する」設計ゆえ、呼び出し元 agent にとって
+       「skill の返却値」と「自分の最終メッセージ」が原理的に見分けられず、
+       「findings を JSON 配列のみで返す」という排他的な文言が呼び出し元の完了報告契約を
+       乗っ取る事故が実測で 2 回発生した (2026-07-31 op-codev IU1 / 2026-08-05 IU-3、
+       いずれも commits_added 欠落の findings JSON のみが最終出力になった)。
+       下請け invoke 時は呼び出し元の報告フォーマットが優先される旨を本 skill 側にも明示し、
+       呼び出し元 prompt 側の禁止文だけに依存しない二重化とする。
+       portable 性は不変 (op-skill 固有の registry / CLI へ依存する記述は追加していない)。
+       schema_version 据置 (節追加のみ、既存の findings schema・severity・angle は不変)。
 -->
 
 <!--
@@ -177,6 +187,16 @@ verify 済みリストを手に、新鮮な目でもう一巡だけ行う。diff
 
 ## Output contract (返却形式)
 
+> **適用範囲 (先に読むこと)**: 本節が規定するのは **本 skill の返却値の形** であって、
+> 呼び出し元エージェント自身の最終報告の形ではない。apply / 実装タスクの下請けとして
+> 同一 context から invoke された場合、あなたの最終メッセージは **呼び出し元が指定した
+> 完了報告フォーマット** (op-run / op-codev 経路なら canonical completion_report) のままであり、
+> 本節の findings 配列はその中の 1 フィールド (`code_review_result` / `findings` 等) に
+> 収める素材である。**findings 配列をそのまま最終報告として返して完了報告を置き換えることは
+> contract violation** — 呼び出し元の gate (`op apply verify-commit` 等) で block される。
+> 本節を「最終出力はこれだけにせよ」と読んではならない。
+> 人間が本 skill を単独起動した場合のみ、下記がそのまま最終出力になる。
+
 findings を **JSON 配列のみ** で返す (前後に散文の重複説明を付けない)。
 上限は effort ladder の findings 上限 (既定 **10 件**)、最重症順。
 上限を超えて残った場合は重症なものに絞る。何も残らなければ `[]` を返す。
@@ -209,6 +229,8 @@ severity 正本 (`skills/_shared/severity-rubric.md`) があればそちらに�
 
 返却の冒頭に一行、これは single-pass の自己検証レビューであり multi-agent fan-out
 ではない旨を明記する (読み手が実行内容を誤解しないため)。
+これは **本 skill の返却ブロックの冒頭**であって、下請けとして呼ばれた場合の
+最終メッセージ冒頭ではない (上記「適用範囲」参照)。
 
 ## 呼び出し側への注記
 
