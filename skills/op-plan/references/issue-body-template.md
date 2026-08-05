@@ -9,7 +9,7 @@ notes: v1 (2026-07-29): ADR-0029 Wave B1 (controller 層 progressive disclosure)
 
 <!--
 機能概要: op-plan フェーズ7 Pass 2 が生成する Issue 本文 (`-final.md`) の `## 依存` セクションの
-         書き方サンプル。hidden marker (`op-depends-on`) と prose (`## 依存`) の正本ペア形式を示す。
+         書き方サンプル。機械可読 marker (`op-depends-on`) と prose (`## 依存`) の正本ペア形式を示す。
 作成意図: Pass 2 の bash 手順 (`FINAL_FILE_I` を Write tool で生成する手順) を読んだ後、
          実際にどんな形の Markdown を書けばよいかを確認するための成果物サンプル。
          手順そのものではなく example のため、SKILL.md 本文から分離して god file 化を抑制する
@@ -31,7 +31,7 @@ Pass 2 の Write tool で実番号に差し替える (依存なし issue はセ�
 marker と prose は「正本ペア」(`_shared/markers/labels-and-markers.md` 参照) のため必ず両方を更新する。
 
 ```markdown
-<!-- hidden marker ブロック (op-architect IU1 の依存あり例と同形式) -->
+<!-- 機械可読 marker ブロック (op-architect IU1 の依存あり例と同形式) -->
 <!-- op-source: op-plan -->
 <!-- op-domain: feature -->
 <!-- op-run-expert: feature-expert -->

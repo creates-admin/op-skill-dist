@@ -10,7 +10,10 @@ effort: max
 <!--
 schema_version: 2
 last_breaking_change: 2026-05-13
-notes: 2026-07-29 追記 (ADR-0029 Wave B1) — 「薄い入口 + references/」分割。
+notes: 2026-08-05 追記 — 表記中立化: 「hidden marker」呼称を「機械可読 marker」へ、marker の
+       「埋める / 埋め込む」を「付与 / 記載」へ全置換。HTML コメント形式メタデータの呼称変更のみで
+       marker リテラル・schema・参照正本 (labels-and-markers.md) は不変ゆえ schema_version 据え置き。
+       2026-07-29 追記 (ADR-0029 Wave B1) — 「薄い入口 + references/」分割。
        フェーズ2.5 §2.5-1〜§2.5-3 (auto-detect / override / Workflow 呼出) を
        `references/op-survey-discovery.md` へ、フェーズ4 §4-judge 詳細と フェーズ6 §6-6
        (EnterPlanMode/ExitPlanMode フォールバック) を `references/judge-panel-and-fallbacks.md` へ、
@@ -159,14 +162,14 @@ EnterPlanMode 呼び出しを skip** する (冪等性確保)。
   Design Plan 生成 / cross-review / 修正反映を担う本スキルの中核処理 (フェーズ 5 で参照)。
   v2 以降: §7.5 Cross-instance Collision Gate が追加され、enrichment 完了直後・`op issue create`
   直前に fingerprint 横断検索 gate を必ず通過する必要がある
-- `~/.claude/skills/_shared/expert-spawn.md` — feature-expert (audit モード) spawn 規約、canonical schema、commits_added required (v14)、Direct / OP-managed Mode 規約 (フェーズ 3 で参照)。**Marker Publish Validate 節** (publish 前 2 段 validate 手順の正本) — controller が `op issue create` で hidden marker を埋める前に `op help marker <name>` + `op core marker-lint --body - --source-hint <kind> --strict` を通す契約。**フェーズ7 起票直前の fail-fast lint を有効化済**: かつての既知制約 (`op core marker-lint` が canonical 必須値 `op-post-check-expert: null` を `expert-active-only` error として誤 block する不具合) は #529 (commit 585298d) で解消済 (`--strict` で `null` を含む body が `decision: pass`、op-scan/op-patrol/op-architect は更新済)
+- `~/.claude/skills/_shared/expert-spawn.md` — feature-expert (audit モード) spawn 規約、canonical schema、commits_added required (v14)、Direct / OP-managed Mode 規約 (フェーズ 3 で参照)。**Marker Publish Validate 節** (publish 前 2 段 validate 手順の正本) — controller が `op issue create` で 機械可読 marker を付与する前に `op help marker <name>` + `op core marker-lint --body - --source-hint <kind> --strict` を通す契約。**フェーズ7 起票直前の fail-fast lint を有効化済**: かつての既知制約 (`op core marker-lint` が canonical 必須値 `op-post-check-expert: null` を `expert-active-only` error として誤 block する不具合) は #529 (commit 585298d) で解消済 (`--strict` で `null` を含む body が `decision: pass`、op-scan/op-patrol/op-architect は更新済)
 - `~/.claude/skills/_shared/pr-templates.md` (>=8) — Issue 本文の指示書フル版テンプレ、
-  hidden marker schema、ラベルカタログ (フェーズ 4 / 7 で参照)
+  機械可読 marker schema、ラベルカタログ (フェーズ 4 / 7 で参照)
 - `~/.claude/skills/_shared/invocation-mode.md` (>=1) — Direct Mode / OP-managed Mode 判定。
   本スキルは Direct Mode 固定 (フェーズ 0 / 6 / 8 で参照)
 - `~/.claude/skills/_shared/version-check.md` (>=2) — schema_version 整合性チェック手順 (フェーズ 0 で参照)
 - `~/.claude/skills/_shared/active-expert-registry.md` (>=2) — feature-expert audit spawn 時の active expert 確認
-- `~/.claude/skills/_shared/markers/labels-and-markers.md` — Issue / PR の hidden marker / label 名と意味の正本
+- `~/.claude/skills/_shared/markers/labels-and-markers.md` — Issue / PR の 機械可読 marker / label 名と意味の正本
 - `~/.claude/skills/_shared/dedup-policy.md` (>=3) — fingerprint 生成仕様 + 既存 Issue 重複除外手順 (フェーズ 4 で参照)
 - `~/.claude/skills/_shared/model-selection.md` (>=5) — expert spawn 時の model (Opus / Sonnet / Haiku、具体 version は §1) 選択 / task_complexity / 区画 complexity の canonical 正本。op-plan は対話計画フェーズで Opus、enrichment 経由で Issue の task_complexity を推論。**op-plan は spawn する側がすべて計画・enrichment 層 (read-only) のため `fable` を渡さない** — 実装 model の昇格判断は起票後の op-run 1-2-g / op-codev 3-B-gate に委ねる (§7.2 (>=5))
 - `~/.claude/skills/_shared/read-economy.md` (>=1) — Read Economy 原則 (R1〜R5) + 「Controller への適用」節。controller は既読 Issue/PR/file の再 Read を避け、Issue/PR body は meta/list で取得し、subagent の completion_report 取り込みを圧縮する (読まなさすぎへの退行は避ける)
@@ -175,7 +178,7 @@ EnterPlanMode 呼び出しを skip** する (冪等性確保)。
 - `workflows/op-survey.js` — 汎用 investigation fan-out workflow (Issue #645)。op-plan フェーズ2.5 の discovery ステップが呼び出す。`--survey` / `--no-survey` フラグで override 可。戻り値 `{ findings[], coverage_notes[] }` を `aggregateSurveyFindings()` で `asset_audit` に射影する。`op_survey.enabled: false` で無効化 (`op-config.yaml` §13)
 - `~/.claude/skills/op-plan/references/op-survey-discovery.md` (>=1) — フェーズ2.5 の auto-detect heuristic (§2.5-1) / override フラグ (§2.5-2) / `Workflow({name:'op-survey'})` 呼び出し手順 (§2.5-3) の詳細。investigation 型要望の判定・survey 起動可否を確認するときのみ読む (SKILL.md 本体 god file 抑制、ADR-0029 Wave B1)
 - `~/.claude/skills/op-plan/references/judge-panel-and-fallbacks.md` (>=1) — フェーズ4 計画 judge-panel (`op-plan-judge` workflow 呼出詳細、ADR-0014 Wave B) と フェーズ6 EnterPlanMode/ExitPlanMode 利用不可環境のフォールバック挙動の詳細。config gate / tool 未提供時のみ読む (SKILL.md 本体 god file 抑制、ADR-0029 Wave B1)
-- `~/.claude/skills/op-plan/references/issue-body-template.md` (>=1) — フェーズ7 Pass 2 が生成する Issue 本文の `## 依存` セクション (hidden marker + prose 正本ペア) の書き方サンプル。`FINAL_FILE_I` を Write tool で生成するときのみ読む (SKILL.md 本体 god file 抑制、ADR-0029 Wave B1)
+- `~/.claude/skills/op-plan/references/issue-body-template.md` (>=1) — フェーズ7 Pass 2 が生成する Issue 本文の `## 依存` セクション (機械可読 marker + prose 正本ペア) の書き方サンプル。`FINAL_FILE_I` を Write tool で生成するときのみ読む (SKILL.md 本体 god file 抑制、ADR-0029 Wave B1)
 
 ---
 
@@ -564,7 +567,7 @@ domain が `feature` でも **UI 影響あり** としてフェーズ 5 (enrichm
 ### 4-2. Issue draft の骨格
 
 `_shared/pr-templates.md` の **「Issue 本文 (指示書フル版)」** をそのまま骨格として使う。
-hidden marker は以下を埋める (詳細は `_shared/markers/labels-and-markers.md` 参照):
+機械可読 marker (HTML コメント形式の routing / dedup 用メタデータ) は以下を記載する (詳細は `_shared/markers/labels-and-markers.md` 参照):
 
 ```html
 <!-- op-fingerprint: <domain>:<normalized_title>:<primary_file>:<symbol> -->
@@ -707,7 +710,7 @@ enrichment 層は以下を順次実行する (本スキルから見えるのは�
   `op issue create` 直前に必ず実行する (`issue-enrichment.md` (>=2) §7.5 参照)。
   block 判定時はユーザーに提示して起票停止。warn 判定時は `<!-- op-collision-warning -->`
   marker と `needs:triage` / `op:potential-collision` ラベルを付与して起票続行
-- enrichment marker 埋め込み (section 3.9)
+- enrichment marker 付与 (section 3.9)
 
 ### 5-3. enrichment 結果の受け取り
 
@@ -764,7 +767,7 @@ v2 ではこの gate を Claude Code 標準の **`ExitPlanMode` 呼び出し** �
 
 ## Labels
 auto-report, pro-feature-expert <UI 影響時は + pro-ux-ui-audit-expert>
-(`op-source: op-plan` は hidden marker として本文冒頭に埋め込み済み、GitHub ラベルではない)
+(`op-source: op-plan` は 機械可読 marker として本文冒頭に記載済み、GitHub ラベルではない)
 
 ## 起票後の実行ステップ (フェーズ 7-8 で実施)
 
@@ -871,7 +874,7 @@ v2 では本フェーズ以降は **plan mode を抜けた状態** で実行す�
 フェーズ7 は **Pass 1 (全 issue 直列起票 + 番号収集)** と **Pass 2 (depends_on 解決 + body 更新)** の
 2 パスで処理する。これにより judge-panel が出力する `issues[i].depends_on` (0-based index 配列) を
 実 issue 番号に変換して `<!-- op-depends-on: #N, #M -->` marker と prose `## 依存` セクションを
-正確に埋め込める。
+正確に記載できる。
 
 > **前提**: enrichment (フェーズ5) は `issues[]` の順序を変えない (per-issue 変換のみ)。
 > よって judge が返した配列の index と Pass 1 の起票順は一致する。
@@ -912,19 +915,19 @@ mcp channel では `op issue create --dry-run` は明示 bail するため本プ
 
 #### 7-2. Marker Publish Validate (起票直前 fail-fast)
 
-各 `op issue create` の **直前** に、組み立てた Issue body の hidden marker を fail-fast で検証する
+各 `op issue create` の **直前** に、組み立てた Issue body の 機械可読 marker を fail-fast で検証する
 (`_shared/expert-spawn.md` の **Marker Publish Validate 節** が正本)。#529 (commit 585298d) で
 `op-post-check-expert: null` の誤 block が解消済のため、op-scan/op-patrol/op-architect と同様に
 本 gate を有効化する (marker の typo / 必須フィールド漏れ / format drift を起票前に検出する)。
 
 ```bash
-# BODY_FILE = 起票する Issue 本文 (hidden marker 埋め込み済、enrichment 反映後)。
+# BODY_FILE = 起票する Issue 本文 (機械可読 marker 記載済、enrichment 反映後)。
 # marker 名・schema の参照は `op help marker <name>`。block 条件は op core marker-lint --strict。
 LINT_JSON=$(op core marker-lint --body - --source-hint issue-body --strict < "$BODY_FILE" 2>/dev/null) || true
 LINT_DECISION=$(printf '%s' "$LINT_JSON" | jq -r '.decision' 2>/dev/null)
 if [ "$LINT_DECISION" != "pass" ]; then
   echo "❌ marker-lint block: $(printf '%s' "$LINT_JSON" | jq -c '.blocking_reasons // []' 2>/dev/null)"
-  echo "→ hidden marker を修正してから再起票する。block された draft は起票しない"
+  echo "→ 機械可読 marker を修正してから再起票する。block された draft は起票しない"
   # Direct Mode 固定のためユーザーに提示して停止する (op-plan は --auto を持たない)
 fi
 # LINT_DECISION == "pass" のときのみ op issue create に進む
@@ -1022,7 +1025,7 @@ done
 
 Pass 1 で収集した `ISSUE_NUMS` (index→番号) を使って、各 issue の `depends_on` (0-based index 配列) を
 実 issue 番号に変換し、`<!-- op-depends-on: #N, #M -->` marker と prose `## 依存` セクションを
-Issue body に埋め込む。依存のない issue は marker・prose 両方を省略する。
+Issue body に記載する。依存のない issue は marker・prose 両方を省略する。
 
 > **なぜ index ベースか**: judge-panel (op-plan-judge.js) は `issues[i].depends_on = [0, 1]` のように
 > 0-based index で依存を表現する。enrichment はこの順序を変えないため、Pass 1 の起票順と index が一致し、
@@ -1073,7 +1076,7 @@ for i in $(seq 0 $((ISSUE_COUNT - 1))); do
 
   # -final.md を Write tool で生成する (prose 指示)。
   # BODY_FILE_I をベースに以下の 2 点を差し替える:
-  #   (a) hidden marker block の末尾 (op-post-check-expert 行の直後) に
+  #   (a) 機械可読 marker block の末尾 (op-post-check-expert 行の直後) に
   #       "<!-- op-depends-on: $DEP_NUMS -->" を追加する。
   #       依存のない issue は marker 行ごと省略する (空 value は lint error — ADR-0019 D1)。
   #   (b) prose "## 依存" セクションを実番号の箇条書きに差し替える。
@@ -1103,7 +1106,7 @@ Pass 1 で書き出す BODY_FILE_I には `## 依存` セクションを placeho
 Pass 2 の Write tool で実番号に差し替える (依存なし issue はセクションごと省略)。
 marker と prose は「正本ペア」(`_shared/markers/labels-and-markers.md` 参照) のため必ず両方を更新する。
 
-> **いつ読むか**: 上記 Pass 2 の `FINAL_FILE_I` を Write tool で生成するとき、hidden marker
+> **いつ読むか**: 上記 Pass 2 の `FINAL_FILE_I` を Write tool で生成するとき、機械可読 marker
 > ブロック (`op-depends-on` 追加位置) と prose `## 依存` セクションの実例を確認したい場合のみ、
 > `references/issue-body-template.md (>=1)` を読む。
 
@@ -1191,7 +1194,7 @@ op-run #<N> を起動するには以下を実行してください:
 
 正常完了時の状態:
 
-- Issue #N が起票済み (enriched 状態、hidden marker 完備)
+- Issue #N が起票済み (enriched 状態、機械可読 marker 完備)
 - `op-source: op-plan` で routing 可能
 - Medium/Low の post_create_comments が Issue コメントとして追加済み
 - op-run を起動するか、ユーザーが手動で `/op-run <N>` できる状態
