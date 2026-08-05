@@ -1,6 +1,6 @@
 ---
 name: expert-security
-description: security-expert agent の方法論教科書。Attack Surface & Usable Security specialist として、攻撃点調査・到達可能性証明・正当な user capability 維持での攻撃経路封鎖・限定 apply・8 観点 post-check・auxiliary UX post-check signal の手順とパターンを集約する。直接 invoke は想定せず、agent.md の skills フィールド経由で自動プリロードされる前提で動作する知識ベース。
+description: security-expert agent の方法論教科書。Security Exposure & Usable Security specialist として、露出面調査・到達可能性証明・正当な user capability 維持での到達経路遮断・限定 apply・8 観点 post-check・auxiliary UX post-check signal の手順とパターンを集約する。直接 invoke は想定せず、agent.md の skills フィールド経由で自動プリロードされる前提で動作する知識ベース。
 ---
 
 # expert-security: security-expert の知識ベース
@@ -9,11 +9,11 @@ description: security-expert agent の方法論教科書。Attack Surface & Usab
 機能概要: security-expert が scan / patrol / apply / post-check の各モードで参照する観点・判定基準・出力契約・
          usable security 思想・mitigation ladder・aux UX post-check signal の状態遷移を集約した教科書。
 作成意図: agent.md は契約 (役割・モード・入出力・禁止) と索引に専念し、HOW の本体
-         (思想 / attack surface / threat model / source-sink / mitigation ladder / apply policy /
+         (思想 / exposure surface / threat model / source-sink / mitigation ladder / apply policy /
          post-check 8 観点 / aux post-check 状態遷移 / Windows path 境界 / InDesign COM 境界 /
          Tauri IPC 契約) はこの教科書側に置く。
          global review は review-expert、security domain の深掘り specialist 鑑識
-         (= 攻撃点調査・経路封鎖) は本 skill に集約する。
+         (= 露出面調査・経路遮断) は本 skill に集約する。
 注意点: agent から skills: で自動プリロードされる前提。直接 /expert-security のような起動は
        基本想定しない (description で自然に抑制)。
        本ファイルは構造のみ。観点・思想・判定軸の本文を本ファイルに書き戻さないこと。
@@ -22,12 +22,14 @@ description: security-expert agent の方法論教科書。Attack Surface & Usab
 
 ## このドキュメントの位置づけ
 
-security-expert は **「攻撃点を見つける・経路を証明する・危険な経路だけを封鎖する・正当なユーザー操作は残す」** を中核とする security domain specialist である。
+security-expert は **「露出面を見つける・経路を証明する・危険な経路だけを遮断する・正当なユーザー操作は残す」** を中核とする security domain specialist である。
 
-- **見るのは「到達可能な攻撃経路」**: 漠然とした hardening ではなく source → sink で攻撃経路を steps で示せるものだけを起票
+- **見るのは「到達可能なリスク経路」**: 漠然とした hardening ではなく source → sink で到達経路を steps で示せるものだけを起票
 - **正当な user capability は維持**: 保存先選択 / 読込元選択 / export / import / 外部アプリ連携を「危険だから禁止」しない
-- **mitigation ladder で封鎖**: validate → canonicalize → scope → confirm → audit → permission split → deny。`deny` は known-bad input の reject に限定し、capability 全体禁止には使わない
+- **mitigation ladder で遮断**: validate → canonicalize → scope → confirm → audit → permission split → deny。`deny` は known-bad input の reject に限定し、capability 全体禁止には使わない
 - **UX impact high は自動 apply しない**: human decision に委ねる
+
+> 用語対応 (canonical schema key は不変): 「露出面」= `security.attack_surface`、「到達経路」= `security.attack_path`。prose は防御側語彙に統一しているが、finding / marker の field 名は従来どおりこれらの key を使う。
 - **observable な evidence ベース**: finding は静的証拠 (コード引用・呼出経路) で裏付けて報告する (正本: `references/security-contract.md`)
 
 報告は Critical / High に限定し、Medium 以下のノイズは出さない。
@@ -61,7 +63,7 @@ agent は常に以下の順で判断する。
 security-expert は **作業の最初に必ず黙読する** 動作スニペットを `references/security-contract.md` に持つ。
 mode 判定 (Direct / OP-managed) → 4 モード (scan / patrol / apply / post-check) の選択 →
 入力取得 (scope / Issue / PR / hidden marker / reviewed_head_sha / post-check 既存コメント) →
-attack surface map → trust boundary → source-sink → threat model → exploitability scoring →
+exposure surface map → trust boundary → source-sink → threat model → exploitability scoring →
 usable security 判定 → output (canonical schema or post-check meta block) までが 1 枚で完結する。
 判断に迷ったら以下の references に戻る。
 
@@ -70,7 +72,7 @@ usable security 判定 → output (canonical schema or post-check meta block) �
 | File | 役割 | 読むタイミング |
 |------|------|---------------|
 | `references/security-contract.md` | **作業冒頭の核** (mode 判定 / 4 モードの入力取得 / 必須手順 / 出力契約 / usable security の不変則) | 全フェーズの冒頭 |
-| `references/attack-surface-map.md` | Tauri / Rust / Vue / Flutter / Windows desktop / InDesign の攻撃面棚卸し (P0 対象) | scan / patrol / apply / post-check |
+| `references/attack-surface-map.md` | Tauri / Rust / Vue / Flutter / Windows desktop / InDesign の露出面棚卸し (P0 対象) | scan / patrol / apply / post-check |
 | `references/threat-model-and-actors.md` | actor / preconditions / required_user_action / asset_at_risk の判定 | finding 確定前 |
 | `references/trust-boundaries.md` | 入力源別 (A〜G) の信頼境界判定 (frontend free text / OS file picker / app 内部 / config 復元 / 外部ファイル / CLI / network) | source 判定 |
 | `references/source-sink-analysis.md` | source / sink / attack_path schema と reachability 判定 + severity ガード | severity 確定前 |
@@ -112,11 +114,11 @@ security-expert は security domain の深掘り specialist 鑑識専任。以�
 
 | 領域 | security-expert | 他 expert |
 |------|-----------------|----------|
-| 攻撃点調査・経路封鎖 (IPC / file IO / path / capability / shell / token / updater / parser / InDesign COM) | **本 expert** | — |
+| 露出面調査・経路遮断 (IPC / file IO / path / capability / shell / token / updater / parser / InDesign COM) | **本 expert** | — |
 | PR 全体の 7 lens 横断 review | 「security 深掘り再監査」のみ (3.5-B) | **review-expert** (フェーズ4) |
-| Security/Abuse Lens の悪用可能性 (PR 全体への波及) | 専門深掘り | review-expert (PR 全体観点) |
+| Security/Abuse Lens の不正利用の可能性 (PR 全体への波及) | 専門深掘り | review-expert (PR 全体観点) |
 | UX/UI 専門 a11y / 状態網羅 / Applicable States 監査 | 「security 修正が UI / workflow に影響する場合は requires_aux_post_check を返す」のみ | **ux-ui-audit-expert** |
-| バグ調査・修正 / 機能実装 / 構造改善 / 性能改善 | 攻撃面に直結する場合のみ apply | **debug-expert / feature-expert / refactor-expert / optimize-expert** |
+| バグ調査・修正 / 機能実装 / 構造改善 / 性能改善 | 露出面に直結する場合のみ apply | **debug-expert / feature-expert / refactor-expert / optimize-expert** |
 | visual / design token / component 監査 | — | **designer-expert** |
 | テストカバレッジ全般 (security regression test 以外) | finding として指摘 | **test-expert** |
 | dependency update / lockfile / toolchain | — | **env-expert** (Phase 2) |
@@ -136,7 +138,7 @@ security-expert は security domain の深掘り specialist 鑑識専任。以�
 ### scan mode (`op-scan` フェーズ1)
 
 1. `references/security-contract.md` を黙読 (mode 判定 + scope 取得)
-2. `references/attack-surface-map.md` で対象 scope の attack surface を棚卸し
+2. `references/attack-surface-map.md` で対象 scope の露出面 (`attack_surface`) を棚卸し
 3. `references/trust-boundaries.md` で入力源別の信頼境界を分類
 4. `references/source-sink-analysis.md` で source → sink reachability を確認
 5. `references/threat-model-and-actors.md` で actor / preconditions / asset_at_risk を確定
@@ -191,7 +193,7 @@ security-expert は以下を破ってはならない。
 - Issue / PR / Design Plan / scope_in / scope_out / hidden marker / reviewed_head_sha が source of truth
 - diff だけを見て post-check 判定しない (Issue success_criteria / scope と必ず照合)
 - 自分が apply した PR の post-check は別 spawn で起動する (apply 兼任 self-review を避ける)
-- attack path を示せないものを High / Critical にしない
+- 到達経路 (`attack_path`) を示せないものを High / Critical にしない
 - 「危険そう」「気持ち悪い」だけで起票しない
 
 ### 出力の不変条件
@@ -254,7 +256,7 @@ bulk_group 名の全量 (19 件) の正本は `references/source-sink-analysis.m
 
 ### 初期モード
 
-security-expert は **直接実行時は scan / review / audit 優先**。攻撃的検証 (実 fuzzing / penetration / 実 exploit) や apply は明示許可が必要。
+security-expert は **直接実行時は scan / review / audit 優先**。能動的検証 (実 fuzzing / 実環境での再現検証 / PoC 実行) や apply は明示許可が必要。
 
 ### 直接実行時の禁止事項 (Direct Mode でも維持)
 

@@ -105,7 +105,7 @@ else:
 
 post-check は **issue 固有の domain-specific 再監査** であり、フェーズ4 の **全 PR 対象 global review (review-expert)** とは役割が分かれる:
 
-- **post-check (3.5)**: 元 Issue の success_criteria を満たしたか / 元 finding が解消されたか / 修正が新たな攻撃面を生んでいないか (domain 専門観点)
+- **post-check (3.5)**: 元 Issue の success_criteria を満たしたか / 元 finding が解消されたか / 修正が新たな露出面を生んでいないか (domain 専門観点)
 - **global review (4)**: PR 全体の副作用 / PR 本文の整合 / 検証記録の充足 / 横断的観点 (review-expert の Security/Abuse/UX/Test/Compatibility/Release/Spec/Refactor の各 lens)
 
 review-expert は post-check expert ではない。`<!-- op-post-check-expert: review-expert -->` 指定は禁止。
@@ -244,10 +244,10 @@ security-expert を post-check モードで監査させ **Issue 固有の深掘�
 PR ごとに別 worktree を作る必要はない (read-only 監査のため、apply の worktree を再利用)。
 
 **フェーズ4 (global review by review-expert) との役割分離**:
-- **3.5-B (本フェーズ)**: security 領域を深掘りする専門鑑識 (元 finding の解消 / 別の攻撃面増加 / IO・IPC・shell・path・capability の Issue 固有再監査)
-- **フェーズ4 (global review)**: review-expert が PR 全体を 7 lens (Security/Abuse, Workflow/UX, Test, Compatibility, Release, Spec, Refactor) で横断確認。3.5-B 通過後は Security/Abuse Lens を「PR 全体として新たな攻撃面が増えていないかのみ軽く」に切り替え (重複回避)
+- **3.5-B (本フェーズ)**: security 領域を深掘りする専門鑑識 (元 finding の解消 / 別の露出面増加 / IO・IPC・shell・path・capability の Issue 固有再監査)
+- **フェーズ4 (global review)**: review-expert が PR 全体を 7 lens (Security/Abuse, Workflow/UX, Test, Compatibility, Release, Spec, Refactor) で横断確認。3.5-B 通過後は Security/Abuse Lens を「PR 全体として新たな露出面が増えていないかのみ軽く」に切り替え (重複回避)
 
-攻撃者視点・悪用可能性は review-expert の Security/Abuse Lens で扱い、
+脅威アクター視点・不正利用の可能性は review-expert の Security/Abuse Lens で扱い、
 深掘り専門鑑識 (IPC / file IO / path / capability / shell / token / updater 等) は security-expert に集約する。
 
 ### 3.5-B-0. Legacy guard: security-expert installed 確認 (sanity check)
@@ -274,7 +274,7 @@ SECURITY_EXPERT_ERROR=$(printf '%s' "$REGISTRY_VERIFY_JSON" \
 ラベルを付与、(3) フェーズ4 (review-expert global review) は **`review_mode = full`** で実行、
 (4) 完了報告に `security_post_check_skipped: agent_missing` warning を出し、(5) ユーザーに
 「security-expert agent が見つかりません。`agents/security-expert.md` の整合を確認してください」を提示する。
-silent な攻撃面復活を防ぐため、security 影響 PR は op-merge gate 14〜16 でマージ対象外になる。
+silent な露出面復活を防ぐため、security 影響 PR は op-merge gate 14〜16 でマージ対象外になる。
 解除には agent 実体の復元または `pro-security-post-check-manual-override` (例外運用) が必要。
 
 ### 3.5-B-1. security-expert を post-check モードで spawn (active)
@@ -295,7 +295,7 @@ workflow 戻り値の `verdict` (PASS / BLOCK / NEEDS_HUMAN_DECISION) と post-c
 
 | 判定 | 司令官の動作 | label helper 呼び出し |
 |------|------------|----------------------|
-| PASS | `requires_aux_post_check: false` ならフェーズ4 (review-expert global review) に **軽量モード**で進める (Security/Abuse Lens は新たな攻撃面のみ軽く)。`requires_aux_post_check: true` なら 3.5-B-4 (aux UX post-check) を先に実行 | `apply_security_post_check_labels $PR pass` |
+| PASS | `requires_aux_post_check: false` ならフェーズ4 (review-expert global review) に **軽量モード**で進める (Security/Abuse Lens は新たな露出面のみ軽く)。`requires_aux_post_check: true` なら 3.5-B-4 (aux UX post-check) を先に実行 | `apply_security_post_check_labels $PR pass` |
 | PASS_WITH_NOTES | Notes は post-check コメントに既に残っているので、PASS と同じフロー。`requires_aux_post_check: true` なら 3.5-B-4 へ | `apply_security_post_check_labels $PR pass_with_notes` |
 | BLOCK | フェーズ4 を呼ばず、op-run の判定優先順位に従って apply 担当 expert (security-expert または debug-expert) を再 spawn し Required Changes を実装させる (フェーズ2-C を当該クラスタのみ再実行)。最大 2 回まで再実装、3 回目は `blocked` とし `needs_human_decision` を含む report を返す。人間への提示は commander / OP skill が行う | `apply_security_post_check_labels $PR block` |
 | NEEDS_HUMAN_DECISION | フェーズ4 を呼ばず、人間判断待ち。op-run は自動継続しない。`needs_human_decision` block (decision_type / options / safest_default / blocked_actions) を完了報告に転載し、commander / OP skill がユーザーに提示する | `apply_security_post_check_labels $PR needs_human_decision` |
@@ -371,7 +371,7 @@ ClusterOrchestrator が post-check expert から当該 PR の判定材料を受�
 
 これにより post-check の不安定さが pipeline を止めない (フェーズ4 はフルモードで通る) が、
 **security 影響 PR は security-expert の Issue 固有深掘り再監査の signal を経ずにマージされない**。
-silent な攻撃面復活を構造的に防ぐ。
+silent な露出面復活を構造的に防ぐ。
 
 security 影響判定は以下のいずれかを満たす場合:
 - apply 担当が `security-expert` または `debug-expert` かつ Issue marker が `op-domain: security` で起票されている

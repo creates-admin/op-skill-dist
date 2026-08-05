@@ -62,7 +62,7 @@ PASS_WITH_NOTES
 | # | 観点 | 結果 | コメント |
 |---|------|------|---------|
 | 1 | 元 finding の解消 | OK | <実装済み> |
-| 2 | 別の攻撃面増加チェック | OK | <新攻撃面なし> |
+| 2 | 別の露出面増加チェック | OK | <新たな露出面なし> |
 | 3 | 入力検証 | OK | <canonicalize / extension / reserved name reject 実装済み> |
 | 4 | 認可 / capability | OK | <IPC 権限境界 / scope 適切> |
 | 5 | エラーパス | OK | <error sanitize 実装済み> |
@@ -114,7 +114,7 @@ EOF
 ```text
 PASS_WITH_NOTES:
   - 元 finding は解消 (security_result: pass)
-  - 別の攻撃面 / 漏洩 / scope_out 違反 / 正当 capability 削除 はない
+  - 別の露出面 / 漏洩 / scope_out 違反 / 正当 capability 削除 はない
   - Notes は merge 後に対応する候補
 
 BLOCK:

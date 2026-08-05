@@ -58,14 +58,14 @@ aux_post_check_status: ${AUX_STATUS}
 PASS
 
 ### 評価サマリ
-<2〜4 文で全体評価。元 finding が解消され、別の攻撃面が増えていないこと、
+<2〜4 文で全体評価。元 finding が解消され、別の露出面が増えていないこと、
 正当な user capability が維持されていることを記述>
 
 ### 8 観点の評価
 | # | 観点 | 結果 | コメント |
 |---|------|------|---------|
 | 1 | 元 finding の解消 | OK | <Issue success_criteria を満たした実装> |
-| 2 | 別の攻撃面増加チェック | OK | <修正で導入されたコードに新しい攻撃面なし> |
+| 2 | 別の露出面増加チェック | OK | <修正で導入されたコードに新しい露出面なし> |
 | 3 | 入力検証 | OK | <canonicalize / extension / reserved name reject 等が実装済み> |
 | 4 | 認可 / capability | OK | <IPC 権限境界 / shell args 配列 / file IO scope 適切> |
 | 5 | エラーパス | OK | <TOCTOU 対策 / error sanitize 実装済み> |

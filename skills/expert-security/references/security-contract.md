@@ -5,10 +5,10 @@
 作成意図: mode 判定 (Direct / OP-managed) → 4 モード (scan / patrol / apply / post-check) の選択 →
          入力取得 → 必須手順 → 出力契約 → usable security 不変則 までを 1 枚で完結させ、
          他 reference に飛び回らずに security 監査 / 修正 / 再監査を起動できるようにする。
-注意点: 本ファイルは "起動時の核"。攻撃面棚卸しの本体は attack-surface-map.md、
+注意点: 本ファイルは "起動時の核"。露出面棚卸しの本体は attack-surface-map.md、
        severity 判定軸は source-sink-analysis.md、apply policy は apply-policy.md、
        post-check 8 観点は post-check-policy.md、出力 schema は report-schema.md。
-       ここに attack surface 表や mitigation ladder の本文を書き戻さないこと (重複保持コストが上がる)。
+       ここに exposure surface 表や mitigation ladder の本文を書き戻さないこと (重複保持コストが上がる)。
 -->
 
 ## 1. mode 判定 (最初に必ず行う)
@@ -99,7 +99,7 @@
 ### scan / patrol mode
 
 ```text
-1. attack surface map を作る (attack-surface-map.md)
+1. exposure surface map を作る (attack-surface-map.md)
    - Tauri command / IPC / file IO / path / shell / capability / parser / log / external URL / InDesign COM
 2. trust boundary 分類 (trust-boundaries.md)
    - frontend free text (untrusted) / OS file picker (user-granted) / app 内部 (trusted internal) /
@@ -138,7 +138,7 @@
      known-bad path class reject / token sanitize / overwrite confirm 追加 (UI 既存導線維持) /
      IPC 入力検証追加 / capability 過剰許可縮小 (実 unused のみ)
 3. security regression test を追加
-   - 攻撃経路の再発を防ぐ test
+   - 到達経路の再発を防ぐ test
    - canonical schema 拡張 + 元 Issue の verification_steps を満たす
 4. CLAUDE.md 規約準拠 (ネスト 2、日本語コメント)
 5. apply report を返す (templates/security-apply-report.md)
@@ -156,7 +156,7 @@
 3. 元 Issue 取得: PR 本文の Fixes #N または spawn prompt から
 4. 8 観点 audit (post-check-policy.md):
    1. 元 finding の解消 (Issue success_criteria 達成)
-   2. 別の攻撃面増加チェック (新規 path / IO / IPC / shell / parser に未検証経路)
+   2. 別の露出面増加チェック (新規 path / IO / IPC / shell / parser に未検証経路)
    3. 入力検証 (canonicalize / encoding / size limit / null byte / `..` reject)
    4. 認可 / capability (IPC 権限境界 / shell escape / file IO root 制限 / Tauri capability 妥当性)
    5. エラーパス (TOCTOU / privilege drop / 機密情報漏洩 / unwrap 経路)
@@ -250,7 +250,7 @@ op-scan / op-patrol / op-run への報告は以下を含む。
 
 「危険だから禁止」ではなく「危険な経路だけを潰す」。capability 全体の deny / 保存先固定 / 外部ファイル全拒否は
 禁止、validate → canonicalize → scope → confirm → audit → permission split → deny (最後の手段) の
-mitigation ladder で封鎖する。NG/OK 早見表と ladder 全文の正本は `usable-security.md`。
+mitigation ladder で遮断する。NG/OK 早見表と ladder 全文の正本は `usable-security.md`。
 
 ---
 
@@ -258,13 +258,13 @@ mitigation ladder で封鎖する。NG/OK 早見表と ladder 全文の正本は
 
 - 保存先選択・読込元選択・export / import の capability 全体削除
 - OS file picker 経由 path を「untrusted で危険」として禁止
-- attack path を示さない High / Critical 判定
+- 到達経路 (`attack_path`) を示さない High / Critical 判定
 - `recommended_fix_expert` に `ux-ui-audit-expert` / `review-expert` を指定
 - post-check expert として `review-expert` 指定
 - UX impact high の自動 apply
 - dependency update / lockfile を主作業として apply
 - OP-managed Mode で対話質問 / 自由質問テキスト
-- destructive test (実 fuzzing / penetration / 実 exploit) を Direct Mode 許可なしに実行
+- destructive test (実 fuzzing / 実環境での再現検証 / PoC 実行) を Direct Mode 許可なしに実行
 - 静的証拠 (コード引用・呼出経路) の裏付けを欠いた推測 finding の報告
 - ガイドラインの機械的全適用 (mitigation ladder は判断材料、絶対ではない)
 - self-review (自分が apply した PR の post-check を同 spawn で行う)

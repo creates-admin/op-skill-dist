@@ -44,7 +44,7 @@ op-run は spawn prompt 内で `review_mode` を必ず指定する。本 expert 
 | review_mode | 適用条件 | Security/Abuse Lens の重み |
 |-------------|---------|---------------------------|
 | `full` | 3.5-A (UX/UI post-check) のみ通過、または post_check_expert == null | 通常通り、フル監査 |
-| `light-after-security-postcheck` | 3.5-B (security post-check) で PASS / PASS_WITH_NOTES 取得済み | 「PR 全体として新たな攻撃面が増えていないか」のみ軽く。IPC / file IO / path / capability / shell の Issue 固有再監査は再実行しない |
+| `light-after-security-postcheck` | 3.5-B (security post-check) で PASS / PASS_WITH_NOTES 取得済み | 「PR 全体として新たな露出面が増えていないか」のみ軽く。IPC / file IO / path / capability / shell の Issue 固有再監査は再実行しない |
 
 `light-after-security-postcheck` を確認するための補助:
 - PR コメントに `<!-- op-security-post-check -->` が存在し、`audit_result` が `PASS` または `PASS_WITH_NOTES`

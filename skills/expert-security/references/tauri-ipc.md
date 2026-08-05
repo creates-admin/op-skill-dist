@@ -78,7 +78,7 @@
 
 | 設定 | 推奨値 | 理由 |
 |-----|--------|------|
-| `devtools` | production: false / dev: true | 攻撃者が WebView 内 JS を debug / inject 防止 |
+| `devtools` | production: false / dev: true | 脅威アクターが WebView 内 JS を debug / inject 防止 |
 | `dragDropEnabled` | 必要な window でのみ true | drag drop 経由の path 取り込みを限定 |
 | `acceptFirstMouse` | false (macOS) | 別 app の click 透過防止 |
 | `additionalBrowserArgs` | 信頼できる値のみ | env var / user input で渡さない |

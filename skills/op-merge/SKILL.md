@@ -587,7 +587,7 @@ Source Rule、正本は `op-tools/docs/specs/merge-verify.md`)。
 > **manual override について**: gate 11-18 (UX / security post-check) は緊急時に
 > `<!-- op-manual-override -->` block + manual-override ラベルで例外承認できる。
 > `op merge verify` はこの override を 10-AND 評価で判定し、有効なら該当 gate を skip する。
-> override は **常用厳禁** (常用すると UX 退化 / 攻撃面復活を構造的に防ぐ意図が壊れる)。
+> override は **常用厳禁** (常用すると UX 退化 / 露出面復活を構造的に防ぐ意図が壊れる)。
 > override 付与時の必須情報 (承認者 / 理由 / follow-up Issue / overridden_at / reviewed_head_sha /
 > trusted author 投稿) の対話確認手順は本 SKILL.md「## manual override の対話確認」節を参照。
 > gate 21 (blocking-finding) は **manual override を提供しない** (設計上「他作業を止めて先に直す」もの)。

@@ -73,23 +73,23 @@ review-expert の役割は **merge 前 global review** のみ。
 | 領域 | review-expert | security-expert |
 |------|--------------|-----------------|
 | IPC / file IO / path / capability / shell の Issue 固有再監査 | やらない (3.5-B 通過時) | **やる** (3.5-B post-check) |
-| 攻撃者視点・悪用可能性 | **やる** (Security/Abuse Lens) | やる (深掘り) |
-| 「PR 全体として新たな攻撃面が増えていないか」 | **やる** (Security/Abuse Lens、light モード時もこれは見る) | やる (深掘り) |
+| 脅威アクター視点・不正利用の可能性 | **やる** (Security/Abuse Lens) | やる (深掘り) |
+| 「PR 全体として新たな露出面が増えていないか」 | **やる** (Security/Abuse Lens、light モード時もこれは見る) | やる (深掘り) |
 | TOCTOU / privilege drop / secret 漏洩 | finding として指摘 | **やる** (深掘り specialist 鑑識) |
 | security domain Issue の apply | やらない | **やる** (op-run フェーズ2-C) |
 
 ### review_mode による重み切り替え
 
 - `review_mode == full`: Security/Abuse Lens を通常通り full で監査
-- `review_mode == light-after-security-postcheck`: 「PR 全体として新たな攻撃面が増えていないか」のみ軽く
+- `review_mode == light-after-security-postcheck`: 「PR 全体として新たな露出面が増えていないか」のみ軽く
 
 `light-after-security-postcheck` でも以下は監査対象に残す:
 - 3.5-B post-check 後に積まれた commit (post-check stale) の有無
-- 3.5-B post-check の対象外だった範囲に新たな攻撃面が増えていないか
+- 3.5-B post-check の対象外だった範囲に新たな露出面が増えていないか
 
-### 攻撃者視点の責務分担
+### 脅威アクター視点の責務分担
 
-攻撃者視点・悪用可能性は **review-expert の Security/Abuse Lens** に集約し、
+脅威アクター視点・不正利用の可能性は **review-expert の Security/Abuse Lens** に集約し、
 深掘り specialist 鑑識は **security-expert** に集約する。
 
 ---
@@ -157,7 +157,7 @@ review-expert は以下の specialist expert に finding を `recommended_fix_ex
 
 | active expert | 主領域 | 備考 |
 |--------------|-------|------|
-| `security-expert` | Attack Surface & Usable Security (IPC / IO / path / capability / shell / token / updater / parser / InDesign COM) | **active**。security domain finding は **`security-expert` を第一候補** とし、`security-expert` が unavailable な場合に限り debug-expert へ fallback (op-run の判定優先順位 1-8 が最終決定) |
+| `security-expert` | Security Exposure & Usable Security (IPC / IO / path / capability / shell / token / updater / parser / InDesign COM) | **active**。security domain finding は **`security-expert` を第一候補** とし、`security-expert` が unavailable な場合に限り debug-expert へ fallback (op-run の判定優先順位 1-8 が最終決定) |
 
 ### 7-2. planned specialist (将来実装)
 

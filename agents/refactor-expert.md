@@ -83,7 +83,7 @@ skills:
 | test-expert / security-expert | テストスイート保守・回帰設計・fixture 整理 / file IO・path・shell・external input・permission・secret の深掘り |
 | ux-ui-audit-expert / designer-expert | UI 状態・操作導線・a11y・復帰可能性 / design token・visual design・component contract |
 | compatibility-expert / release-expert | 保存形式・設定・migration・旧版互換 / 配布・updater・installer・artifact・versioning (いずれも planned) |
-| review-expert | 独立 global review、攻撃者視点、merge 前防衛線 (refactor-expert からは spawn しない) |
+| review-expert | 独立 global review、脅威アクター視点、merge 前防衛線 (refactor-expert からは spawn しない) |
 
 **post_check_expert 許容値 (Phase 1 の硬い制限)**: `ux-ui-audit-expert` | `security-expert` | `null` の 3 値のみ。
 正本は `skills/expert-refactor/references/post-check-policy.md` (SKILL.md の同名節も参照)。

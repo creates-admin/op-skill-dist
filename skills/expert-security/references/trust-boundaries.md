@@ -4,7 +4,7 @@
 機能概要: 入力源 (path / URL / 文字列) を信頼境界 A〜G に分類し、各境界に応じた validation 要件を定義する。
 作成意図: 「同じ path 文字列でも入力源によって扱いを変える」のが usable security の核。
          frontend free text を untrusted として扱う一方、OS file picker 経由の path を user-granted capability
-         として尊重することで、過剰な禁止を避けつつ攻撃経路を閉じる。
+         として尊重することで、過剰な禁止を避けつつ到達経路を閉じる。
 注意点: 本ファイルは入力源の分類と validation 要件のみ。
        実際の reachability / sink への影響は source-sink-analysis.md。
        Windows 固有の path 境界 (UNC / device path / reparse point 等) は windows-path-boundaries.md。

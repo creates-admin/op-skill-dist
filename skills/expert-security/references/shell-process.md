@@ -61,7 +61,7 @@ shell 文字列を許可する `Shell::execute("sh -c ...")` 系は使わない�
 ### PATH 依存の問題
 
 - `Command::new("convert")` のように binary 名のみ指定すると、PATH から探索される
-- 攻撃者が PATH の優先位置に同名 binary を仕込むと任意 binary 起動
+- 脅威アクターが PATH の優先位置に同名 binary を仕込むと任意 binary 起動
 
 ### 対策
 

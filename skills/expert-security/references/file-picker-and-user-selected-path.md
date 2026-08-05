@@ -88,7 +88,7 @@ typed string は boundary A (untrusted) として扱う。
 ```text
 - canonicalize で resolve した結果が、想定 root / workspace の外を指す場合に scope 違反として reject
   (ただし user-selected の場合は scope 強制しない場合も多い)
-- 攻撃シナリオ: user-selected が一見 workspace 内だが、symlink で外部を指す
+- 到達シナリオ: user-selected が一見 workspace 内だが、symlink で外部を指す
   → canonicalize 後の path で判断
 - TOCTOU 対策: canonicalize 後すぐに open し、open した file descriptor / handle で操作する
 ```

@@ -72,7 +72,7 @@ gh issue create \
 | sink.symbol | `<関数 / 出口>` |
 | trust_boundary | <frontend_to_backend / user_file / user_selected_path / external_url / local_fs / env / config / generated_script / com_boundary> |
 
-### Attack Path (steps)
+### 到達経路 (Reachability Path, steps)
 
 1. <source から sink までの具体的な流れ Step 1>
 2. <Step 2>
@@ -132,7 +132,7 @@ impact:
 ### 成功条件 (success_criteria)
 - 元 finding の attack_path.steps が再現しない
 - legitimate_workflow_preserved == true
-- 別の攻撃面が増えていない
+- 別の露出面が増えていない
 
 ### 既知の落とし穴 / 注意点
 - <scan が遭遇した罠 / apply で踏みやすいミス>

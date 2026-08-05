@@ -372,7 +372,7 @@ expert 再 spawn または `manual_review_bucket` に回す (op-run でも安全
 
 - `security.*`: attack_surface / trust_boundary / source (kind/file/symbol/input_name) /
   sink (kind/file/symbol/operation) / attack_path (reachable, steps) / exploitability /
-  impact (C/I/A) / data_sensitivity — Issue 本文「Threat Model」「Source → Sink Reachability」「Attack Path」節へ
+  impact (C/I/A) / data_sensitivity — Issue 本文「Threat Model」「Source → Sink Reachability」「到達経路 (Reachability Path)」節へ
 - `threat_model.*`: actor / preconditions / required_user_action / asset_at_risk — Issue 本文「Threat Model」表へ
 - `usable_security.*`: affected_user_capability / legitimate_workflow_preserved / ux_impact /
   preferred_mitigation / forbidden_shortcuts — Issue 本文「Usable Security 方針」「触ってはいけない範囲」節へ

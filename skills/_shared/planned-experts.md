@@ -125,7 +125,7 @@ Current substitutes:
   - concrete signing risk
   - secrets exposure
   - supply-chain vulnerability
-  - updater attack surface
+  - updater exposure surface
   - distribution security finding
 
 - `needs_human_decision` (rendered as GitHub label `needs:human-decision` only at the label boundary)

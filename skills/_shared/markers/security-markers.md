@@ -140,14 +140,14 @@ security domain 固有の補足:
 |---|---|---|---|
 | `security_result` | enum | ✓ | `pass` / `block` (security 判定の本体) |
 | `finding_resolved` | boolean | ✓ | 元 finding (Issue success_criteria) が解消されたか |
-| `new_attack_surface_introduced` | boolean | ✓ | 修正で別の攻撃面が増えていないか |
+| `new_attack_surface_introduced` | boolean | ✓ | 修正で別の露出面が増えていないか |
 | `scope_out_violation` | boolean | ✓ | Issue scope_out 違反 (redesign 混入) があるか |
 | `secret_or_path_leak_detected` | boolean | ✓ | エラーメッセージ / ログ等で secret / path が漏洩していないか |
 
 ### Usable security 系 (workflow preservation)
 
 security mitigation が **正当なユーザー操作** を破壊していないかを判定するフィールド。
-capability 全体禁止 (例: `save_as` を完全削除) のような **過剰封鎖** を防ぐ。
+capability 全体禁止 (例: `save_as` を完全削除) のような **過剰遮断** を防ぐ。
 
 | フィールド | 型 | 必須 | 説明 |
 |---|---|---|---|
@@ -213,7 +213,7 @@ security post-check は以下 8 観点を必ず確認する (PR comment 本文�
 | # | 観点 | 紐付くフィールド |
 |---|---|---|
 | 1 | 元 finding の解消 (Issue success_criteria 達成) | `finding_resolved` |
-| 2 | 修正で別の攻撃面が増えていないか | `new_attack_surface_introduced` |
+| 2 | 修正で別の露出面が増えていないか | `new_attack_surface_introduced` |
 | 3 | 入力検証 (path / encoding / canonicalization / size limit) | (本文記述のみ) |
 | 4 | 認可 / capability の境界 (IPC / shell / file IO) | (本文記述のみ) |
 | 5 | エラーパスでの情報漏洩 / 失敗時挙動 (TOCTOU / privilege drop) | `secret_or_path_leak_detected` |
@@ -234,7 +234,7 @@ security domain で **UX impact high** / **capability 全体禁止が必要** �
 ### 使用条件 (AND)
 
 - security risk と usable workflow のトレードオフが高い
-- 自動判断 (`pass` / `block`) で結論を出すと user 操作を不当に破壊する / 攻撃を残す のいずれか
+- 自動判断 (`pass` / `block`) で結論を出すと user 操作を不当に破壊する / 到達経路を残す のいずれか
 - 構造化された options で人間判断材料を提示できる
 
 ### op-run の動作

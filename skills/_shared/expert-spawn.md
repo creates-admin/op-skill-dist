@@ -180,7 +180,7 @@ UX/UI は **使いやすさ番人 (ux-ui-audit-expert)** と **美しさ番人 (
 両者の検出が衝突した場合は **使いやすさが常に優先される**。op-architect の Design Plan gate と
 op-run の post-check は `ux-ui-audit-expert` が担い、designer の出力を縛る。
 
-攻撃者視点 / 悪用可能性は review-expert の Security/Abuse Lens で扱い、
+脅威アクター視点 / 不正利用の可能性は review-expert の Security/Abuse Lens で扱い、
 深掘り specialist 鑑識は security-expert に集約する。
 
 post-check expert として **runtime spawn 可能** なのは以下に限る:
@@ -656,7 +656,7 @@ threat_model:
   secondary_actors:
     - <enum と同じ語彙>
   preconditions:
-    - "<攻撃が成立する前提>"
+    - "<到達が成立する前提>"
   required_user_action:
     - "<ユーザー操作が必要なら明記。不要なら空配列>"
   asset_at_risk:
@@ -713,7 +713,7 @@ post_check:
 
 > **post-check policy** (security domain): apply 担当が `security-expert` または `debug-expert` のいずれでも
 > post-check は **必ず `security-expert`** が実行する (op-run フェーズ3.5-B)。
-> 8 観点 (元 finding 解消 / 別の攻撃面増加 / 入力検証 / 認可・capability / エラーパス / scope_out 違反 /
+> 8 観点 (元 finding 解消 / 別の露出面増加 / 入力検証 / 認可・capability / エラーパス / scope_out 違反 /
 > 正当なユーザー操作維持 / UX/UI auxiliary post-check 必要性) で audit し、
 > PASS / PASS_WITH_NOTES / BLOCK / NEEDS_HUMAN_DECISION の 4 種で判定する。
 > `legitimate_workflow_preserved == false` を検出した場合は NEEDS_HUMAN_DECISION を優先する

@@ -16,7 +16,7 @@ review_mode (`full` / `light-after-security-postcheck`) に応じて Security/Ab
 
 | # | Lens | 主な観点 | 主担当 expert (post-check / specialist) |
 |---|------|---------|---------------------------------------|
-| 1 | Security / Abuse | 入力検証・認可・IO・IPC・shell・path・capability・悪用可能性 | security-expert (深掘り再監査) |
+| 1 | Security / Abuse | 入力検証・認可・IO・IPC・shell・path・capability・不正利用の可能性 | security-expert (深掘り再監査) |
 | 2 | Workflow / UX | 画面遷移・状態復帰・操作破壊・a11y 波及 | ux-ui-audit-expert (専門 a11y / 状態網羅) |
 | 3 | Test / Regression | 変更に対する回帰検証不足・既存テストへの影響 | test-expert (カバレッジ全般) |
 | 4 | Compatibility | 保存データ・設定・migration・rollback リスク | compatibility-expert (planned) |
@@ -37,7 +37,7 @@ review_mode が `light-after-security-postcheck` のときは Security/Abuse Len
 - **認可 / capability**: IPC command の権限境界 / shell 引数の escape / file IO の root 制限 / Tauri capability 追加の妥当性
 - **IO / IPC**: `std::fs` / `tokio::fs` / Tauri invoke の境界 / WebView ↔ Rust 間の payload 検証
 - **エラーパス**: TOCTOU / privilege drop の漏れ / 失敗時の機密情報漏洩 (error message に path / token / secret が出ていないか)
-- **悪用可能性**: 攻撃者視点で「この PR で新たに増えた攻撃面」を想像する
+- **不正利用の可能性**: 脅威アクター視点で「この PR で新たに増えた露出面」を想像する
 
 ### 典型 finding 例
 
@@ -54,10 +54,10 @@ review_mode が `light-after-security-postcheck` のときは Security/Abuse Len
 | review_mode | Security/Abuse Lens の扱い |
 |-------------|---------------------------|
 | `full` | 通常通り、フル監査 (上記すべての観点) |
-| `light-after-security-postcheck` | **「PR 全体として新たな攻撃面が増えていないか」のみ軽く**。3.5-B で security-expert が完了済みのため、IPC / file IO / path / capability / shell の Issue 固有再監査は再実行しない |
+| `light-after-security-postcheck` | **「PR 全体として新たな露出面が増えていないか」のみ軽く**。3.5-B で security-expert が完了済みのため、IPC / file IO / path / capability / shell の Issue 固有再監査は再実行しない |
 
 `light-after-security-postcheck` でも以下は監査対象に残す:
-- 3.5-B post-check の対象外だった範囲に新たな攻撃面が増えていないか
+- 3.5-B post-check の対象外だった範囲に新たな露出面が増えていないか
 - post-check 後に積まれた commit (stale post-check) がないか
 
 ### bulk_group 例 (review-expert が推奨する specialist 向け)
@@ -188,7 +188,7 @@ review-expert は重複監査しない。
 
 - **Issue 要求充足**: PR が Issue の要求をすべて実装したか
 - **acceptance criteria**: success_criteria を実装が満たすか
-- **scope_in / scope_out**: scope_out への侵入がないか / scope_in の漏れがないか
+- **scope_in / scope_out**: scope_out への越境がないか / scope_in の漏れがないか
 - **過剰実装**: Issue が要求していない機能を勝手に追加していないか
 - **PR 本文整合**: PR 本文の記述と diff が一致するか
 
@@ -204,7 +204,7 @@ review-expert は重複監査しない。
 
 | bulk_group | 内容 |
 |-----------|------|
-| `spec:scope-out-violation` | scope_out への侵入 |
+| `spec:scope-out-violation` | scope_out への越境 |
 | `spec:over-implementation` | Issue 要求外の追加実装 |
 | `spec:pr-body-mismatch` | PR 本文と diff の不一致 |
 
@@ -245,12 +245,12 @@ CLAUDE.md (user's global directives) は本 lens の **絶対基準**として�
 
 | Lens | Critical | High | Medium / Low |
 |------|---------|------|-------------|
-| Security / Abuse | 攻撃面拡大 / 認可破壊 / 機密漏洩 | 入力検証漏れ / capability 過剰 / IPC 検証欠如 | 通常 finding に出さない |
+| Security / Abuse | 露出面拡大 / 認可破壊 / 機密漏洩 | 入力検証漏れ / capability 過剰 / IPC 検証欠如 | 通常 finding に出さない |
 | Workflow / UX | 主要導線完全停止 / 復帰不能 | 操作破壊 / a11y 退化 (focus 削除等) | 通常 finding に出さない |
 | Test / Regression | リグレッションテスト欠如 (bug fix で) | 検証コマンド漏れ / silenced failure | 通常 finding に出さない |
 | Compatibility | rollback 不能 / 既存データ破壊 | migration 欠如 / version bump 漏れ | 通常 finding に出さない |
 | Release | installer 致命的破壊 | version 不整合 / artifact 漏れ | 通常 finding に出さない |
-| Spec | scope_out 重大侵入 / acceptance criteria 重大未達 | 過剰実装 / PR 本文 vs diff 不一致 | 軽微な記述ズレは Notes |
+| Spec | scope_out 重大越境 / acceptance criteria 重大未達 | 過剰実装 / PR 本文 vs diff 不一致 | 軽微な記述ズレは Notes |
 | Refactor | バグの種 (副作用 / dispose 漏れ等) | ネスト超過 / 命名不統一 | 軽微な好みは finding に出さない |
 
 severity は `~/.claude/skills/_shared/severity-rubric.md` に従う。

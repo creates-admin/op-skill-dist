@@ -237,7 +237,7 @@ spawn schema の `task_complexity:` field に格納する。
 | refactor-expert | Sonnet | **Opus** (architecture debt / 責務境界) |
 | debug-expert | Sonnet | **Opus** (根本原因 / 並行性 / spec 解釈) |
 | optimize-expert | Sonnet | **Opus** (algorithm 改善) |
-| security-expert | Sonnet | **Opus** (attack chain 仮説) |
+| security-expert | Sonnet | **Opus** (到達経路チェーン仮説) |
 | test-expert | Sonnet | **Opus** (test 設計戦略) |
 | designer-expert | Sonnet (token 適用のみ) | **Opus** (層構成 / 全体調和) |
 | ux-ui-audit-expert | (実装しない / post-check 専門) | (実装しない / post-check 専門) |
@@ -533,7 +533,7 @@ investigate phase のみ Sonnet に段階下げできる (verify / gate / 最終
 > review-expert subagent 使用の最大要因だった (要因1 = sensitive 自動 Opus、ADR-0015 Consequences L129)。
 >
 > **最大 recall リスクと tunable 撤退経路**: Security lens の Sonnet 見落としは targeted backstop では残留
-> リスク (ADR-0011 L160-162)。doc-only 限定で攻撃面が薄く許容するが、Ladder4 recall e2e で 7-lens フル
+> リスク (ADR-0011 L160-162)。doc-only 限定で露出面が薄く許容するが、Ladder4 recall e2e で 7-lens フル
 > (全 Opus) vs investigate-sonnet の見落とし High/Critical 差が出たら **Security lens のみ investigate を Opus 床へ
 > 戻す** (本例外を Security に適用しない tunable)。本例外の本番化は Issue #720 の Ladder4 実証を merge gate とする。
 

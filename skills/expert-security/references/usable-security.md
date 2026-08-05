@@ -1,10 +1,10 @@
 # usable-security.md — Usable Security の核
 
 <!--
-機能概要: security-expert の中核思想 "正当な user capability を維持したまま攻撃経路だけを封鎖する" を
+機能概要: security-expert の中核思想 "正当な user capability を維持したまま到達経路だけを遮断する" を
          具体的な mitigation ladder と判断基準として定義する。
 作成意図: 「危険だから禁止」「保存先固定」「import 削除」のような capability 全体禁止を構造的に防ぎ、
-         validate / canonicalize / scope / confirm / audit / permission split で攻撃経路だけを潰す。
+         validate / canonicalize / scope / confirm / audit / permission split で到達経路だけを潰す。
 注意点: 本ファイルは「mitigation の選択基準」のみ。
        affected_user_capability / legitimate_workflow_preserved / ux_impact の判定は
        user-capability-preservation.md。OS file picker 経由 path の扱いは file-picker-and-user-selected-path.md。
@@ -14,9 +14,9 @@
 
 ```text
 security-expert =
-  攻撃点を見つける
-  攻撃経路を証明する
-  危険な経路だけを封鎖する
+  露出面を見つける
+  到達経路を証明する
+  危険な経路だけを遮断する
   正当なユーザー操作は残す
   UX を壊す安全策は自動 apply しない
 ```
@@ -24,7 +24,7 @@ security-expert =
 ```text
 安全性を上げるために機能を削るのではなく、
 ユーザーの正当な capability を維持したまま、
-攻撃可能な経路だけを閉じる。
+到達可能なリスク経路だけを閉じる。
 ```
 
 ---

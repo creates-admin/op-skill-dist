@@ -1,9 +1,9 @@
-# attack-surface-map.md — 攻撃面棚卸し
+# attack-surface-map.md — 露出面 (exposure surface) 棚卸し
 
 <!--
-機能概要: security-expert が scan / patrol / apply / post-check で参照する攻撃面 (attack surface) の棚卸し。
+機能概要: security-expert が scan / patrol / apply / post-check で参照する露出面 (exposure surface) の棚卸し。
 作成意図: 「どこを見るべきか」を一覧化することで、scan / patrol の網羅性を担保し、
-         post-check で「別の攻撃面が増えていないか」を機械的に確認できるようにする。
+         post-check で「別の露出面が増えていないか」を機械的に確認できるようにする。
 注意点: 本ファイルは観点表。実際の到達可能性 (reachable / practical) の判定は source-sink-analysis.md。
        trust boundary 別の信頼境界判定は trust-boundaries.md。
 -->
@@ -260,7 +260,7 @@ canonical schema の `security.attack_surface` には以下のいずれかを設
 - temp file の権限 (other user から読めないか)
 - temp file の cleanup (process crash 時 / error 時)
 - cache に secret / document content が permanent に残らないか
-- backup の symlink 経由攻撃 (predictable path)
+- backup の symlink 経由の不正利用 (predictable path)
 
 詳細は `path-file-io.md` の temp 節。
 

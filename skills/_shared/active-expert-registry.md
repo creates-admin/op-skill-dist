@@ -85,7 +85,7 @@ agent 名から skill ディレクトリ名を機械生成 (例: `skills/expert-
 
 > **注**:
 > - `Runtime apply` は op-run フェーズ2 で `subagent_type` に渡せるか。
-> - `Issue post-check` は op-run フェーズ3.5 で発生する Issue 固有の再監査 (元 finding 解消確認 / 別の攻撃面増加チェック等) を担当できるか。
+> - `Issue post-check` は op-run フェーズ3.5 で発生する Issue 固有の再監査 (元 finding 解消確認 / 別の露出面増加チェック等) を担当できるか。
 > - `Global review` は op-run フェーズ4 で実施される PR 全体監査を担当できるか。`gate` は op-architect Design Plan gate 担当を意味する (PR 全体監査ではない)。`specialist` は security 観点の specialist として global review に参加することを意味する。
 > - `review-expert` は **Global review 専任** であり、`op-post-check-expert` には指定しない (`<!-- op-post-check-expert: review-expert -->` 禁止)。
 > - `refactor-expert` は Issue post-check を持たない。架構 debt の追跡は `<!-- op-refactor-debt-key: ... -->` で行い、特定 Issue の post-check が必要な場合は marker で individual に指定する。
@@ -171,7 +171,7 @@ OP-managed mode で spawn する際の model (Opus / Sonnet / Haiku、具体 ver
 | designer-expert | 高 | 高 | 全体調和 / 空間認識 — **Haiku 不可** |
 | ux-ui-audit-expert | 高 | — | workflow 認知負荷 — **Haiku 不可** |
 | review-expert | — | — | global review 専任。model は `model-selection.md` §5.1 / §7.1 に従う (OP-managed は Opus 基調、§7.1 narrow opt-down 例外あり / Direct Mode は frontmatter)。本 registry は model の正本ではない |
-| security-expert | 高 | 高 | attack chain 仮説 |
+| security-expert | 高 | 高 | 到達経路チェーン仮説 |
 
 - 「audit 感度 = 高」の expert は `complex` / `critical` 区画で Opus を推奨
 - 「apply 感度 = 高」の expert は `design` / `integration` / `api-design` で Opus を推奨

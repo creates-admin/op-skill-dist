@@ -73,8 +73,8 @@ review_mode は op-run から `full` または `light-after-security-postcheck` 
 
 詳細観点リストは `expert-review/references/lens-catalog.md` を参照。
 
-1. **Security / Abuse Lens** — 入力検証 / 認可 / IO / IPC / shell / path / capability / 悪用可能性
-   (`light-after-security-postcheck` モードでは新たな攻撃面のみ軽く)
+1. **Security / Abuse Lens** — 入力検証 / 認可 / IO / IPC / shell / path / capability / 不正利用の可能性
+   (`light-after-security-postcheck` モードでは新たな露出面のみ軽く)
 2. **Workflow / UX Lens** — 画面遷移 / 状態復帰 / 操作破壊 / a11y 波及
    (UX/UI 専門観点は 3.5-A で ux-ui-audit-expert が独立 audit 済み前提、PR 全体への波及のみ)
 3. **Test / Regression Lens** — 変更に対する回帰検証不足 / 既存テストへの影響 / 検証コマンド充足
@@ -91,7 +91,7 @@ review_mode は op-run から `full` または `light-after-security-postcheck` 
 
 | 判定 | 条件 | op-run の次アクション |
 |------|------|---------------------|
-| **approve** | scope_in 充足 / scope_out 不侵入 / required post-check PASS / merge blocker なし / レビュー中に新 commit が積まれていない (判定確定時の HEAD を `reviewed_head_sha` として記録、レビュー後 commit の stale gate は op-merge が担当) | `pro-reviewed` 付与 → op-merge へ |
+| **approve** | scope_in 充足 / scope_out 非越境 / required post-check PASS / merge blocker なし / レビュー中に新 commit が積まれていない (判定確定時の HEAD を `reviewed_head_sha` として記録、レビュー後 commit の stale gate は op-merge が担当) | `pro-reviewed` 付与 → op-merge へ |
 | **needs-fix** | 3 条件 AND (same-pr 内修正可 / 単一 expert で完結 / 既知パターン) | `pro-review-needs-fix` 付与 → 同 worktree で specialist 再委任 |
 | **needs-specialist-review** | needs-fix 3 条件のいずれかが欠ける / 専門判断後でないと修正方針を決められない | `pro-review-needs-fix` 付与 → specialist に妥当性判断 handoff |
 | **blocked** | scope_out / 人間判断必要 / loop 上限超過 / Issue 再設計必要 | `pro-review-blocked` 付与 → 自動継続停止 |

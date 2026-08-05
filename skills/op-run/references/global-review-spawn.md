@@ -369,7 +369,7 @@ export SENSITIVE_INVESTIGATE_SONNET="${SENSITIVE_INVESTIGATE_SONNET:-0}"
 | review_mode | 適用条件 | Security/Abuse Lens の扱い |
 |-------------|---------|---------------------------|
 | `full` | 3.5-A (UX/UI post-check) のみ通過、または post_check_expert が null、または 3.5-B が legacy skip (security-expert agent 不在の異常状態) | 通常通り、7 lens フル監査 |
-| `light-after-security-postcheck` | 3.5-B (security post-check) で PASS / PASS_WITH_NOTES を取得済み (aux post-check が必要なら aux も PASS / PASS_WITH_NOTES) | Security/Abuse Lens は **「PR 全体として新たな攻撃面が増えていないか」のみ軽く** に切り替え (深掘り再監査は security-expert が完了済み)。他 lens は通常通り |
+| `light-after-security-postcheck` | 3.5-B (security post-check) で PASS / PASS_WITH_NOTES を取得済み (aux post-check が必要なら aux も PASS / PASS_WITH_NOTES) | Security/Abuse Lens は **「PR 全体として新たな露出面が増えていないか」のみ軽く** に切り替え (深掘り再監査は security-expert が完了済み)。他 lens は通常通り |
 
 `light-after-security-postcheck` の判定は **review state 文書** (ADR-0027 6b) から行う —
 `op review state pull` の `.details.state.post_checks["security-expert"].audit_result` が
@@ -670,7 +670,7 @@ fi
 > (ADR-0011 決定5 の調査/ゲート分離をそのまま sensitive doc-only small に適用)。
 > **verify / gate は常に opus 固定** (`REVIEW_VERIFY_MODEL` / `REVIEW_GATE_MODEL` は本フラグの分岐の外、
 > model-selection.md §7.1.7)。最大 recall リスク (Security lens の sonnet 見落とし) は doc-only 限定で
-> 攻撃面が薄く許容するが、Ladder4 で不足が出たら Security のみ investigate を opus 床へ戻す
+> 露出面が薄く許容するが、Ladder4 で不足が出たら Security のみ investigate を opus 床へ戻す
 > (model-selection.md §7.1.3 が tunable 明記)。
 
 ##### 4-2-a-pre2. active lens / bundle 解決 (ADR-0015 proportional lens gating、司令官保持)

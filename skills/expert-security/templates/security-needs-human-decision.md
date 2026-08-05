@@ -61,7 +61,7 @@ needs_human_decision:
   options:
     - id: "A"
       label: "現 UX を維持し、save 経路に validation 強化のみ"
-      consequence: "security_risk は完全解消しないが、UX は壊れない (validation で大半の攻撃経路は閉じる)"
+      consequence: "security_risk は完全解消しないが、UX は壊れない (validation で大半の到達経路は閉じる)"
     - id: "B"
       label: "UX 再設計 (固定 directory + 別 location 選択 wizard)"
       consequence: "security_risk は完全解消するが、UX 再設計が必要 (designer-expert / feature-expert 連携)"

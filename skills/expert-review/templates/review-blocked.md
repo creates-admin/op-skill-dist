@@ -139,7 +139,7 @@ EOF
 
 | ケース | 例 |
 |--------|---|
-| **scope_out** | 元 Issue の scope_out に明確に入る修正が必要 / scope_out として除外されたファイルに侵入が必要 |
+| **scope_out** | 元 Issue の scope_out に明確に入る修正が必要 / scope_out として除外されたファイルに越境が必要 |
 | **人間判断必要** | 仕様変更 / 設計再判断 / business decision が必要 / acceptance criteria の解釈が複数候補 |
 | **規定外 spawn** | review_round > max_review_fix_rounds + 1 (= 4 以上) で起動された (本来 op-run 4-2-pre の bash gate で停止しているはず) |
 | **Issue 再設計必要** | 元 Issue の scope を分割 / 再定義しないと修正できない / Issue 自体が ambiguity を含む |

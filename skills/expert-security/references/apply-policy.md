@@ -104,7 +104,7 @@ apply_decision:
    - 日本語コメント (作成意図 / 注意点)
 
 5. security regression test を追加
-   - 攻撃経路の再発を防ぐ test
+   - 到達経路の再発を防ぐ test
    - canonical schema 拡張 + Issue verification_steps を満たす
 
 6. verification 実行

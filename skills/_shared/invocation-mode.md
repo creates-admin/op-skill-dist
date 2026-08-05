@@ -130,7 +130,7 @@ OP-managed Mode の条件を **一つも満たさない** 場合は Direct Mode 
 | 司令官・ユーザーに「確認してください」と返す | OP-managed Mode の commander は agent の output を機械処理する |
 | Issue コメントで質問して回答を待つ | コメント生成は OP skill / commander の責務 (expert に明示委譲された場合のみ可) |
 | 自分で gh issue create / edit / comment を呼んで質問を立てる | 同上。明示委譲された場合のみ可 |
-| 勝手に scope_out へ侵入する | 並列タスクと衝突 / 別 expert 担当領域への侵食 |
+| 勝手に scope_out へ越境する | 並列タスクと衝突 / 別 expert 担当領域への侵食 |
 | 渡された hidden marker を書き換える | OP skill 側の dispatcher が壊れる |
 
 ### 不足情報の扱い (4 段階)

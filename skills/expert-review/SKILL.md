@@ -124,7 +124,7 @@ review-expert は merge 前 global review 専任。以下とは責務が分か�
 |------|--------------|----------|
 | PR 全体の横断確認 (7 lens) | **本 expert** | — |
 | UX/UI 専門 a11y / 状態網羅 / Applicable States 監査 (3.5-A) | 「PR 全体への波及」のみ | **ux-ui-audit-expert** |
-| security 深掘り再監査 (IPC / file IO / path / capability / shell / token / updater) (3.5-B) | 「新たな攻撃面」のみ軽く | **security-expert** |
+| security 深掘り再監査 (IPC / file IO / path / capability / shell / token / updater) (3.5-B) | 「新たな露出面」のみ軽く | **security-expert** |
 | 元 Issue success_criteria の domain-specific 再監査 | — | **post-check expert** (ux-ui-audit-expert / security-expert) |
 | バグ調査・修正 / 機能実装 / 構造改善 / 性能改善 | finding として指摘 | **debug-expert / feature-expert / refactor-expert / optimize-expert** |
 | visual / design token / component 監査 | — | **designer-expert** |
@@ -187,7 +187,7 @@ review-expert は spawn prompt 内の `review_mode` を必ず読み、Security/A
 | review_mode | 適用条件 | Security/Abuse Lens の扱い | その他 lens |
 |-------------|---------|---------------------------|------------|
 | `full` | 3.5-A (UX/UI post-check) のみ通過、または post_check_expert が null | 通常通り、7 lens フル監査 | フルモード |
-| `light-after-security-postcheck` | 3.5-B (security post-check) で PASS / PASS_WITH_NOTES を取得済み | **「PR 全体として新たな攻撃面が増えていないか」のみ軽く**。IPC / file IO / path / capability の Issue 固有再監査は再実行しない | 通常通り、フルモード |
+| `light-after-security-postcheck` | 3.5-B (security post-check) で PASS / PASS_WITH_NOTES を取得済み | **「PR 全体として新たな露出面が増えていないか」のみ軽く**。IPC / file IO / path / capability の Issue 固有再監査は再実行しない | 通常通り、フルモード |
 
 判定根拠の詳細は `references/lens-catalog.md` の Security / Abuse Lens 節と
 `~/.claude/skills/_shared/expert-spawn.md` の review prompt 規約を参照。

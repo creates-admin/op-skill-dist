@@ -60,7 +60,7 @@ fn build_jsx_open(path: &str) -> String {
 - predictable filename を避ける (tempfile crate 利用)
 - 権限を user-private にする (Windows: default ACL / Linux/macOS: mode 0600)
 - 実行後に削除 (panic / error 経路でも cleanup)
-- crash 時に残る可能性を考慮 (predictable name を避けることで再利用攻撃を防ぐ)
+- crash 時に残る可能性を考慮 (predictable name を避けることで再利用による不正利用を防ぐ)
 ```
 
 ### 3. COM / 外部アプリ起動境界

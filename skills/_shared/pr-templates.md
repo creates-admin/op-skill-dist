@@ -693,7 +693,7 @@ review-expert の 7 lens (Security/Abuse, Workflow/UX, Test, Compatibility, Rele
 <技術用語を避けた 1〜3 文の説明>
 
 ### チェック内容
-- [x] Security / Abuse: 入力検証・認可・IPC・file IO・shell の攻撃面
+- [x] Security / Abuse: 入力検証・認可・IPC・file IO・shell の露出面
 - [x] Workflow / UX: 画面遷移・状態復帰・操作破壊・a11y 波及
 - [x] Test / Regression: 変更に対する回帰検証
 - [x] Compatibility: 保存データ・migration・rollback
@@ -910,7 +910,7 @@ recommended_apply_expert: feature-expert
 requires_post_check: security-expert
 reviewed_round: 1
 reviewed_at: $(date -Iseconds)
-reason: 入力検証は同 PR 内 src-tauri/src/export.rs に追加すれば閉じる。capability 変更は不要、新たな攻撃面は生まない。
+reason: 入力検証は同 PR 内 src-tauri/src/export.rs に追加すれば閉じる。capability 変更は不要、新たな露出面は生まない。
 
 ## 🧐 specialist 判断結果
 
@@ -1190,9 +1190,9 @@ PR を draft で open した直後に、security-expert が PR diff を独立に
 > 仕様変更は領域別 `*-markers.md` 側に反映してから本テンプレを更新する。
 
 > **post_check と global review の概念分離**:
-> - 本テンプレ (3.5-B) は **元 finding が解消されたか / 修正で別の攻撃面が増えていないか** の security 深掘り再監査 (specialist 鑑識)
+> - 本テンプレ (3.5-B) は **元 finding が解消されたか / 修正で別の露出面が増えていないか** の security 深掘り再監査 (specialist 鑑識)
 > - フェーズ4 の global review は review-expert が PR 全体を 7 lens (Security/Abuse, Workflow/UX, Test, Compatibility, Release, Spec, Refactor) で横断確認する別工程
-> - 3.5-B が PASS / PASS_WITH_NOTES を返した PR では、フェーズ4 は Security/Abuse Lens を「PR 全体の新たな攻撃面のみ軽く」に切り替える (重複監査回避)
+> - 3.5-B が PASS / PASS_WITH_NOTES を返した PR では、フェーズ4 は Security/Abuse Lens を「PR 全体の新たな露出面のみ軽く」に切り替える (重複監査回避)
 
 司令官 (op-run) は判定に応じて:
 - PASS: フェーズ4 (review-expert global review) に軽量モードで進める
@@ -1256,7 +1256,7 @@ PASS | PASS_WITH_NOTES | BLOCK | NEEDS_HUMAN_DECISION
 | # | 観点 | 結果 | コメント |
 |---|------|------|---------|
 | 1 | 元 finding の解消 (Issue success_criteria 達成) | OK / NG | <NG なら未解消の挙動 + 該当ファイル> |
-| 2 | 修正で別の攻撃面が増えていないか | OK / NG | <NG なら新規攻撃面 + 該当行> |
+| 2 | 修正で別の露出面が増えていないか | OK / NG | <NG なら新規露出面 + 該当行> |
 | 3 | 入力検証 (path / encoding / canonicalization / size limit) | OK / NG | <NG なら検証漏れ + 該当箇所> |
 | 4 | 認可 / capability の境界 (IPC / shell / file IO) | OK / NG | <NG なら境界違反 + 該当箇所> |
 | 5 | エラーパスでの情報漏洩 / 失敗時挙動 (TOCTOU / privilege drop) | OK / NG | <NG なら漏洩経路 + 該当箇所> |

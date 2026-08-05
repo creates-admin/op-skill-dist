@@ -99,7 +99,7 @@ commit message に **必ず**含める節。空欄のまま完了報告するこ
 | designer-expert | Design Plan の `Components to Use` / `Tokens to Use` / `States` の転記 |
 | refactor-expert | `Refactor Type` / `Behavior Change Claim` (挙動非変更の宣言) / `Contract Preservation` |
 | test-expert | 追加 / 削除したテストと、削除の場合はゴミテスト判定根拠 |
-| security-expert | 攻撃経路の封鎖内容 / 維持した正当な user capability / post-check 観点との対応 |
+| security-expert | 到達経路の遮断内容 / 維持した正当な user capability / post-check 観点との対応 |
 | ux-ui-audit-expert | (apply 派生の修正 commit のみ) 破壊されていた invariant と復旧内容 |
 
 各 expert の agent.md / SKILL.md には **自 expert の必須節名 + 1 行** だけを残し、

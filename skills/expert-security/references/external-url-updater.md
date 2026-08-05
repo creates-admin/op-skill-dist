@@ -2,7 +2,7 @@
 
 <!--
 機能概要: external URL / HTTP request / Tauri updater / signing / TLS の audit 観点。
-作成意図: scheme / host / signature / redirect / TLS の前提を統一して、network 越境攻撃を防ぐ。
+作成意図: scheme / host / signature / redirect / TLS の前提を統一して、network 越境リスクを防ぐ。
 注意点: 配布 / installer / signing 設計の変更は release-expert (Phase 4 planned) の責務。
        本ファイルは security 観点 (検査と防御) に集中する。
 -->

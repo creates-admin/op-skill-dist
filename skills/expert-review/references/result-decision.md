@@ -25,7 +25,7 @@ review-expert は判定を以下 4 種のいずれかに必ず閉じる。質問
 
 ```text
 □ scope_in の要求をすべて満たしている
-□ scope_out への侵入がない
+□ scope_out への越境がない
 □ acceptance criteria を実装が満たしている
 □ 7 lens で merge blocker (Critical / High) がない
 □ レビュー中に新 commit が積まれていない
@@ -96,7 +96,7 @@ security 影響なし) は本条件の対象外。skipped label そのものが�
 |------|------|
 | バグ修正 PR で再現テストが欠如、test-expert が単独で 1 本追加すれば済む | needs-fix (3 条件 AND 満たす) |
 | UI button の focus が消えた、designer-expert で `outline` を戻せば済む | needs-fix (3 条件 AND 満たす) |
-| IPC 経路に新たな攻撃面が増えたが、修正方針が複数あり判断必要 | needs-specialist-review (パターン未確定) |
+| IPC 経路に新たな露出面が増えたが、修正方針が複数あり判断必要 | needs-specialist-review (パターン未確定) |
 | migration / rollback 周りの不具合、複数 expert (compatibility / debug / test) が必要 | needs-specialist-review (単一 expert で完結しない) |
 | Issue の scope_out に明確に入る修正が必要 | blocked (scope_out) |
 | review_round = 3 (= max_review_fix_rounds + 1, 最終許可 round) で needs-fix が残る | needs-fix (通常判定。詳細は「round と blocked の境界 (canonical 表現)」節) |

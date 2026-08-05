@@ -4,7 +4,7 @@ last_breaking_change: 2026-05-05
 notes: v4 (2026-07-29, additive) — ADR-0030 決定3 (C): 「scan 報告ルール (共通)」節を新設
        (Critical/High only / 可能性表現禁止 / 0 件表現 / Level 0 read-only 実行ポリシーの抽出先正本)。
        節追加のみ・判定基準そのものは不変ゆえ schema_version 据置。
-       v4 (2026-05-05) — security-expert を Attack Surface & Usable Security specialist として正式化。
+       v4 (2026-05-05) — security-expert を Security Exposure & Usable Security specialist として正式化。
        severity 判定で source → sink reachability + threat_model.actor + usable_security 判定を組み合わせる
        前提を追加。「to_be_reachable と to_be_practical を区別」「direct evidence のみ Critical」
        「reachable: false / theoretical only / hardening は起票しない」「capability 全体 disable を提案する
@@ -175,12 +175,12 @@ scan の出力で「可能性がある」「〜かもしれない」は原則禁
 
 ### security-expert
 
-**Attack Surface & Usable Security specialist**。攻撃点の調査と、正当な user capability 維持での経路封鎖を担う。
+**Security Exposure & Usable Security specialist**。露出面の調査と、正当な user capability 維持での経路遮断を担う。
 
-- Critical: 認証バイパス / SQL injection の到達経路あり / 任意ファイル IO の practical exploit + impact high
+- Critical: 認証バイパス / SQL injection の到達経路あり / 任意ファイル IO の exploitability == practical + impact high
   + evidence_grade: direct + threat_model.actor が現実的 + attack_path.steps が断定的に書ける
 - High: 入力検証漏れ / ログに秘密混入 / Tauri capability の弱い設定 / IPC / shell / path canonicalization の欠落
-  (reachable exploit + impact medium 以上、または theoretical exploit + impact high の defense-in-depth)
+  (exploitability == reachable + impact medium 以上、または exploitability == theoretical + impact high の defense-in-depth)
 - 起票しない: reachable: false / hardening のみ / 漠然とした「危険」 / capability 全体 disable を提案する finding
   (usable_security 違反 = forbidden_shortcuts 抵触のため blocker)
 

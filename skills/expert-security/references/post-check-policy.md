@@ -37,7 +37,7 @@
 
 ---
 
-### 観点 2. 別の攻撃面増加チェック
+### 観点 2. 別の露出面増加チェック
 
 ```text
 - 修正で導入されたコード (新規 path / 新規 IO / 新規 IPC / 新規 shell call / 新規 parser) に
@@ -47,7 +47,7 @@
 ```
 
 判定:
-- 新攻撃面あり → `new_attack_surface_introduced: true` → BLOCK
+- 新たな露出面あり → `new_attack_surface_introduced: true` → BLOCK
 - なし → `new_attack_surface_introduced: false`
 
 ---

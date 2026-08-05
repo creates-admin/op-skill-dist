@@ -310,7 +310,7 @@ schema_version bump + 段階移行プロトコル (`_shared/version-check.md`) �
 | 不明・複合 | feature-expert (最も汎用的) | UI 影響あれば ux-ui-audit-expert |
 
 > **post_check と global review の概念分離**:
-> - **post_check_expert (op-run フェーズ3.5)**: Issue 固有の再監査 (元 finding が解消されたか / 修正で別の攻撃面が増えていないか)
+> - **post_check_expert (op-run フェーズ3.5)**: Issue 固有の再監査 (元 finding が解消されたか / 修正で別の露出面が増えていないか)
 > - **global review (op-run フェーズ4)**: 全 PR が必ず受ける独立レビュー (review-expert が PR 全体の副作用 / PR 本文整合 / 検証記録 / 7 lens 品質を横断確認)
 >
 > debug / refactor / optimize / test 等 post_check が `null` のクラスタも、フェーズ4 の global review (review-expert) は必ず受ける。post_check が null であることは「Issue 固有の再監査は不要」を意味するだけで、独立レビューを skip するわけではない。

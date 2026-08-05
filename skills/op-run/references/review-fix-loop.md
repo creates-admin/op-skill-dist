@@ -541,7 +541,7 @@ specialist は finding 単位で 1 block を出す。複数 finding を一度に
        migrations/** / config 構造 → compatibility、release/installer/updater → release、PR 本文 / scope → spec、
        命名 / 構造 / 配置 → refactor-maintainability)。
 (c) core lens (security / spec / test-regression) を常時加える
-    - fix が新たな regression / scope 逸脱 / 攻撃面を持ち込んでいないかを毎 round 必ず再評価する。
+    - fix が新たな regression / scope 逸脱 / 露出面を持ち込んでいないかを毎 round 必ず再評価する。
 ```
 
 `lens_bundles` は初回と同じ許可ペア表 (`compatibility`+`release` / `workflow-ux`+`refactor-maintainability`) を

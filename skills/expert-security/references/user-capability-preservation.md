@@ -183,7 +183,7 @@ usable_security:
 **共通原則 (全 capability に共通する NG mitigation)**: capability の UI / 導線を削除する、
 出力先・読込元を固定する、受け入れ形式を 1 つに縮退させる、といった「capability 自体を犠牲にする」
 修正は禁止 (`legitimate_workflow_preserved` の判定基準を参照)。正しい mitigation は常に
-validate / canonicalize / scope / confirm / audit の組合せで攻撃経路だけを閉じる。
+validate / canonicalize / scope / confirm / audit の組合せで到達経路だけを閉じる。
 
 ### 早見表 (代表 6 capability)
 
@@ -215,7 +215,7 @@ needs_human_decision:
   decision_type: "usable_security"
   options:
     - id: "A"
-      label: "現 UX を維持し、validation だけで攻撃経路を閉じる"
+      label: "現 UX を維持し、validation だけで到達経路を閉じる"
       consequence: "security_risk は残るが UX は壊れない"
     - id: "B"
       label: "UX 破壊を許容して capability 全体を縮小"

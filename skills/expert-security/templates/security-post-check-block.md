@@ -63,13 +63,13 @@ aux_post_check_status: ${AUX_STATUS}
 BLOCK
 
 ### 評価サマリ
-<2〜4 文で BLOCK の主因。元 finding 未解消 / 新攻撃面 / scope_out 違反 / 正当 capability 削除 のいずれか>
+<2〜4 文で BLOCK の主因。元 finding 未解消 / 新たな露出面 / scope_out 違反 / 正当 capability 削除 のいずれか>
 
 ### 8 観点の評価
 | # | 観点 | 結果 | コメント |
 |---|------|------|---------|
 | 1 | 元 finding の解消 | OK / **NG** | <NG なら未解消の挙動 + 該当ファイル> |
-| 2 | 別の攻撃面増加チェック | OK / **NG** | <NG なら新規攻撃面 + 該当行> |
+| 2 | 別の露出面増加チェック | OK / **NG** | <NG なら新規露出面 + 該当行> |
 | 3 | 入力検証 | OK / **NG** | <NG なら検証漏れ + 該当箇所> |
 | 4 | 認可 / capability | OK / **NG** | <NG なら境界違反 + 該当箇所> |
 | 5 | エラーパス | OK / **NG** | <NG なら漏洩経路 / panic 経路 + 該当箇所> |

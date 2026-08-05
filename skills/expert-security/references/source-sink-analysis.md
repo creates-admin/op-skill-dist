@@ -109,7 +109,7 @@ steps は **断定的かつ短い文** で書き、各 step を静的証拠 (コ
 - source kind が観測可能な入力経路として実在する
 - sink kind が実在する API 呼び出し
 - source から sink までの中間で **検証 (validation / canonicalize / scope / signature) が確認できない**
-- 攻撃者モデル (threat_model) が現実的 (CompromisedFrontend / MaliciousDocument 等)
+- 脅威モデル (threat_model) が現実的 (CompromisedFrontend / MaliciousDocument 等)
 
 `reachable: false` の例:
 
@@ -123,26 +123,26 @@ steps は **断定的かつ短い文** で書き、各 step を静的証拠 (コ
 
 | exploitability | 条件 | severity への影響 |
 |----------------|------|------------------|
-| `none` | 攻撃経路が存在しない | 起票しない |
+| `none` | 到達経路が存在しない | 起票しない |
 | `theoretical` | 経路はあるが、現実的な前提条件が複雑 (3 つ以上の precondition AND) | High 上限 (Critical にしない) |
 | `reachable` | 経路があり、precondition も観測可能 (1〜2 個の AND) | High 標準 |
 | `practical` | 経路が直接的で、precondition が ほぼ常に満たされる | Critical 候補 |
 
 ```text
-practical exploit:
+exploitability == practical:
   - frontend invoke 経由で直接到達 (XSS / supply chain compromise が前提)
   - imported file の zip-slip
   - updater payload signature skip
   - secret が常時 log に出る
 
-reachable exploit:
+exploitability == reachable:
   - user 操作 1 つで成立 (file open / import 等)
   - capability 越権が WebView compromise 前提
   - log permission が default 644 で漏洩
 
-theoretical exploit:
+exploitability == theoretical:
   - 複数の precondition AND が必要
-  - 攻撃者が特殊な OS 権限 / network 位置を持つ前提
+  - 脅威アクターが特殊な OS 権限 / network 位置を持つ前提
   - hardening 候補 (defense-in-depth)
 ```
 
@@ -328,7 +328,7 @@ security:
       - "load_recent_files が config の path を std::path::Path::display() でそのまま log::error! に渡す"
       - "ログファイルが permission 644 で他ユーザー読める"
       - "user 名 / 文書名 / 内部 directory 構造が漏れる"
-  exploitability: reachable   # 「log permission が default 644 で漏洩」= 本ファイル §exploitability scoring の reachable exploit 例そのもの (theoretical ではない)
+  exploitability: reachable   # 「log permission が default 644 で漏洩」= 本ファイル §exploitability scoring の exploitability == reachable の例そのもの (theoretical ではない)
   impact:
     confidentiality: medium
     integrity: none

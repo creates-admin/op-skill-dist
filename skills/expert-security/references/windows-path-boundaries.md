@@ -5,7 +5,7 @@
          device path / ADS / reserved name / mixed separator / TOCTOU) の検査観点。
 作成意図: Tauri / Rust 開発で頻出する Windows path の落とし穴を集約し、scan / patrol / apply / post-check で
          網羅的に検査できるようにする。Windows 環境固有の reject パターンを統一する。
-注意点: 本ファイルは Windows 固有 path の attack surface 観点。
+注意点: 本ファイルは Windows 固有 path の exposure surface 観点。
        OS file picker 経由 path の扱いは file-picker-and-user-selected-path.md。
        trust boundary 判定は trust-boundaries.md。
 -->
@@ -34,7 +34,7 @@
 
 ## 1. parent traversal (`../`)
 
-### 攻撃シナリオ
+### 到達シナリオ
 
 - archive entry name に `../foo` を含む (zip-slip)
 - 設定ファイル / project file 内の reference path に `../`
@@ -53,7 +53,7 @@ Rust 実装例は本ファイル末尾「統合チェック関数の例」の `v
 
 ## 2. symlink
 
-### 攻撃シナリオ
+### 到達シナリオ
 
 - ユーザー文書 directory に symlink を仕込み、そこを target にして任意 path に書き込む
 - imported file の path が symlink で system32 を指す
@@ -73,7 +73,7 @@ Rust 実装例は本ファイル末尾「統合チェック関数の例」の `v
 
 ## 3. NTFS junction
 
-### 攻撃シナリオ
+### 到達シナリオ
 
 - junction (NTFS のディレクトリ symlink) を仕込み、別 volume を指す
 - mklink /J で作成可能 (admin 不要)
@@ -88,7 +88,7 @@ Rust 実装例は本ファイル末尾「統合チェック関数の例」の `v
 
 ## 4. reparse point
 
-### 攻撃シナリオ
+### 到達シナリオ
 
 - reparse point (NTFS の特殊 link 機構) で別 volume / 別 path を指す
 - symlink / junction / mount point / OneDrive placeholder すべて reparse point の一種
@@ -105,7 +105,7 @@ Rust 実装例は本ファイル末尾「統合チェック関数の例」の `i
 
 ## 5. UNC path / network share (`\\server\share\...`)
 
-### 攻撃シナリオ
+### 到達シナリオ
 
 - ユーザーが選択した path が `\\malicious-server\share\foo.exe`
 - network 越境のファイル操作 (TOCTOU / 認証 / payload 経路)
@@ -126,7 +126,7 @@ Rust 実装例は本ファイル末尾「統合チェック関数の例」の `i
 
 ## 6. Windows device path (`\\?\C:\...`)
 
-### 攻撃シナリオ
+### 到達シナリオ
 
 - device path で MAX_PATH を回避し、想定外の長 path を渡す
 - canonicalize の検査を回避 (device path は normalization rule が異なる)
@@ -141,7 +141,7 @@ Rust 実装例は本ファイル末尾「統合チェック関数の例」の `i
 
 ## 7. reserved name (`CON`, `PRN`, `AUX`, `NUL`, `COMx`, `LPTx`)
 
-### 攻撃シナリオ
+### 到達シナリオ
 
 - ユーザーが file picker で `C:\Users\Alice\Documents\CON.txt` を選択
 - archive entry name に `CON` を含む
@@ -161,7 +161,7 @@ reserved name チェック部分を参照。
 
 ## 8. alternate data stream (ADS): `file.txt:stream`
 
-### 攻撃シナリオ
+### 到達シナリオ
 
 - `file.txt:hidden_stream` という path で hidden data を書く
 - `directory:stream` で directory の ADS に書く
@@ -178,7 +178,7 @@ ADS を含む path は reject。
 
 ## 9. case-insensitive path collision
 
-### 攻撃シナリオ
+### 到達シナリオ
 
 - Windows は case-insensitive (`Foo.txt` と `foo.txt` は同一視)
 - アプリが case-sensitive な比較で「workspace 内 path」を判定すると、`C:\WORKSPACE\foo` が `C:\workspace\foo` と一致しない
@@ -193,7 +193,7 @@ ADS を含む path は reject。
 
 ## 10. mixed separator (`/` と `\`)
 
-### 攻撃シナリオ
+### 到達シナリオ
 
 - `C:\Users/Alice\Documents/foo.txt` のような mixed path
 - denylist が `\` 区切り前提で書かれていると、`/` 区切り path で bypass
@@ -207,7 +207,7 @@ ADS を含む path は reject。
 
 ## 11. trailing dot / trailing space
 
-### 攻撃シナリオ
+### 到達シナリオ
 
 - `foo.txt.` (trailing dot) は Windows では `foo.txt` として扱われる
 - `foo.txt ` (trailing space) も同様
@@ -222,7 +222,7 @@ ADS を含む path は reject。
 
 ## 12. long path handling (MAX_PATH = 260)
 
-### 攻撃シナリオ
+### 到達シナリオ
 
 - 260 文字を超える path を渡し、アプリが truncate して別 path に書き込む
 - device path (`\\?\`) で MAX_PATH を回避され、想定外の場所に書く
@@ -237,10 +237,10 @@ ADS を含む path は reject。
 
 ## 13. temp directory race
 
-### 攻撃シナリオ
+### 到達シナリオ
 
-- 攻撃者が temp directory で予測可能な name の file を先に作る (predictable filename)
-- アプリが create_new flag なしで write し、攻撃者の symlink 経由で別 path に書き込み
+- 脅威アクターが temp directory で予測可能な name の file を先に作る (predictable filename)
+- アプリが create_new flag なしで write し、脅威アクターの symlink 経由で別 path に書き込み
 
 ### 検査
 
@@ -252,10 +252,10 @@ ADS を含む path は reject。
 
 ## 14. overwrite / delete / rename の TOCTOU
 
-### 攻撃シナリオ
+### 到達シナリオ
 
 - アプリが `if path.exists() { fs::remove_file(path); }` のような check-then-act
-- check と act の間に攻撃者が path を symlink に差し替える
+- check と act の間に脅威アクターが path を symlink に差し替える
 - canonicalize の結果と、その後の操作対象が同一でない (canonicalize 後に path が変わる)
 
 ### 検査
@@ -269,10 +269,10 @@ ADS を含む path は reject。
 
 ## 15. drive letter / current directory 依存
 
-### 攻撃シナリオ
+### 到達シナリオ
 
 - `foo.txt` のような relative path は current directory 依存
-- アプリの起動 path が攻撃者制御下なら、想定外の場所に書き込み
+- アプリの起動 path が脅威アクター制御下なら、想定外の場所に書き込み
 - `C:foo.txt` のような drive-relative path (drive letter のみ指定、root 省略) は current directory 依存
 
 ### 検査

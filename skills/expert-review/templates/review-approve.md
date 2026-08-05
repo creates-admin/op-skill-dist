@@ -57,7 +57,7 @@ review-expert の 7 lens (Security/Abuse, Workflow/UX, Test, Compatibility, Rele
 <技術用語を避けた 1〜3 文の説明>
 
 ### チェック内容
-- [x] Security / Abuse: 入力検証・認可・IPC・file IO・shell の攻撃面
+- [x] Security / Abuse: 入力検証・認可・IPC・file IO・shell の露出面
 - [x] Workflow / UX: 画面遷移・状態復帰・操作破壊・a11y 波及
 - [x] Test / Regression: 変更に対する回帰検証
 - [x] Compatibility: 保存データ・migration・rollback
@@ -102,7 +102,7 @@ review-expert を Direct Mode で実行した参考レビューです。
 <技術用語を避けた 1〜3 文の説明>
 
 ### チェック内容
-- [x] Security / Abuse: 入力検証・認可・IPC・file IO・shell の攻撃面
+- [x] Security / Abuse: 入力検証・認可・IPC・file IO・shell の露出面
 - [x] Workflow / UX: 画面遷移・状態復帰・操作破壊・a11y 波及
 - [x] Test / Regression: 変更に対する回帰検証
 - [x] Compatibility: 保存データ・migration・rollback
@@ -133,9 +133,9 @@ EOF
 
 ## review_mode == light-after-security-postcheck の場合
 
-Security/Abuse Lens は「PR 全体として新たな攻撃面が増えていないか」のみ軽く確認したことを明記する:
+Security/Abuse Lens は「PR 全体として新たな露出面が増えていないか」のみ軽く確認したことを明記する:
 
 ```diff
-- [x] Security / Abuse: 入力検証・認可・IPC・file IO・shell の攻撃面
-+ [x] Security / Abuse: PR 全体として新たな攻撃面が増えていないかを軽量モードで確認 (3.5-B で security-expert が深掘り再監査済み)
+- [x] Security / Abuse: 入力検証・認可・IPC・file IO・shell の露出面
++ [x] Security / Abuse: PR 全体として新たな露出面が増えていないかを軽量モードで確認 (3.5-B で security-expert が深掘り再監査済み)
 ```

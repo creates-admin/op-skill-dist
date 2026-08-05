@@ -1,4 +1,4 @@
-# threat-model-and-actors.md — 脅威モデルと攻撃者像
+# threat-model-and-actors.md — 脅威モデルと脅威アクター像
 
 <!--
 機能概要: security-expert が finding に必ず付与する threat_model (actor / preconditions / required_user_action /
@@ -23,15 +23,15 @@ threat_model:
   secondary_actors:
     - <enum と同じ語彙>  # 任意配列、空または省略可
   preconditions:
-    - "<攻撃が成立する前提を 1 行ずつ>"
+    - "<到達が成立する前提を 1 行ずつ>"
   required_user_action:
-    - "<攻撃にユーザー操作が必要なら明記。不要なら空配列>"
+    - "<到達成立にユーザー操作が必要なら明記。不要なら空配列>"
   asset_at_risk:
     - user_file | production_path | token | document_content | generated_artifact
 ```
 
 > **actor は単一に固定する理由**: op-merge / op-scan / op-patrol が `threat_model.actor` を
-> 単一 enum として集計・優先度付けする (例: `compromised_frontend` 多発 → frontend 由来攻撃面強化)。
+> 単一 enum として集計・優先度付けする (例: `compromised_frontend` 多発 → frontend 由来露出面強化)。
 > primary actor が複数になると集計 / dedup / 優先度判定が崩れる。
 > 同一 finding が複数経路で成立する場合は **最も典型的 / 影響の大きい** 1 つを primary に置き、
 > 残りは `secondary_actors[]` に記録する。
@@ -72,7 +72,7 @@ threat_model:
 
 ### 6. `malicious_update_source`
 
-- 攻撃者が compromise した updater サーバー / fake mirror
+- 脅威アクターが compromise した updater サーバー / fake mirror
 - 典型シナリオ: updater payload 改竄 / version downgrade / signature bypass
 - 想定資産: artifact integrity / system integrity
 
@@ -100,7 +100,7 @@ threat_model:
 
 ## preconditions (必ず明記する)
 
-`preconditions` には攻撃が成立する **観測可能な前提条件** を 1 行ずつ列挙する。
+`preconditions` には到達が成立する **観測可能な前提条件** を 1 行ずつ列挙する。
 具体例は本ファイル末尾「判定例」の 例1 (compromised_frontend) / 例2 (malicious_document) の
 `preconditions` block を参照。
 
@@ -108,9 +108,9 @@ threat_model:
 
 ---
 
-## required_user_action (ユーザー操作が必要な攻撃か)
+## required_user_action (ユーザー操作が必要な到達経路か)
 
-ユーザーが何らかの操作をしないと成立しない攻撃か、放置でも成立する攻撃か。
+ユーザーが何らかの操作をしないと成立しない到達経路か、放置でも成立するか。
 
 | required_user_action 例 | 説明 |
 |------------------------|------|
@@ -121,14 +121,14 @@ threat_model:
 | `["user clicks export button"]` | export 操作が必要 |
 | `["user grants permission via OS dialog"]` | OS 権限ダイアログでの許可が必要 |
 
-**ユーザー操作が必要な攻撃** は exploitability の判定で `theoretical` / `reachable` 寄りになる。
-**ユーザー操作不要 (silent) な攻撃** は `practical` 寄りで Critical 候補になりやすい。
+**ユーザー操作が必要な到達経路** は exploitability の判定で `theoretical` / `reachable` 寄りになる。
+**ユーザー操作不要 (silent) な到達経路** は `practical` 寄りで Critical 候補になりやすい。
 
 ---
 
 ## asset_at_risk (失われるもの)
 
-`asset_at_risk` には攻撃が成立した場合に失われる資産を列挙する。
+`asset_at_risk` には到達が成立した場合に失われる資産を列挙する。
 
 | asset_at_risk | 説明 |
 |--------------|------|
@@ -165,8 +165,8 @@ scan / patrol で finding を起票する前、apply / post-check の判定前�
 - **例外**: actor がすでに compromise 前提 (`malicious_update_source` 等) かつ `asset_at_risk` が
   ほぼ全種 (`all high` 相当、supply-chain 的一撃) の場合、`required_user_action` があっても
   **Critical 判定できる** (被害規模が「user action の有無」の閾値を上書きする)
-- 同一 actor でも、**侵入経路そのもの** (例: compromised_frontend による任意 file write) と
-  **侵入後の被害拡大** (例: 同じ actor が compromise 済み前提で capability scope が広すぎる) は
+- 同一 actor でも、**初期到達経路** (例: compromised_frontend による任意 file write) と
+  **到達後の被害拡大** (例: 同じ actor が compromise 済み前提で capability scope が広すぎる) は
   分けて判定する。前者は典型的に Critical 候補、後者は「compromise 前提でどこまで被害が広がるか」の
   評価なので High 止まりになりやすい
 - `local_user` のような permission 次第で `theoretical` になる finding でも、
@@ -178,7 +178,7 @@ scan / patrol で finding を起票する前、apply / post-check の判定前�
 threat_model:
   actor: compromised_frontend
   preconditions:
-    - "WebView 内 frontend が攻撃者制御下にある (XSS / 脆弱な依存)"
+    - "WebView 内 frontend が脅威アクター制御下にある (XSS / 脆弱な依存)"
     - "Tauri command write_user_data(path, content) が registered で capability に含まれる"
     - "write_user_data は path canonicalize を行わずに std::fs::write を呼ぶ"
   required_user_action: []
