@@ -70,6 +70,26 @@ notes: v1 (2026-06-14): 初版。対話型監督実装スキル (op-codev)。
        契約の追加のみ (既存フェーズ順序・checkpoint 構造・Step B-1 gate は不変) ゆえ
        schema_version 据置。関連: op-code-review/SKILL.md の Output contract 適用範囲節、
        agents/feature-expert.md の apply (op-codev) 行。
+       v6 (2026-08-05, additive): **手動 fallback の証拠必須化と判定権の明示** (op-skill #128)。
+       v5 の実走検証中、Step B worker が自己検証を「skill 解決に失敗したので手動 fallback で
+       実行した」と報告した。しかし同一環境 (plugin 0.1.27) での診断では、司令官 /
+       feature-expert / general-purpose の 3 経路すべてが Skill(op-skill:op-code-review) の
+       解決に成功し、解決失敗は一度も再現しなかった。同じ診断で当該 agent は skill 可視性
+       (bare 名が一覧にあるか) についても他 2 経路と食い違う自己申告をしており、
+       skill 解決ではなく **自己申告の精度** が問題だと判断した。
+       → Step B prompt に「手動 fallback の発動条件 (証拠必須)」を追加。
+       (1) Skill を実際に呼ぶ (2) エラー文言を verbatim で code_review_skip_reason に入れる
+       の AND を発動条件とし、証拠なしの fallback 申告は contract violation とした。
+       これにより反証不能だった主張が反証可能になる。
+       → あわせて自己検証が best-effort (controller から機械検証不能) であり、判定権は
+       Step B-2 の独立レビューにあることを明示。検証できない値に契約を載せない。
+       自己申告フィールドの追加 (code_review_mode 等) は採らない — 自己申告の精度が
+       問題である以上、同じ穴が増えるだけであるため。
+       → v5 で追加した _shared 探索 fallback を実パス glob へ差し替え
+       (Read tool は環境変数を展開せず、Bash tool 環境で CLAUDE_PLUGIN_ROOT が unset である
+       実測に対応)。
+       正本は _shared/apply-completion-checklist.md v7「手動 fallback の発動条件」、
+       参照 pin を (>=7) へ更新。契約の追加のみゆえ schema_version 据置。
 -->
 
 
@@ -127,7 +147,7 @@ op-codev の責務:
 - `~/.claude/skills/_shared/spawn-prompt-common.md` (>=1) — spawn prompt 共通必須ブロック
   (§1 invocation_mode / §2 必読 checklist / §3 commits_added / §4 質問禁止 + fallback) の正本。
   Step B は §1〜§4 すべて、Step A / Step C / Step B-2 は §1・§4 を pointer 参照する
-- `~/.claude/skills/_shared/apply-completion-checklist.md` (>=6) — apply 完了手順の正本。op-codev は
+- `~/.claude/skills/_shared/apply-completion-checklist.md` (>=7) — apply 完了手順の正本。op-codev は
   **Section 2-A の commit 先行順序** を使う (v4 で Section 2 の 5 段階順序から変更。理由は下記)
 - `~/.claude/skills/_shared/apply-completion-verify.md` (>=4) — controller 側 verify gate の正本。
   Step B 直後の `op apply verify-commit` 配線はこれに従う
@@ -524,12 +544,16 @@ Agent({
     【共通宣言層】
     共通宣言 (invocation_mode / 質問禁止 / 必読 checklist / commits_added):
     ~/.claude/skills/_shared/spawn-prompt-common.md (>=1) §1〜§4 を参照。
-    【必読】Read ~/.claude/skills/_shared/apply-completion-checklist.md (>=6) — 完了手順の正本。
+    【必読】Read ~/.claude/skills/_shared/apply-completion-checklist.md (>=7) — 完了手順の正本。
     **本フェーズは op-codev の apply Run Mode である** (同 §1 の mode 表で「apply Run Mode
     (op-run / op-codev 経由 または Direct apply)」に該当する)。よって commits_added: [SHA, ...]
     (1 件以上) を完了報告に必ず含める (§3)。順序は同 **Section 2-A (commit 先行)** を使う。
     上記 2 ファイルが Read できない場合 (plugin 配布ではパスが異なることがある) は、
-    **skip せず** plugin root 配下の skills/_shared/ を探して読むこと。
+    **skip せず** 次の実パスを試すこと (環境変数は Read tool で展開されないため、
+    $CLAUDE_PLUGIN_ROOT ではなくこの glob を使う。Bash tool 環境では
+    CLAUDE_PLUGIN_ROOT が unset である実測あり):
+      ~/.claude/plugins/cache/op-skill/op-skill/*/skills/_shared/
+    (Glob tool、または ls で version ディレクトリを解決してから Read する)
     それでも解決しないときは、本 prompt 内に逐語で埋め込んだ下記【完了報告の形式】が
     完了報告の契約として有効であり、これに従って報告する。
 
@@ -628,7 +652,27 @@ Agent({
     skill 解決自体に失敗した場合のみ、skills/op-code-review/SKILL.md の
     Angle A〜E + 3 値 verify を同一 context で手動一巡し、その旨を報告する。
 
+    【手動 fallback の発動条件 (証拠必須)】
+
+    手動一巡へ逃げてよいのは、次の両方を満たす場合だけである
+    (正本: _shared/apply-completion-checklist.md (>=7)「手動 fallback の発動条件」):
+
+    1. Skill({skill: "op-skill:op-code-review", ...}) を **実際に呼んだ**
+       (呼ばずに「解決できないはず」「この環境には無いはず」と判断して
+        fallback することは禁止)
+    2. 返ってきた **エラー文言を verbatim で** code_review_skip_reason に入れた
+       (要約・言い換え不可)
+
+    エラー文言を伴わない fallback 申告は contract violation であり、
+    code_review_invoked: true を名乗ってはならない。
+    実測 (2026-08-05) では、司令官 / feature-expert / general-purpose の 3 経路すべてで
+    この skill は解決に成功している。解決失敗は例外的事象であり、
+    証拠なしに主張してよいものではない。
+
     なお本自己検証は Step B-2 の独立レビューを代替しない (両者は別レイヤー)。
+    本自己検証は **best-effort** であり、controller は実行の有無を機械検証できない。
+    そのため判定権 (Critical/High の有無で先へ進めるかの判断) は
+    controller が fresh context で spawn する Step B-2 の独立レビューにある。
     自分が Agent tool で子 agent を spawn することはできない (harness 制約) —
     レビューの委任は controller が Step B-2 で行う。
 

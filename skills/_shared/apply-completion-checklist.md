@@ -1,7 +1,20 @@
 <!--
-schema_version: 6
-last_breaking_change: 2026-07-31
-notes: v6 (2026-07-31) — **commit 取りこぼし対策**。①Section 2-A (commit 先行) の適用範囲を
+schema_version: 7
+last_breaking_change: 2026-08-05
+notes: v7 (2026-08-05, breaking) — **手動 fallback の発動条件を証拠必須化** (op-skill #128)。
+       §2「code-review skill 名と effort-level」に「手動 fallback の発動条件」節を新設し、
+       (1) Skill を実際に呼んだこと (2) エラー文言を verbatim で報告に含めたこと の AND を
+       発動条件とした。証拠を伴わない fallback 申告は contract violation とし
+       `code_review_invoked: true` を名乗れない。あわせて「判定権の所在」を明記 —
+       自己検証は best-effort (controller から機械検証できない) であり、merge 可否の判定権は
+       controller spawn の独立レビュー (op-run フェーズ4 / op-codev Step B-2) に置く。
+       実測根拠 (2026-08-05): 事故報告と同一環境 (plugin 0.1.27) で司令官 / feature-expert /
+       general-purpose の 3 経路すべてが Skill(op-skill:op-code-review) の解決に成功し、
+       解決失敗は再現しなかった。同じ agent が skill 可視性についても事実と異なる自己申告を
+       しており、自己申告フィールドの追加 (code_review_mode 等) では解決しないと判断した。
+       既存 fallback 経路に新たな必須条件を課すため breaking として bump (v6 まで許容されていた
+       証拠なし fallback が violation になる)。参照 SKILL.md の pin を (>=7) へ更新すること。
+       v6 (2026-07-31) — **commit 取りこぼし対策**。①Section 2-A (commit 先行) の適用範囲を
        op-run に加えて **op-codev** へ拡大 (節名を「op-run 経路の例外分岐」→「commit 先行経路」に改称)。
        実測事故 (2026-07-31, op-codev IU1 Step B 再実行) で、agent が実装 → 自己検証 → High 検出 →
        自己修正まで完遂しながら commit だけを落とし、完了報告として op-code-review の findings JSON
@@ -122,6 +135,35 @@ commit までの 5 ステップを **この順序で** 実行する。
   Skill invoke できない** (2026-07-29 実測確定)。built-in および旧 `simplify` への fallback は廃止。
   skill 解決に失敗した場合の fallback は、`skills/op-code-review/SKILL.md` の Angle A〜E +
   3 値 verify を同一 context で **手動一巡** すること (本ファイルには手順を複製しない)。
+  ただし発動には下記「手動 fallback の発動条件」を満たす必要がある。
+
+### 手動 fallback の発動条件 (v7 新設 — 証拠必須)
+
+手動 fallback を実行してよいのは、以下を **両方** 満たす場合のみである。
+
+1. `Skill({skill: "op-skill:op-code-review", ...})` を **実際に呼んだ** (呼ばずに「解決できないはず」と
+   判断して fallback することは禁止)
+2. 呼んだ結果返ってきた **エラー文言を verbatim で完了報告に含めた**
+   (`code_review_skip_reason` に原文を入れる。要約・言い換え不可)
+
+**エラー文言を伴わない fallback 申告は contract violation** であり、`code_review_invoked: true` を
+名乗ってはならない。
+
+> **なぜ証拠を要求するか** (2026-08-05 実測、op-skill #128): 旧 v6 までの条項は発動条件が
+> agent の自己判定のみで、失敗の証拠を残す義務が無かった。そのため「解決に失敗したので
+> fallback した」が **反証不能な主張** になっていた。実測では、事故報告と同一環境
+> (plugin 0.1.27) で司令官 / plugin agent (feature-expert) / built-in agent (general-purpose) の
+> **3 経路すべてが解決に成功**し、解決失敗は一度も再現しなかった。同じ診断で当該 agent は
+> 「bare 名も available skills 一覧に載っている」とも報告したが、これも他 2 経路の観測と食い違った
+> (bare で載るのは Dynamic Workflow 系のみ)。すなわち自己申告そのものの精度が問題であり、
+> 自己申告フィールドを増やしても解決しない。本条項は主張を **反証可能な形に変換する** ためのもので、
+> 次に同じ報告が出たときエラー文言の有無で真偽を判定できるようにする。
+
+> **判定権の所在**: 本自己検証は **best-effort** であり、controller 側から実行の有無を機械検証できない
+> (`commits_added` が `op apply verify-commit` で検証されるのとは対照的)。したがって
+> **merge 可否を左右する判定権は自己検証に置かない** — controller が fresh context で spawn する
+> 独立レビュー (op-run = フェーズ4 global review、op-codev = Step B-2) が判定層である。
+> 検証できない値に契約を載せないこと。
 - controller が `code_review_effort` field として effort を渡してくる場合、agent は
   `Skill({skill: "op-skill:op-code-review", args: "effort: <effort>"})` で呼ぶ。
   `auto` または未指定の場合は effort 引数なしで呼ぶ (skill 既定 = high)。

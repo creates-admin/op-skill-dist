@@ -118,6 +118,11 @@ built-in `code-review` は disable-model-invocation のため subagent から in
     `auto` / 未指定なら effort 引数なしで呼ぶ — 派生ルールの正本は _shared/model-selection.md §5.5)
    - skill 解決に失敗した場合の fallback: op-code-review/SKILL.md の Angle A〜E +
      3 値 verify を同一 context で手動一巡する (checklist 正本は同 SKILL.md、ここに複製しない)
+   - **fallback の発動には証拠が要る** (`_shared/apply-completion-checklist.md` (>=7)
+     「手動 fallback の発動条件」が正本): (1) Skill を実際に呼び (2) 返ってきたエラー文言を
+     verbatim で `code_review_skip_reason` に入れること。呼ばずに「解決できないはず」と判断して
+     fallback すること、およびエラー文言を伴わない fallback 申告は contract violation であり
+     `code_review_invoked: true` を名乗ってはならない
 2. Critical または High が検出された場合: 自己修正して **追加 commit** を打ち、自己検証を再実行する
    (追加 commit は必須。uncommitted 変更を残したまま完了報告することは contract violation)
    (再実行は 1 回まで。2 回目の Critical/High は self_check_blocked: true を含めて ClusterOrchestrator に返す)

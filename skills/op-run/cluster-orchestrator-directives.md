@@ -308,7 +308,10 @@ apply-expert spawn 時の prompt に自己検証指示を含める (フェーズ
 1. Skill({skill: "op-skill:op-code-review", args: "effort: ${code_review_effort}"}) を起動する
    (`auto` / 未指定なら effort 引数なしで Skill({skill: "op-skill:op-code-review"}))
    - scope: commit で変更したファイルの diff のみ
-   - skill 解決に失敗した場合は skills/op-code-review/SKILL.md の手動 fallback に従う
+   - skill 解決に失敗した場合は skills/op-code-review/SKILL.md の手動 fallback に従う。
+     ただし発動には証拠が要る — Skill を実際に呼び、返ってきたエラー文言を verbatim で
+     code_review_skip_reason に入れること (正本: _shared/apply-completion-checklist.md (>=7)
+     「手動 fallback の発動条件」)。証拠なしの fallback 申告は contract violation
 2. 結果を確認する:
    - Critical / High が出た場合: 自力で修正して **追加 commit** し、自己検証を再実行する
      (追加 commit は必須。uncommitted 変更の残置は contract violation = checklist Section 2-A)
