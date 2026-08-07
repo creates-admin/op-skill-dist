@@ -1,7 +1,12 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-06-14
-notes: v1.7 相当 additive (2026-07-31): expert-spawn.md v17 (#84) 追従。`self_check_blocked` を
+notes: v1.8 相当 additive (2026-08-07): expert-spawn.md v17「expert spawn は subagent であること」追従。
+       フェーズ2 実行節に CO からの nested spawn 契約 (配下も subagent / 個体名を付けない /
+       `run_in_background` は既定に委ねる) を配線した。従来 CO 側には subagent_type の scoped 名規約
+       しかなく、teammate 化を避ける根拠が CO 層に無かったため。
+       ClusterSummary schema・verdict union は不変ゆえ schema_version 据置。
+       v1.7 相当 additive (2026-07-31): expert-spawn.md v17 (#84) 追従。`self_check_blocked` を
        フェーズ2 返却 / フェーズ3 返却 / フェーズ4 (PR 作成) 入力条件に配線し、L1 で required +
        fail-closed と定義したフィールドの consumer 実体を CO 側に持たせる (従来 CO 側に言及が 0 件で、
        契約だけが宙に浮いていた)。`true` の場合はフェーズ4 へ進まず人間 gate / 再委任へ回す。
@@ -234,6 +239,15 @@ compact summary に記録して ClusterOrchestrator のライフサイクルを�
 Agent tool で apply-expert を spawn する。`subagent_type` は **plugin scoped 名** `"op-skill:${EXPERT}"`
 を渡す (`${EXPERT}` は payload の bare expert 名。前置は spawn 境界のみで、`apply-prompt-directives.md`
 の `${EXPERT}` 節 lookup 等には bare 名を使う。正本は `_shared/expert-spawn.md`「Plugin scoped-name 規約」)。
+
+> **配下も subagent として spawn する** (正本: `_shared/expert-spawn.md`「expert spawn は subagent で
+> あること」)。agent 指定は `subagent_type`、ラベルは `description` で足り、**個体名を付けない**
+> (teammate 化すると完了が戻り値ではなく idle 通知になり、apply / review の構造化返却を前提とする
+> 本フェーズ以降が壊れる)。`Workflow({ name: ... })` の `name` は named workflow の識別子であり、
+> Agent 側へ引きずらない。`run_in_background` は既定に委ね、CO 配下を同期直列に固定しない
+> (nested 並列は公式の想定用途)。本規約は以降の CO からの spawn
+> (フェーズ3.5 post-check / フェーズ5-6 global review / 再委任) すべてに適用する。
+
 prompt は以下の 3 層で構成する。
 
 ```

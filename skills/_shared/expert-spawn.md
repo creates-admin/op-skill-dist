@@ -6,7 +6,15 @@ additive_only_policy:
   - breaking change (既存フィールドの削除 / 型変更 / required 化 / marker 仕様変更) のみ schema_version を bump する
   - 現行 schema_version 一覧は `~/.claude/skills/_shared/version-check.md` の
     「## _shared ファイル 現行 schema_version 一覧」節を参照する
-notes: v17 (2026-07-31, breaking) — 「修正完了報告 フィールドの必須性」表の改訂。
+notes: v17 (2026-08-07, additive) — 「expert spawn は subagent であること (teammate 化させない)」節を新設。
+       subagent は単一テキストを親へ返すが teammate は独立 session で idle 通知 + mailbox になるため、
+       ClusterSummary (ADR-0016) 等の戻り値契約は worker が teammate 化した時点で壊れる。
+       一次対策は環境側 (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` を設定しない = teams 既定無効)、
+       二次対策は spawn 引数で個体名を付けない (識別は `description`)。
+       Agent tool の `name` 入力は公式ドキュメント未記載であり「name = teammate 化」は事故からの推論、
+       名前付き subagent は teammate ではない旨を未確定注記として明示。
+       prose 追加のみ・marker schema / field 契約は不変ゆえ schema_version 据置。
+       v17 (2026-07-31, breaking) — 「修正完了報告 フィールドの必須性」表の改訂。
        #96: apply Run Mode で `code_review_invoked: true` を原則必須化 (理由なき `false` は contract
        violation。正当な `false` は exploration-only spawn と expert 固有 skip 条件の 2 つのみで、
        mode 判定は apply-completion-checklist.md §1、skip 条件一覧は同 §5 が正本)。
@@ -125,7 +133,7 @@ Planned experts listed in `planned-experts.md` must be normalized before spawn.
 - spawn prompt 構造 (3 パターン: scan / apply / review)
 - spawn schema (canonical scan output schema および各 domain 拡張)
 - review-expert を spawn するための **prompt テンプレと最低限の field 定義のみ**
-- execution boundary (司令官と subagent の責務分担、並列 spawn 制約)
+- execution boundary (司令官と subagent の責務分担、並列 spawn 制約、teammate 化させない契約)
 - reclassification の **schema field** (`reclassified_from` / `reclassified_to` /
   `reclassification_reason`)。PR コメント側に reclassification を示す hidden marker が現れる場合、
   それは本 schema field の **mirror only** であり、canonical は schema field 側 (=本ファイル) に置く。
@@ -228,6 +236,71 @@ plugin 内の component は **`op-skill:` prefix 付き**で登録されるた�
 
 ---
 
+## expert spawn は subagent であること (teammate 化させない)
+
+OP skill の spawn 契約は **subagent の戻り値**に依存する。Agent tool の subagent は
+「タスクを自律実行し、**単一のテキスト結果を親会話へ返す**」( [tools-reference §Agent tool behavior](https://code.claude.com/docs/en/tools-reference#agent-tool-behavior) )
+のに対し、agent teams の **teammate は独立した Claude Code session** で、完了は戻り値ではなく
+**lead への idle 通知**として届き、やり取りは mailbox 経由になる
+( [agent-teams §Context and communication](https://code.claude.com/docs/en/agent-teams) )。
+したがって **op-run の ClusterSummary (ADR-0016) のように「戻り値で構造化 payload を受け取る」契約は、
+worker が teammate 化した時点で成立しない**。
+
+> **実測事故 (2026-08-07)**: op-run が ClusterOrchestrator を `@CO-c1`…`@CO-c13` と命名して spawn した run で、
+> `Teammate @CO-c11 finished` の idle 通知は届くのに ClusterSummary が返らず、controller が worktree / PR から
+> 状態を再構成する回避動作に落ちた。`Teammate` 表記と idle 通知は teams 有効時のみ現れるため、
+> **当該 session では teams が有効で、CO が teammate として生まれていた**ことは確実である。
+
+### 一次対策: 環境側で teams を無効にする (確実な唯一の switch)
+
+teammate が生まれる条件は公式に **1 つだけ**明記されている。
+
+> Agent teams are experimental and disabled by default. Enable them by setting
+> `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` … **Without that variable, no team is set up at session start,
+> no team directories are written, and Claude does not spawn or propose teammates.**
+> — [agent-teams](https://code.claude.com/docs/en/agent-teams) (2026-08-07 参照)
+
+**op-run / op-loop など戻り値契約を持つ skill を回す環境では、`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` を
+設定しない (既定 = 無効のまま)**。これが teammate 化を防ぐ確実な手段であり、prompt 側の規約では代替できない
+(teams が有効なら Claude は自発的に teammate を提案・spawn しうるため)。
+
+### 二次対策: spawn 引数で teammate を要求しない
+
+teams が有効な環境 (人間が他用途で使う session 等) で OP skill を回す場合の緩和策。
+
+- **agent の指定は `subagent_type`、識別ラベルは `description`** (例: `"ClusterOrchestrator: c1"`) で足りる。
+  cluster 識別のために名前を付けたくなるが、**`description` で目的を満たす**。
+- **`Workflow({ name: "op-run-discover" })` の `name` は named workflow の識別子**であり、
+  Agent tool の spawn 対象指定とは無関係。混同して Agent 側へ持ち込まない。
+- prompt で「teammate として」「チームを作って」と要求しない。
+
+> **未確定 (推論であることを明示する)**: Agent tool に teammate 化を意味する `name` 入力があるとは
+> **公式ドキュメントに記載が無い** (tools-reference / sub-agents / agent-teams いずれにも無い。
+> 旧 `team_name` 入力は "accepted but ignored" と明記)。teams 無効セッションでは Agent tool の
+> 入力に `name` 自体が存在しない。また **名前が付いた subagent は teammate ではない**
+> (sub-agents §Sibling roster: "whether Claude named it when spawning it **or** it runs as an agent team teammate")。
+> よって「`name` を渡したから teammate 化した」は上記事故からの推論であり、確定した仕様ではない。
+> 契約の根拠は「teammate は戻り値を返さない」側に置き、`name` 禁止を唯一の防御にしない。
+
+### teammate 化したときに実際に起きること (誤解の訂正)
+
+| | subagent | teammate |
+|---|---|---|
+| 結果の返り方 | 単一テキストが Agent tool の戻り値として親へ返る | 戻り値なし。idle 通知 + mailbox |
+| 配下の teammate spawn | — | **不可** ("No nested teams": teammates cannot spawn their own teammates) |
+| 配下の subagent spawn | 可 (深さ制限内) | **可。ただし foreground 限定** ("No background subagents from in-process teammates") |
+
+**teammate は subagent を spawn できる** — 壊れるのは戻り値契約であって、配下 spawn 自体ではない。
+`Teammates cannot spawn other teammates` が出るのは *teammate がさらに teammate を作ろうとした*ときだけである。
+
+### `run_in_background`
+
+既定に委ねる。nested subagent の並列 fan-out は公式の想定用途であり、**CO 配下を同期直列に固定しない**。
+例外は呼び出し元が in-process teammate のときで、`In-process teammates cannot spawn background agents`
+が返った場合のみ `false` で再送する (先回りして倒さない)。
+
+---
+
 ## spawn の3パターン
 
 ### パターン1: scan 用 (read-only audit)
@@ -278,7 +351,8 @@ Agent({
     Do not stop and wait for commander or user replies.
     Return the required apply report and commit. Do not push.
   """,
-  run_in_background: true            ← 並列待機のため
+  run_in_background: true            ← 並列待機のため (通常は既定に委ねてよい)
+                                    ← 個体名を付けない (「expert spawn は subagent であること」節)
 })
 ```
 
@@ -1206,6 +1280,7 @@ op-merge は `reviewed_head_sha == current_head_sha` かつ `review_result == ap
 
 - 司令官は同時 spawn 数を `max_parallel` (デフォルト 3) で制御する
 - subagent 完了通知は run_in_background の通知で受ける (sleep/poll しない)
+- nested 層 (CO 配下) も並列化してよい (「expert spawn は subagent であること」節)
 - 30 分以上応答がない subagent はタイムアウト扱いで隔離 (worktree は保持してユーザー判断に委ねる)
 - 失敗 subagent はリトライ最大 1 回。それでも失敗したら他タスクに影響させず続行
 

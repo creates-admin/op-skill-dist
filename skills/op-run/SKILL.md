@@ -10,7 +10,12 @@ effort: max
 <!--
 schema_version: 3
 last_breaking_change: 2026-06-15
-notes: v3.3 相当 additive (2026-07-31): model-selection.md v5 §7.2 (Fable escalation gate) 実装。
+notes: v3.4 相当 additive (2026-08-07): expert-spawn.md v17「expert spawn は subagent であること」追従。
+       CO が teammate 化すると ClusterSummary が戻り値で返らず (teammate は idle 通知 + mailbox)、
+       ADR-0016 の返却契約と serial_chains の直列保証が同時に壊れる実測事故 (2026-08-07) を受け、
+       parallel / serial 両ブロックに注記を配線。環境側の一次対策 (teams 無効維持) も併記。
+       既存 spawn ブロックの挙動は不変。schema_version 据置。
+       v3.3 相当 additive (2026-07-31): model-selection.md v5 §7.2 (Fable escalation gate) 実装。
        フェーズ1 に 1-2-g (apply spawn の Fable 昇格提案 gate) を新設し、承認済み cluster にのみ
        `apply_model: "fable"` を載せる。CO 自身 / investigation (2-A) / post-check (3.5) /
        global review (4) は従来どおり Opus 天井 (read-only 側は §7.2 F3 で Fable 禁止)。
@@ -1118,6 +1123,12 @@ for each cluster in parallel_clusters:
   # Agent tool で ClusterOrchestrator を spawn (1 メッセージに全 parallel cluster 分を並べる)
   # CO 自身の model は常に cluster.model (= Opus 天井)。1-2-g で承認された昇格は payload の
   # apply_model にのみ載り、CO がフェーズ2 の apply-expert spawn で使う (model-selection.md §7.2 F1/F3)
+  #
+  # **CO は subagent として spawn する** (正本: _shared/expert-spawn.md「expert spawn は subagent で
+  # あること」)。teammate 化すると完了が戻り値ではなく idle 通知になり、ClusterSummary を前提とする
+  # フェーズ3 以降 (ADR-0016) が不成立になる。cluster 識別は description で足りる (名前を付けない)。
+  # Workflow({name:...}) の name は named workflow の識別子であり Agent 側へ持ち込まない。
+  # 環境側の一次対策は CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS を設定しないこと (teams 既定 = 無効)。
   Agent({
     subagent_type: "op-skill:feature-expert",
     description: "ClusterOrchestrator: ${cluster.id_short}",
@@ -1148,6 +1159,8 @@ Stage 2 で serial_chains に分類されたクラスタは **controller-side �
 ```
 # serial_chains: 各 chain を逐次 await するループ
 # 前の ClusterOrchestrator が返るまで次は起動しない
+# ここは Agent の戻り値 (CHAIN_SUMMARY_JSON) で直列化を強制するため、CO が teammate 化すると
+# 戻り値が消え、直列保証ごと壊れる (2-Orchestrate の注記参照)
 # ClusterOrchestrator 向け注記: background child (apply-expert/review-expert) が
 # rest 状態になっても無限待ちしない。git log / completion 情報でフェーズを先へ進めること。
 CHAIN_SUMMARIES=()  # 配列初期化 (CLAUDE.md bash fence convention)
