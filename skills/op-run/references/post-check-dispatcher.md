@@ -186,10 +186,13 @@ apply_ux_post_check_labels "$PR_NUMBER" "$UX_POST_CHECK_RESULT"
 # state push (post_check payload、ADR-0027 6b、機械正本)。expert key は "ux-ui-audit-expert"。
 # payload は flatten 形式 (entry の各 field を top-level に置く。nested な entry:{} ラッパは
 # CLI (ApplyJsonPayload の #[serde(flatten)]) が受理しない — 正は review/state.rs)。
+# `auditor` は **必須** (op-skill #132): op-merge gate 11c が auditor == "ux-ui-audit-expert" を
+# 空文字も含めて要求する。これを落とすと UI 影響 PR が manual override なしでは merge 不能になる。
 POST_CHECK_PAYLOAD=$(jq -n --arg result "$UX_POST_CHECK_RESULT" --arg sha "$POST_CHECKED_HEAD_SHA" \
   --argjson round "$POST_CHECK_ROUND" \
   '{kind:"post_check", expert:"ux-ui-audit-expert", post_check_result:$result, audit_result:($result|ascii_upcase),
-    post_checked_head_sha:$sha, post_check_round:$round, post_check_expert:"ux-ui-audit-expert", triggered_by:null}')
+    post_checked_head_sha:$sha, post_check_round:$round, post_check_expert:"ux-ui-audit-expert",
+    auditor:"ux-ui-audit-expert", triggered_by:null}')
 printf '%s' "$POST_CHECK_PAYLOAD" | op review state push --pr "$PR_NUMBER" \
   --apply-json - --write-id "${OP_RUN_SESSION_ID}-postcheck-ux-ui-audit-expert-r${POST_CHECK_ROUND}" \
   --session "$OP_RUN_SESSION_ID" \
@@ -309,11 +312,14 @@ apply_security_post_check_labels "$PR_NUMBER" "$SECURITY_POST_CHECK_RESULT"
 # apply_ux_post_check_labels "$PR_NUMBER" "$AUX_UX_RESULT"
 
 # state push (post_check payload、ADR-0027 6b、機械正本)。expert key は "security-expert"。
+# `auditor` は必須 (op-skill #132)。security の gate 14c は `!is_empty()` ガードを持つため
+# 欠落しても BLOCK にはならないが、欠落すると gate が silent に無効化される (検査されない)。
 POST_CHECK_PAYLOAD=$(jq -n --arg result "$SECURITY_POST_CHECK_RESULT" --arg sha "$POST_CHECKED_HEAD_SHA" \
   --argjson round "$POST_CHECK_ROUND" --argjson requires_aux "${REQUIRES_AUX_POST_CHECK:-false}" \
   --argjson legit "${LEGITIMATE_WORKFLOW_PRESERVED:-true}" \
   '{kind:"post_check", expert:"security-expert", post_check_result:$result, audit_result:($result|ascii_upcase),
-    post_checked_head_sha:$sha, post_check_round:$round, post_check_expert:"security-expert", triggered_by:null,
+    post_checked_head_sha:$sha, post_check_round:$round, post_check_expert:"security-expert",
+    auditor:"security-expert", triggered_by:null,
     requires_aux_post_check:$requires_aux, legitimate_workflow_preserved:$legit}')
 printf '%s' "$POST_CHECK_PAYLOAD" | op review state push --pr "$PR_NUMBER" \
   --apply-json - --write-id "${OP_RUN_SESSION_ID}-postcheck-security-expert-r${POST_CHECK_ROUND}" \
@@ -431,11 +437,14 @@ apply_ux_post_check_labels "$PR_NUMBER" "$AUX_UX_RESULT"
 # state push (post_check payload、ADR-0027 6b、機械正本)。
 # aux は primary (security-expert) と同じ map に同居するため expert key を "<expert>@aux" とし、
 # triggered_by を primary expert 名にする (map key 衝突回避規約、ADR-0027 CLI 契約)。
+# `auditor` は **必須** (op-skill #132): aux 側 gate 18f が primary gate 11c と対称に
+# auditor == "ux-ui-audit-expert" を空文字も含めて要求する。
 POST_CHECK_PAYLOAD=$(jq -n --arg result "$AUX_UX_RESULT" --arg sha "$POST_CHECKED_HEAD_SHA" \
   --argjson round "$POST_CHECK_ROUND" \
   '{kind:"post_check", expert:"ux-ui-audit-expert@aux", post_check_result:$result,
     audit_result:($result|ascii_upcase), post_checked_head_sha:$sha, post_check_round:$round,
-    post_check_expert:"ux-ui-audit-expert", triggered_by:"security-expert"}')
+    post_check_expert:"ux-ui-audit-expert", auditor:"ux-ui-audit-expert",
+    triggered_by:"security-expert"}')
 printf '%s' "$POST_CHECK_PAYLOAD" | op review state push --pr "$PR_NUMBER" \
   --apply-json - --write-id "${OP_RUN_SESSION_ID}-postcheck-ux-ui-audit-expert@aux-r${POST_CHECK_ROUND}" \
   --session "$OP_RUN_SESSION_ID" \

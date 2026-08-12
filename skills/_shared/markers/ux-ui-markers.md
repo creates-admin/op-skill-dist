@@ -282,14 +282,21 @@ post-check を spawn する。本 marker (`<!-- op-ux-ui-audit -->`) を通常�
 `op-tools/crates/op-core/tests/prose_examples.rs` が parse + lint clean を assert する canonical。
 Rust struct schema 変更時に同期する (silent fork 防止、ADR-0003)。
 
-> **注 (prose 2-tag vs example 1-tag)**: post-check 段階の runtime canonical 出力は「出力構造」節の通り
-> `<!-- op-ux-ui-audit -->` 直後に `<!-- op-post-check-meta -->` を並べる **2 marker 併記**である
-> (共通 meta block の正本と単体 example は `post-check-markers.md (>=2)` 参照。gate 段階の
-> `op-ux-ui-gate` は仕様どおり meta を付けない)。下記 `op-ux-ui-audit` example がドメイン marker
-> 1 tag のみなのは意図的: 抽出 harness (`op-core/src/schema_check/prose_example.rs` の
-> `extract_yaml_blocks`) は `<!--` で始まる行で YAML block を打ち切るため、ここに meta tag 行を
-> 挿入すると example が空 block 化して `prose_examples.rs` の assert が fail する。2-tag の
-> literal fixture 化は Rust 側 extractor の変更が必要 (marker 契約自体は 2-tag 併記のまま不変)。
+> **注 (2-tag 併記、op-skill #132 で解消)**: post-check 段階の runtime canonical 出力は「出力構造」節の通り
+> `<!-- op-ux-ui-audit -->` 直後に `<!-- op-post-check-meta -->` を並べる **2 marker 併記**であり、
+> 1 つの YAML 本文を両 marker が共有する (共通 meta block の正本は `post-check-markers.md (>=2)` 参照。
+> gate 段階の `op-ux-ui-gate` は仕様どおり meta を付けない)。
+>
+> かつては抽出 harness (`op-core/src/schema_check/prose_example.rs` の `extract_yaml_blocks`) と
+> runtime lint の双方が `<!--` 行で YAML block を無条件に打ち切っていたため、**先頭の domain marker が
+> 必ず空 block 化**し、正本どおり 2-tag で書いた post-check agent が
+> `failed to parse YAML block: empty YAML block` で必ず弾かれていた (op-skill #132)。
+> 現在は 3 実装すべてが「YAML 開始前に隣接する自己完結 tag は跨ぐ」規則に揃っているため、
+> **下記 example も 2-tag のまま fixture 化できる**:
+>
+> - `op-core::markers::block_yaml::collect_yaml_lines` (marker block 本文抽出)
+> - `op::commands::marker_lint::collect_subsequent_block` (`op core marker-lint`)
+> - `op-core::schema_check::prose_example::extract_yaml_blocks` (prose fixture 抽出)
 
 <!-- op-ux-ui-gate -->
 audit_result: PASS
@@ -299,6 +306,7 @@ blocking_count: 0
 notes_count: 0
 
 <!-- op-ux-ui-audit -->
+<!-- op-post-check-meta -->
 audit_result: PASS
 audited_at: 2026-05-09T10:00:00Z
 auditor: ux-ui-audit-expert
