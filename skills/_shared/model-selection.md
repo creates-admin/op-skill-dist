@@ -1,7 +1,9 @@
 <!--
 schema_version: 5
 last_breaking_change: 2026-07-31
-notes: v5 (2026-07-31) — §1 に **Fable tier** を追加し、§7.2「Fable escalation gate」を新設。
+notes: v5 据置 (2026-09-01) — §5.1 主表の enrichment ux-ui-audit gate 行に「op-plan は `design_gate: human` で spawn せず
+       人間承認が gate」の pointer を additive 追記 (正本は issue-enrichment.md §5)。model 選択規則は不変。
+       v5 (2026-07-31) — §1 に **Fable tier** を追加し、§7.2「Fable escalation gate」を新設。
        **破壊的変更の所在**: (a) §6 controller 決定フローに step 2b (Fable escalation gate) を挿入し、
        (b) step 3 explicit override の値域から `fable` を除外した (config / env から Fable を選べない)。
        いずれも §10「override 優先順位 / §6 controller 決定フローの変更」に該当する。
@@ -182,7 +184,7 @@ spawn schema の `task_complexity:` field に格納する。
 | op-patrol | 区画 audit | 区画 × N expert | 中 | §5.2 参照 |
 | op-patrol | 統合 gate | 単発 | 高 | **Opus** |
 | enrichment (issue-enrichment.md) | Design Plan 生成 | 単発 (Issue 毎) | 高 | **Opus** |
-| enrichment | ux-ui-audit gate | 単発 (Issue 毎) | 中 | **Opus** |
+| enrichment | ux-ui-audit gate | 単発 (Issue 毎) | 中 | **Opus** (op-plan は `design_gate: human` で spawn せず人間承認が gate、`issue-enrichment.md` §5) |
 | enrichment | cross-review (検出 expert 以外) | 単発 (Issue 毎) | 中 | **Opus** |
 | op-run | clustering 案出し (judge-panel generate、ADR-0014) | N 案並列 | 高 | **Sonnet** (breadth、安く広く N 案) |
 | op-run | clustering 評価 (judge-panel evaluate、ADR-0014) | 単発 | 高 | **Opus** (depth、tradeoff 裁定) |

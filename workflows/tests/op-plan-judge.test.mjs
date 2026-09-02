@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { loadPureFns, loadNormalizeArgs } from "./_extract.mjs";
 
 const fns = loadPureFns("op-plan-judge.js", {
-  functions: ["validatePlanCandidate", "hasCycle", "computePlanScore", "longestDepChain", "round3"],
+  functions: ["validatePlanCandidate", "hasCycle", "computePlanScore", "longestDepChain", "round3", "shouldRunEvaluator", "singleCandidateVerdict"],
 });
 
 // RVW-004 準拠: loadNormalizeArgs はトップレベルで一度だけ呼ぶ (副作用なし・純評価なので毎回構築する必要がない)
@@ -128,6 +128,37 @@ test("normalizeArgs は candidate_count: 3 注入で angles を 3 案に展開�
   // controller が candidate_count=3 を注入すると override 経路が勝つ (a.candidate_count を尊重)。
   const out = na.run({ requirement: { summary: "新機能を追加したい" }, candidate_count: 3 });
   assert.equal(out.angles.length, 3, `candidate_count=3 で angles は 3 案 (実際: ${out.angles.length})`);
+});
+
+// ---- evaluator skip (単一案では opus evaluator を spawn しない、2026-09-01 op-plan 消費調整) ----
+test("shouldRunEvaluator は候補 1 案で false、2 案以上で true を返す (単一案 evaluator skip の回帰検出点)", () => {
+  assert.equal(fns.shouldRunEvaluator(1, { evaluate_single_candidate: false }), false);
+  assert.equal(fns.shouldRunEvaluator(2, { evaluate_single_candidate: false }), true);
+  assert.equal(fns.shouldRunEvaluator(3, { evaluate_single_candidate: false }), true);
+});
+
+test("shouldRunEvaluator は evaluate_single_candidate:true 注入で単一案でも true (override 経路の保持)", () => {
+  assert.equal(fns.shouldRunEvaluator(1, { evaluate_single_candidate: true }), true);
+  // undefined / null args は override なし扱い (安全側 = skip)
+  assert.equal(fns.shouldRunEvaluator(1, undefined), false);
+});
+
+test("singleCandidateVerdict は唯一の候補を rank1 に置き skip 理由を rationale に残す (決定論)", () => {
+  const v = fns.singleCandidateVerdict([{ angle: "mvp-first", issues: [issue()] }]);
+  assert.equal(v.recommended_angle, "mvp-first");
+  assert.deepEqual(v.ranking, [{ angle: "mvp-first", rank: 1, assessment: "single candidate (evaluator skipped)" }]);
+  assert.match(v.rationale, /evaluator/);
+  assert.equal(v.synthesis_notes, "");
+});
+
+test("normalizeArgs は evaluate_single_candidate 未注入時 false に補完し、true 注入を保持する", () => {
+  const def = na.run({ requirement: { summary: "新機能を追加したい" } });
+  assert.equal(def.evaluate_single_candidate, false);
+  const on = na.run({ requirement: { summary: "新機能を追加したい" }, evaluate_single_candidate: true });
+  assert.equal(on.evaluate_single_candidate, true);
+  // 非 boolean (文字列 "true" 等) は安全側 false へ
+  const bad = na.run({ requirement: { summary: "新機能を追加したい" }, evaluate_single_candidate: "true" });
+  assert.equal(bad.evaluate_single_candidate, false);
 });
 
 // ---- fable guard (model-selection.md (>=5) §7.2 F3: judge-panel は read-only 経路ゆえ fable 禁止) ----

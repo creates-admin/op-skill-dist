@@ -39,6 +39,10 @@
  *     予期せぬ例外→try/catch で result:blocked fail-safe (reason:unexpected_error)。
  *   - cross-review は **index-zip 維持** (filter(Boolean) しない、D7): null spawn を失敗 reviewer として特定し strict 判定に使う。
  *   - op-architect 向け **additive 戻り値** design_plan (markdown) + apply_expert (with_cross_review:false 経路)。
+ *   - **design_gate (2026-09-01, op-plan 消費調整)**: options.design_gate = "expert" (既定) | "human"。"human" は役 pipeline を
+ *     1 round だけ走らせ ux-ui-audit gate を spawn しない (BLOCK retry も無い)。代わりに GATE_CRITERIA を gate_checklist として
+ *     additive 返却し、caller の人間承認 gate (op-plan ExitPlanMode) が gate を担う。marker は既存 enum の generated を使う
+ *     (gate_only と同じ「本文に確定 Design Plan あり」の意味。enum 不変)。gate_only は design_gate を無視して expert 固定。
  *   - REAL_API 準拠: export const meta (pure literal 第一文) / phase() は body 冒頭で 1 回のみ (stage callback 内で呼ばない、
  *     以降は agent opts.phase で grouping) / 非決定 API (現在時刻取得・乱数生成・引数なしの日付生成) 不使用 (today は args 注入)。
  */
@@ -69,6 +73,20 @@ const ROLE_MODEL_FALLBACK = {
   "layout-composition": "opus", // visual hierarchy / 統合 = 生成
   "motion-spec": "opus", // motion 設計 = 生成
 };
+
+// ux-ui-audit gate の 6 観点 (issue-enrichment.md §5 / expert-ux-ui-audit criteria.md Gate 節)。
+// buildGatePrompt (expert gate) と humanGateChecklist (design_gate:"human" で caller の人間 gate に渡す checklist) が共有する
+// (二重定義で観点がズレるのを防ぐ)。観点 7 (motion) は design_roles に motion-spec を含むときだけ additive。
+const GATE_CRITERIA = [
+  "次の行動が明確になる設計か",
+  "必須 UI state が網羅されているか",
+  "エラー復帰導線が設計されているか",
+  "業務フローに合った画面構成か",
+  "accessibility 要件が十分か",
+  "見た目に寄りすぎていないか",
+];
+const GATE_CRITERION_MOTION =
+  "motion 安全性 (Design Plan に ### Motion Strategy 節がある場合のみ評価): 前庭障害トリガ (大きな視差・回転・ズーム) を含まず、prefers-reduced-motion fallback と性能ガード (transform/opacity のみ、layout-triggering プロパティを animate しない) を備えるか。motion 節が無ければ N/A (起票しない)。motion の質 (timing の自然さ) は完全静的では検証不能 = Static Hard blocker の有無のみ BLOCK 可。基準は ~/.claude/skills/expert-design/references/motion-patterns.md。";
 
 // Design Plan 生成 (designer-expert Architect Mode) の戻り。Markdown を object でラップ (StructuredOutput は object 返却が安全)。
 const designPlanSchema = {
@@ -198,7 +216,7 @@ const scopedAgentType = (n) => (n && !BUILTIN_AGENTS.has(n) ? `op-skill:${n}` : 
 log(
   `op-enrichment: severity=${input.issue_draft.severity} ui=${input.options.with_design_plan} ` +
     `cross_review=${input.options.with_cross_review} reviewers=${input.cross_review_experts.length} ` +
-    `max_loops=${input.options.max_review_loops} strict=${input.options.strict} today=${input.today}`
+    `max_loops=${input.options.max_review_loops} strict=${input.options.strict} design_gate=${input.options.design_gate} today=${input.today}`
 );
 
 try {
@@ -208,6 +226,8 @@ try {
   let applyExpert = null;
   let designPlanAlreadyInBody = false; // gate_only: 提示済 Design Plan は body に既存 = 再 embed しない
   let gateOnlyNotes = null; // gate_only PASS_WITH_NOTES の audit notes (body へ追記)
+  let designGate = null; // "expert" | "human" | null (Design Plan を生成しなかった)
+  let gateChecklist = []; // design_gate:"human" のとき caller の人間 gate に渡す観点リスト (additive 返却)
 
   if (input.gate_only) {
     // ADR-0013 決定C: op-explore handoff。提示済 Design Plan を再生成せず ux-ui-audit gate だけ実行する (二重課金回避)。
@@ -252,6 +272,8 @@ try {
     designStatus = dp.status; // "generated" | "failed"
     designPlan = dp.design_plan_markdown; // failed (designer 失敗) なら null
     applyExpert = dp.apply_expert;
+    designGate = dp.gate || "expert";
+    gateChecklist = Array.isArray(dp.gate_checklist) ? dp.gate_checklist : [];
   }
 
   // Design Plan を本文へ埋込 (cross-review reviewers が見られるよう Phase B の前に embed、§6)。
@@ -311,6 +333,9 @@ try {
     // --- additive (op-architect 向け、標準 3 caller は無視、§12 非破壊) ---
     design_plan: designPlan,
     apply_expert: applyExpert,
+    // --- additive (design_gate:"human" caller = op-plan 向け。expert gate では "expert" / [] 、Design Plan なしでは null / []) ---
+    design_gate: designGate,
+    gate_checklist: gateChecklist,
   };
 } catch (e) {
   // §10 fail-safe (D8): 予期せぬ例外は result:blocked で人間判断に倒す。
@@ -343,6 +368,22 @@ async function runDesignPlanLoop(a) {
   let prevRequiredChanges = null;
   let startIndex = 0; // BLOCK 遡及開始役 index (純整数演算のみ)
 
+  // design_gate:"human" (op-plan): 役 pipeline を 1 round だけ走らせ、ux-ui-audit gate を spawn しない。
+  // gate は caller の人間承認 gate (ExitPlanMode) が担うため、6 観点を gate_checklist として返す (BLOCK retry は存在しない)。
+  // 役間 contract error (validateRoleConsumption) は JS 側で従来どおり止まる。
+  if (a.options.design_gate === "human") {
+    const built = await runRolePipeline(a, roles, cache, 0, null, 1);
+    if (built.blocked) return built;
+    if (built.failed) return built;
+    return {
+      status: "generated",
+      design_plan_markdown: built.design_plan_markdown,
+      apply_expert: built.apply_expert,
+      gate: "human",
+      gate_checklist: humanGateChecklist(roles),
+    };
+  }
+
   for (let round = 1; round <= 3; round++) {
     const built = await runRolePipeline(a, roles, cache, startIndex, prevRequiredChanges, round);
     if (built.blocked) return built; // strict spawn 失敗 / 未定義 role 参照 contract error
@@ -367,7 +408,7 @@ async function runDesignPlanLoop(a) {
       if (gate.verdict === "PASS_WITH_NOTES" && gate.audit_notes) {
         md = `${md}\n\n### Audit Notes\n\n${gate.audit_notes}`;
       }
-      return { status: "generated", design_plan_markdown: md, apply_expert: built.apply_expert };
+      return { status: "generated", design_plan_markdown: md, apply_expert: built.apply_expert, gate: "expert", gate_checklist: [] };
     }
     // BLOCK → target_role から遡及開始 index を決め、cache で前役を温存して再生成 (4-e)
     prevRequiredChanges = Array.isArray(gate.required_changes) ? gate.required_changes : [];
@@ -451,6 +492,13 @@ function resolveRetryStartIndex(roles, requiredChanges) {
   if (min < roles.length) return min;
   const layoutIdx = roles.indexOf("layout-composition");
   return layoutIdx >= 0 ? layoutIdx : 0;
+}
+
+// design_gate:"human" で caller の人間 gate に渡す観点リスト (純関数)。expert gate の buildGatePrompt と同じ GATE_CRITERIA を使い、
+// design_roles に motion-spec を含むときだけ観点 7 (motion) を末尾に足す (expert gate と同じ条件 = 観点集合を一致させる)。
+function humanGateChecklist(designRoles) {
+  const motionInScope = Array.isArray(designRoles) && designRoles.includes("motion-spec");
+  return motionInScope ? [...GATE_CRITERIA, GATE_CRITERION_MOTION] : [...GATE_CRITERIA];
 }
 
 // cross-review の reviewer 数を severity / UI 影響 / task_complexity で削減する gating 関数 (§6 cost-control)。
@@ -708,6 +756,10 @@ function normalizeArgs() {
   if (!Number.isInteger(o.max_review_loops) || o.max_review_loops < 1)
     throw new Error("op-enrichment: options.max_review_loops must be a positive integer");
   if (typeof o.strict !== "boolean") throw new Error("op-enrichment: options.strict must be boolean");
+  // design_gate (2026-09-01): "expert" (既定、ux-ui-audit gate spawn) | "human" (gate spawn なし、gate_checklist を返し caller の人間 gate に委ねる)。
+  if (o.design_gate === undefined) o.design_gate = "expert";
+  if (o.design_gate !== "expert" && o.design_gate !== "human")
+    throw new Error("op-enrichment: options.design_gate must be 'expert' or 'human'");
   if (!a.task_complexity) throw new Error("op-enrichment: args.task_complexity required (controller pre-step、D11)");
   if (!a.today)
     throw new Error("op-enrichment: args.today (YYYY-MM-DD) required (agent 側 日付実行禁止 = F2 対策)");
@@ -735,6 +787,8 @@ function normalizeArgs() {
   if (typeof a.foundation_exists !== "boolean") a.foundation_exists = false; // controller 注入の fallback (foundation 不在扱い)
   // ADR-0013 決定C: with_design_plan='gate_only' = 提示済 Design Plan を再生成せず gate のみ (op-explore handoff)。
   a.gate_only = o.with_design_plan === "gate_only";
+  // gate_only は「提示済 Design Plan を gate だけする」経路ゆえ human gate と両立しない → expert 固定 (silent 無視でなく明示矯正)。
+  if (a.gate_only) o.design_gate = "expert";
   return a;
 }
 
@@ -931,18 +985,8 @@ function buildGatePrompt(a, designPlanMarkdown) {
     designPlanMarkdown,
     "",
     `【検証】~/.claude/skills/expert-ux-ui-audit/references/criteria.md の Gate 節 (\`<!-- anchor: gate -->\`) の判定基準に従い ${motionInScope ? "7" : "6"} 観点をチェック:`,
-    "1. 次の行動が明確になる設計か",
-    "2. 必須 UI state が網羅されているか",
-    "3. エラー復帰導線が設計されているか",
-    "4. 業務フローに合った画面構成か",
-    "5. accessibility 要件が十分か",
-    "6. 見た目に寄りすぎていないか",
-    // 観点7 (motion) は conditional additive (ADR-0012 Wave4)。Motion Strategy 節がなければ N/A。
-    ...(motionInScope
-      ? [
-          "7. motion 安全性 (Design Plan に ### Motion Strategy 節がある場合のみ評価): 前庭障害トリガ (大きな視差・回転・ズーム) を含まず、prefers-reduced-motion fallback と性能ガード (transform/opacity のみ、layout-triggering プロパティを animate しない) を備えるか。motion 節が無ければ N/A (起票しない)。motion の質 (timing の自然さ) は完全静的では検証不能 = Static Hard blocker の有無のみ BLOCK 可。基準は ~/.claude/skills/expert-design/references/motion-patterns.md。",
-        ]
-      : []),
+    // 観点 1〜6 は GATE_CRITERIA (humanGateChecklist と共有)。観点7 (motion) は conditional additive (ADR-0012 Wave4)。
+    ...humanGateChecklist(a.design_roles).map((c, i) => `${i + 1}. ${c}`),
     "",
     "【出力】gateVerdictSchema で返す。",
     "- verdict: PASS / PASS_WITH_NOTES / BLOCK",

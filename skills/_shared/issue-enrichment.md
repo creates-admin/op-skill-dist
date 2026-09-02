@@ -7,7 +7,16 @@ last_breaking_change: 2026-05-16
 作成意図: 「ADR 不要だが Issue 品質・UI 設計はほしい」中量級 Issue を底上げする共通基盤。
          Single Canonical Source Rule: 本ファイルが正本 (Design Plan + gate + cross-review)。
 注意点: 本層は「起票前 (pre-create) 専用」。apply / 起票 / scope 推定 / severity 判定は呼び出し側担当。
-notes: v2 据置 (2026-07-29) — §7.5 に「op-collision-warning / op:potential-collision の name + core semantics は
+notes: v2 据置 (2026-09-01, Design Plan 軽量化) — §3 options に `design_gate` (expert | human) を additive 追加、
+       §5 に human gate mode (ux-ui-audit gate を spawn せず gate_checklist を返し caller の人間承認を gate にする、
+       op-plan 限定) を記述、§9 `generated` の意味に human gate を追記 (enum 不変)、§11 に human gate 時の spawn 数と
+       op-plan の surface 共有 (同一 surface の Design Plan 1 本化、正本は op-plan/SKILL.md 5-0) の目安を追記。
+       §8 Output contract は additive (`design_gate` / `gate_checklist`) のみ。schema_version 据え置き。
+       v2 据置 (2026-09-01, op-plan 消費調整) — §7.6 に手順 4-fast (spawn 0 draft の pass-through fast path:
+       design_depth=none ∩ cross-review false なら workflow を呼ばず controller が 4 marker + labels を決定論組立)
+       と §7.6.1 (B) の除外注記、§11 に op-plan 1 run の目安を additive 追加。marker enum / §8 Output contract /
+       workflow 契約は不変 (fast path の出力は workflow 同条件出力と同形) のため schema_version 据え置き。
+       v2 据置 (2026-07-29) — §7.5 に「op-collision-warning / op:potential-collision の name + core semantics は
        labels-and-markers.md に登録済み (field schema は本節が正本)」の pointer 注記を additive 追加
        (marker 正本一覧への未登録欠落を labels-and-markers.md 側で corrective 登録したことに伴う相互参照)。
        v2 据置 (2026-07-22, ADR-0024 Phase 3 第二波) — §7.5 に mcp channel の素材注記を additive 追加
@@ -88,6 +97,7 @@ notes: v2 据置 (2026-07-29) — §7.5 に「op-collision-warning / op:potentia
   "options": {
     "with_design_plan": "true | false | auto | gate_only",
     "with_cross_review": "true | false | auto",
+    "design_gate": "expert | human",
     "max_review_loops": 2,
     "strict": false
   }
@@ -102,6 +112,7 @@ notes: v2 据置 (2026-07-29) — §7.5 に「op-collision-warning / op:potentia
 | `with_cross_review` | `auto` は severity high+ のみ実行 (§11 cost-control 参照)。`true` 強制 / `false` 強制 skip | `auto` |
 | `max_review_loops` | review → 修正反映 → 再 review の最大ループ数 (初回を含む)。default 2 = 初回 + 再 review 1 回 | 2 |
 | `strict` | true: 一部失敗 (designer-expert spawn 失敗 / cross-review 一部失敗) でも enrichment 中断。false: warning + 継続 (§10 参照) | false |
+| `design_gate` | `expert`: ux-ui-audit-expert を gate Mode で spawn し PASS / BLOCK 判定 (BLOCK retry 最大 3 round)。`human`: gate を spawn せず役 pipeline 1 round のみ、6 観点を `gate_checklist` で返し **caller の人間承認 gate が gate を担う** (§5「design_gate」。caller が人間に本文を読ませる対話 skill = op-plan 限定。`gate_only` では無視され expert 固定) | `expert` |
 
 ### 入力前提 (呼び出し側責務)
 
@@ -294,6 +305,23 @@ spawn prompt 本文 (designer Architect / ux-ui-audit gate の文面) は `workf
 `buildDesignPlanPrompt` / `buildGatePrompt` に移送済 (本ファイルに重複保持しない、ADR-0009 削除ポリシー)。
 op-architect フェーズ 4.6 も本 workflow を呼ぶ (C4 で統一、本ファイルが Design Plan 生成 + gate ロジックの
 **唯一の正本**。op-architect 側に重複定義 / 逆方向 pointer は書かない)。
+
+### design_gate: human (人間 gate mode、2026-09-01)
+
+`options.design_gate = "human"` のとき、workflow は役 pipeline (token→(component)→layout→(motion)) を **1 round だけ**
+走らせ、**ux-ui-audit gate を spawn しない**。BLOCK retry も存在しない。代わりに gate の 6 観点 (+ motion 時 7、
+`op-enrichment.js` の `GATE_CRITERIA` = expert gate の prompt と同一集合) を **`gate_checklist`** (additive 戻り値) で返し、
+**caller が人間に Design Plan を読ませる承認 gate (op-plan フェーズ6 ExitPlanMode) を Design Plan gate とする**。
+
+- marker は `op-enrichment-design-plan: generated` (本文に確定 Design Plan があり downstream 意味は通常生成と同一。
+  `gate_only` と同じ流儀で enum を増やさない、§9)。
+- 適用条件: **caller が起票前に人間へ本文を提示する対話 skill に限る** (現状 op-plan のみ)。op-scan / op-patrol は
+  `--auto` で人間が本文を読まない経路があり、op-architect は milestone 単位で別 gate 構造のため `expert` を維持する。
+- `gate_only` (op-explore handoff) は「提示済 Plan の検証だけ」が目的なので `human` を指定しても workflow が `expert` に
+  矯正する。
+- 役間 contract error (component が未定義 semantic role を参照) は従来どおり JS 側で `design_plan_block` になる
+  (gate の有無と無関係)。
+- cost: light 2 spawn / full 3 spawn (§11)。
 
 ### Design Plan 生成 (Phase 2、designer-expert Architect Mode)
 
@@ -706,8 +734,24 @@ controller (op-scan / op-patrol / op-plan / op-architect):
        (#642): その reviewer が当該 Issue の apply 役 (例: UI 経路の designer-expert) または post-check 役
        (`issue_draft.post_check_expert` に一致、例: ux-ui-audit-expert / security-expert) を兼ねるなら true、
        純粋な品質レビュー役 (例: refactor 検出時の debug/test) なら false。labels_to_add の pro-* 付与可否に効く (§8)。
+  4-fast. [fast path、2026-09-01] 手順 3 の解決結果が `with_design_plan:false` (design_depth=none。`gate_only` は含まない)
+       ∩ `with_cross_review:false` の draft は、workflow を呼んでも agent spawn 0 の marker pass-through にしかならない
+       (§11「severity medium 以下: 0 spawn」)。controller は手順 4-5 を skip し、以下を **決定論で組立てて §8 相当の
+       enriched_issue とする** (workflow の同条件出力と同形 = `op-enrichment.js` の embedEnrichmentMarkers / buildLabels
+       と同値。marker enum・downstream 意味は不変):
+         - body: 冒頭に `<!-- op-enriched: true -->` / `<!-- op-enrichment-loops: 0 -->` /
+           `<!-- op-enrichment-design-plan: skipped -->` / `<!-- op-enrichment-cross-review: skipped -->` の 4 行を prepend
+         - labels_to_add: `[pro-<recommended_runner>]` / post_create_comments: `[]` / task_complexity: 手順 3 の推論値
+         - review_summary: loops_executed 0 / critical_high_addressed 0 / medium_low_count 0 /
+           design_plan_status skipped / cross_review_status skipped / escalation_report null
+       op-plan (severity n/a 固定) の非 UI issue は常にここに落ちる (Workflow 往復 = body の往復 echo + task 通知を
+       issue 数ぶん省く)。op-scan / op-patrol は severity gate 通過 = high+ で cross-review auto が true になるため
+       通常は該当せず、cross-review を false に解決した非 UI draft のみ該当する。手順 6 以降は fast path でも必ず実行する。
   4. Workflow({name:'op-enrichment', args:{issue_draft, options, cross_review_experts, task_complexity, today, project_type, design_depth, design_roles, foundation_exists, role_models}})
+       options.design_gate は対話 caller (op-plan) のみ "human" (§5)。op-plan は手順 3 で surface グルーピング
+       (同一 surface の UI issue 群は lead 1 件だけ Design Plan 生成、`op-plan/SKILL.md` 5-0) も行う。
   5. §8 Output contract を受領 (result: enriched | blocked)
+       design_gate:"human" の戻りには additive で `gate_checklist[]` / `design_gate` が付く (caller の人間 gate に提示)。
        - blocked → 起票せず escalation_report を提示 (--auto は manual_review_bucket 退避、§7.1)
   6. [post] §7.5 Cross-instance Collision Gate (gh issue list 横断検索)  ← controller 保持 (workflow は gh 不可)
   6.5 [post ADR-0012] foundation_exists==false ∩ 新規 surface → foundation-build Issue を op:foundation-precondition
@@ -740,6 +784,7 @@ in-script の named workflow とは戻り値・複数 draft の扱いが異な�
   `out.result.review_summary` を読む (`.enriched_issue` 直アクセスは空振りする)。
 - **(B) 複数 draft の委譲経路**: op-enrichment は **per-Issue invocation** (1 draft = 1 呼び出し)。chat-controller が
   N draft を enrichment する場合は **per-draft で Workflow tool を N 回呼ぶ** (N 通知を容認する) のが blessed な既定経路。
+  ただし §7.6 手順 4-fast に該当する draft (spawn 0 の pass-through) は Workflow を呼ばないため N に数えない。
   N 通知を 1 通知に束ねたい場合のみ、controller が薄い fan-out wrapper workflow を **その場で自作してよい**が、
   per-Issue の op-enrichment 契約 (本節 §7.6) は変えない (wrapper は op-enrichment を N 回呼ぶだけの薄い層に留める)。
 - **(C) body 受け渡し**: per-draft で Workflow tool を呼ぶ場合、`issue_draft.body` は **args に JSON 文字列**として
@@ -908,7 +953,9 @@ Phase 2 時点の schema_version (2) と coordinate する (ADR-0003 silent fork
 
 - **意味**: Design Plan 生成 + gate の最終 status
 - **value 集合**:
-  - `generated` — designer-expert + ux-ui-audit gate が PASS / PASS_WITH_NOTES で完了
+  - `generated` — designer-expert + ux-ui-audit gate が PASS / PASS_WITH_NOTES で完了。`gate_only` (提示済 Plan の gate
+    通過) と `design_gate: human` (gate を spawn せず caller の人間承認が gate、§5) も同値を使う (= 「本文に確定 Design Plan
+    がある」が downstream 意味。enum は増やさない)
   - `skipped` — UI 影響なし or `with_design_plan = "false"` で skip
   - `failed` — spawn 失敗 + strict=false で warning 継続 (Plan を Issue に埋め込めなかった)
   - `blocked` — gate BLOCK 3 連続 (本層全体の result は `blocked`)
@@ -1000,6 +1047,8 @@ ADR-0012 で Design Plan 生成が役連鎖 (token-curation → component-select
 | `full` (motion_enabled=false) | 3 (token/component/layout) | +1 ux-ui-audit | **4 spawn** |
 | `full` (motion_enabled=true)  | 4 (+motion-spec) | +1 | **5 spawn** |
 | `light` | 2 (token/layout) | +1 | **3 spawn** |
+| `full` + `design_gate: human` (op-plan 既定) | 3 (motion 時 4) | 0 (人間 gate、§5) | **3〜4 spawn**、BLOCK retry なし |
+| `light` + `design_gate: human` (op-plan 既定) | 2 | 0 | **2 spawn**、BLOCK retry なし |
 | `none` | 0 (Design Plan skip) | 0 | **0 spawn** |
 
 - 役連鎖は逐次 (serial)。BLOCK retry は `resolveRetryStartIndex` で遡及開始役のみ再 spawn (最悪 design_plan_loop 3 round)。
@@ -1010,7 +1059,14 @@ ADR-0012 で Design Plan 生成が役連鎖 (token-curation → component-select
 - UI 影響あり + severity high+ + full: Design Plan 4〜5 + cross-review 3×2 = **最大 10〜11 spawn**
 - UI 影響あり + severity high+ + light: Design Plan 3 + cross-review 3×2 = **最大 9 spawn**
 - UI 影響なし + severity high+: cross-review 2×2 = **最大 4 spawn**
-- severity medium 以下: 0 spawn (本層は marker のみ埋め込んで pass-through)
+- severity medium 以下: 0 spawn (本層は marker のみ埋め込んで pass-through。§7.6 手順 4-fast により controller は
+  workflow 自体を呼ばない)
+- **op-plan 1 run の目安** (分解 N issue、うち UI 影響 k 件を s 個の surface に束ねる、severity n/a 固定): 計画側
+  (フェーズ3 audit 1 + judge-panel generate 1 + evaluator 0〜1 [候補 2 案以上のときのみ]) + enrichment
+  `s × (light 2 / full 3)` (human gate ゆえ BLOCK retry なし)。Design Plan は **surface 単位で 1 本** (同一 surface の
+  follower issue は lead の Plan を `参照: #N` で共有、正本は `op-plan/SKILL.md` 5-0) で、follower と非 UI issue は
+  spawn 0 で workflow も呼ばない。分解は enrichment 前に人間と align する (op-plan フェーズ4-6) ため、angle 切替による
+  全 issue 再 enrichment は原則発生しない。
 
 ### op-explore playground を重ねた場合の worst-case と hard cap (ADR-0013 決定I)
 

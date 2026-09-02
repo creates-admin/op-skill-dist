@@ -10,7 +10,24 @@ effort: max
 <!--
 schema_version: 2
 last_breaking_change: 2026-05-13
-notes: 2026-08-05 追記 — 表記中立化: 「hidden marker」呼称を「機械可読 marker」へ、marker の
+notes: 2026-09-01 追記 (Design Plan 軽量化、additive) — (4) フェーズ5-0「surface グルーピング」新設: 同一 surface
+       (UI file 共有 / 同一画面ディレクトリ) の UI issue 群は lead issue 1 件だけ Design Plan を生成し、follower は
+       `## 🎨 Design Plan` 節に `参照: issue[k]` を置いて Pass 2 で `#N` に解決 (marker は既存 enum `skipped`)。
+       op-run apply / post-check は参照先から Plan を取得 (apply-prompt-directives.md / post-check-prompts.md 追記)。
+       (5) フェーズ5-1 で `design_gate: "human"` を op-plan 既定に: ux-ui-audit gate を spawn せず、workflow が返す
+       `gate_checklist` (6 観点) を plan file に載せてフェーズ6 の人間承認を gate とする (op-plan 限定例外。
+       正本 issue-enrichment.md §5)。UI surface 1 つあたり light 2 / full 3 spawn (旧 3 / 4、BLOCK retry 消滅)。
+       marker / 入出力契約は不変ゆえ schema_version 据え置き。
+       2026-09-01 追記 (消費調整、additive) — enrichment 周りの spawn / context 消費を 3 点で抑制。
+       (1) フェーズ4-6「分解 align gate」新設: enrichment (UI issue 1 件 3〜4 spawn) に入る前に分解 (angle /
+       issue 構成) を人間と align し、見積り spawn 数を提示する (旧: フェーズ6 で初めて代替 angle を提示
+       = 切替時に全 issue 再 enrichment)。フェーズ6-1-judge / 6-3 を追従。
+       (2) フェーズ5-1-fast: design_depth=none ∩ cross-review false の issue (op-plan の非 UI issue は常時) は
+       Workflow を呼ばず controller が pass-through marker を決定論で付与 (正本 issue-enrichment.md §7.6 4-fast)。
+       (3) op-plan-judge.js: candidate 1 案では opus evaluator を spawn しない (evaluator.skipped、
+       references/judge-panel-and-fallbacks.md v2、pin (>=2))。フェーズ構成・marker・入出力契約は不変ゆえ
+       schema_version 据え置き。
+       2026-08-05 追記 — 表記中立化: 「hidden marker」呼称を「機械可読 marker」へ、marker の
        「埋める / 埋め込む」を「付与 / 記載」へ全置換。HTML コメント形式メタデータの呼称変更のみで
        marker リテラル・schema・参照正本 (labels-and-markers.md) は不変ゆえ schema_version 据え置き。
        2026-07-29 追記 (ADR-0029 Wave B1) — 「薄い入口 + references/」分割。
@@ -547,7 +564,7 @@ per-issue で適用する。`ok:false` またはワークフロー無効時は *
 > **いつ読むか**: `planning_judge_panel.enabled` (既定 `true`) の下でフェーズ4 に入るとき、
 > workflow への args 組立 (`requirement` / `asset_audit` / `adr_decision` の作り方、op-survey 由来の
 > `asset_audit` マージ規則を含む) や `Workflow({name:'op-plan-judge'})` の呼び出し詳細・戻り値の
-> per-issue 適用ルールを確認するときに `references/judge-panel-and-fallbacks.md (>=1)` (計画
+> per-issue 適用ルールを確認するときに `references/judge-panel-and-fallbacks.md (>=2)` (計画
 > judge-panel 節) を読む。
 
 ### 4-1. domain 判定
@@ -651,11 +668,101 @@ mcp channel では素材を `github-channel.md` §6 の手順 (`mcp__github__sea
 ここまでで作成された Issue draft (title + body + recommended labels) は
 **まだ起票していない**。フェーズ 5 (enrichment) でさらに底上げする。
 
+### 4-6. 分解 align gate (enrichment 前の軽量確認、spawn 0)
+
+フェーズ5 の enrichment は **UI surface 1 つにつき designer 役を 2〜3 spawn** する (gate は人間、5-0 / 5-1 /
+`issue-enrichment.md (>=2)` §11)。分解 (issue の切り方 / angle) が承認前に変わると、その enrichment は
+全 issue ぶん無駄になる (旧フローはフェーズ6 で初めて代替 angle を提示していたため、angle 切替 =
+全 issue 再 enrichment だった)。そこで **enrichment に入る前に、分解そのものを人間と align する**。
+本ステップは対話のみで expert spawn を伴わない。
+
+司令官は 4-1〜4-5 で骨格化した draft 群 (dedup 通過後) を以下の形で提示する:
+
+```
+## 分解 align (enrichment 前の確認)
+
+採用分解: <recommended.angle> (<N> issue)
+| # | title | domain | expert | UI 影響 (design_depth) | Design Plan | depends_on |
+|---|---|---|---|---|---|---|
+| 0 | <title> | feature | feature-expert | あり (light) | 生成 (surface A) | - |
+| 1 | <title> | ux-ui | designer-expert | あり (light) | issue[0] 参照 (surface A) | 0 |
+| 2 | <title> | refactor | refactor-expert | なし | - | 0 |
+
+代替案: <他 candidates の angle / issue 数 / 一言 assessment を 1 行ずつ。単一案 (既定 candidate_count=1) なら「なし」>
+evaluator 根拠: <evaluator.rationale 2〜4 行。evaluator.skipped:true なら「単一案のため evaluator なし (align は本 gate で人間が担う)」>
+
+enrichment 見積り: UI surface <s> 個 (UI 影響 issue <k> 件を 5-0 でグルーピング) → Design Plan spawn 約 <2s〜3s>
+                  (light 2 / full 3 per surface、gate は人間 = フェーズ6、issue-enrichment.md §11)
+                  follower <k-s> 件 + 非 UI issue <N-k> 件 → spawn 0 (5-1-fast の pass-through、Workflow も呼ばない)
+
+どう進めますか?
+1. この分解で enrichment に進む (推奨)
+2. 別 angle に切り替える (<angle 名>) → その分解を 4-1〜4-5 で骨格化し直して再提示
+3. issue の追加 / 削除 / 統合 / 順序変更を指示する → フェーズ4 をやり直して再提示
+4. enrichment を省略して起票へ進む (Design Plan なし。UI 影響 issue は op-run 側で Design Plan 無しの apply に
+   なるため非推奨。§7.5 collision gate は省略不可で必ず実行する)
+```
+
+「UI 影響 (design_depth)」列は `issue-enrichment.md` §4 の判定 (拡張子 / path / runner / domain) + carve-out を
+司令官が pre-step として適用した結果 (= フェーズ5 で args に注入する `design_depth`) をそのまま出す。
+「Design Plan」列は 5-0 の surface グルーピング結果 (lead = 生成 / follower = `issue[k] 参照`) で、人間はここで
+グルーピングの妥当性 (別画面なのに束ねられていないか) も確認する。gate が人間側なので BLOCK retry による増分は無い。
+
+- 1 → フェーズ5 へ進む
+- 2 / 3 → 分解を差し替えて本 gate を再提示する (spawn 0 なので何度でも安い)
+- 4 → フェーズ5 の Workflow 呼出を全 issue で skip し、5-1-fast と同じ pass-through marker
+  (`op-enrichment-design-plan: skipped`) でフェーズ6 へ進む
+
 ---
 
 ## フェーズ5: enrichment 呼び出し
 
 `_shared/issue-enrichment.md` を呼び出し、Issue draft を enriched Issue に変換する。
+
+### 5-0. surface グルーピング (同一 surface の Design Plan を 1 本に共有)
+
+Design Plan は **画面 (surface) の設計**であり issue の設計ではない。同じ画面を触る issue が複数あるとき、
+issue ごとに Design Plan を生成すると同じ surface に対して役 pipeline が issue 数ぶん走る (旧: 3 issue で
+最大 12 spawn)。op-plan は分解元が 1 つの要望なので同一 surface の issue が並びやすく、ここが Design Plan
+コストの主因だった。以下の規則で **surface 1 つにつき Design Plan 1 本**に束ねる。
+
+**対象**: 4-6 で UI 影響あり (`design_depth != none`) と判定された issue のみ。非 UI issue は関与しない。
+
+**surface の同一判定 (決定論、司令官 pre-step)**: 各 issue の UI file 集合 (= `issue-enrichment.md` §4 の
+条件 1 / 2 にヒットした `scope_files ∪ new_files`) を取り、2 issue が次のいずれかなら同一 surface とする:
+
+- (a) UI file を 1 つ以上共有する
+- (b) 同じ画面ディレクトリに属する (`pages/<x>/` / `routes/<x>/` / `views/<x>/` の直下 1 階層 `<x>` が一致)
+
+関係は推移的に閉じる (A-B, B-C なら A-B-C で 1 surface)。`components/**` の共有だけで (a) が成立する場合は
+共通部品を触っているだけで別画面の可能性があるため **束ねない** (安全側。carve-out と同じく「迷ったら発火」=
+別 surface として各自生成)。
+
+**lead / follower**:
+
+- **lead** = surface 内で issue index が最小の issue。lead だけが 5-1 の Workflow (Design Plan 生成) を呼ぶ。
+  `design_depth` は surface 内の最大値 (full が 1 つでもあれば full)。
+- lead の `issue_draft.body` 末尾に **`## 同一 surface の関連 issue`** 節を append し、follower の title /
+  scope_summary / scope_files を列挙してから Workflow に渡す (Design Plan が surface 全体 = follower が足す
+  要素も含めて設計されるようにする。この節は起票 body にもそのまま残す = 人間の文脈にもなる)。
+- **follower** = surface 内の残り。`with_design_plan: false` で 5-1-fast の pass-through に落とし、body の
+  `## 🎨 Design Plan` 節を次の 2 行にする (Pass 2 で `issue[k]` を実番号に解決する、7 Pass 2 (c)):
+
+  ```markdown
+  ## 🎨 Design Plan
+
+  参照: issue[<lead_index>] (同一 surface の lead issue に確定 Design Plan がある。本 issue では生成しない)
+  ```
+
+  marker は既存 enum の `<!-- op-enrichment-design-plan: skipped -->` (本 issue では生成していない、
+  `issue-enrichment.md` §9)。UI issue としての `op-post-check-expert: ux-ui-audit-expert` と
+  `pro-ux-ui-audit-expert` ラベルは維持する (post-check は参照先の Plan を読む)。
+- op-run 側: apply-expert は `参照: #N` を見たら #N 本文の `## 🎨 Design Plan` 節を取得して起点にし、
+  post-check も同節を参照する (正本: `op-run/references/apply-prompt-directives.md` /
+  `post-check-prompts.md`)。lead と follower が別 cluster / 別 PR になっても、Plan は起票済 Issue 本文にあるため
+  順序依存は生じない。
+
+**単一 UI issue の run には効かない** (surface が 1 つなら従来どおり 1 本生成)。
 
 ### 5-1. enrichment input contract
 
@@ -676,6 +783,7 @@ mcp channel では素材を `github-channel.md` §6 の手順 (`mcp__github__sea
   "options": {
     "with_design_plan": "auto",
     "with_cross_review": "auto",
+    "design_gate": "human",
     "max_review_loops": 2,
     "strict": false
   }
@@ -684,6 +792,15 @@ mcp channel では素材を `github-channel.md` §6 の手順 (`mcp__github__sea
 
 `with_design_plan: auto` により、`_shared/issue-enrichment.md` section 3.4 の
 UI 影響判定で Design Plan 生成が自動的に走る (UI 影響時のみ、cost-control)。
+
+**`design_gate: "human"` (op-plan 既定、2026-09-01)**: op-plan はフェーズ6 で人間が Issue 本文 (Design Plan 込み) を
+読んで承認する skill なので、enrichment 内の ux-ui-audit gate (opus 1 spawn + BLOCK retry 最大 3 round) を
+spawn せず、**フェーズ6 の人間承認を Design Plan gate とする**。workflow は役 pipeline を 1 round 走らせ、
+gate の 6 観点 (+ motion 時 7) を `gate_checklist` として返す。司令官はこれを 6-1 の plan file に載せ、人間が
+観点をなぞって承認 / 差し戻す。marker は `op-enrichment-design-plan: generated` (本文に確定 Design Plan がある、
+`gate_only` と同じ扱い、enum 不変)。**この例外は op-plan 限定** — op-scan / op-patrol / op-architect は人間が本文を
+読まない (auto) か別 gate 構造のため `expert` のまま (正本: `issue-enrichment.md (>=2)` §5「design_gate」)。
+`--from-record` (`gate_only`) は提示済 Plan の検証だけが目的なので expert gate のまま (workflow が矯正する)。
 
 > **C4 (ADR-0009 Phase C)**: enrichment の Design Plan 生成→gate / cross-review は内部で
 > `workflows/op-enrichment.js` workflow を使う。司令官は `issue-enrichment.md` §7.6 の順序で
@@ -696,6 +813,19 @@ UI 影響判定で Design Plan 生成が自動的に走る (UI 影響時のみ�
 > op-plan は **対話 active caller**: foundation token / base component 不在の新規 surface では ExitPlanMode で
 > foundation-build Issue (`op:foundation-precondition` ラベル) を先行提示し、③④ bespoke animation が要る場合は
 > design-spike (`needs_human_decision(decision_type:"design")`) を選択肢に翻訳する。
+
+### 5-1-fast. spawn 0 の issue は Workflow を呼ばない (pass-through fast path)
+
+`issue-enrichment.md (>=2)` §7.6 手順 4-fast (正本) に従う。pre-step で `design_depth = none`
+(= `with_design_plan: false`) ∩ `with_cross_review: false` に解決された issue は、workflow を呼んでも
+agent spawn 0 の marker pass-through にしかならない (§11「severity medium 以下: 0 spawn」)。op-plan は severity
+`n/a` 固定ゆえ **非 UI issue は常にこの経路**に落ちる。司令官は `Workflow({name:'op-enrichment'})` を呼ばず、
+§7.6 手順 4-fast の決定論組立 (4 marker prepend + `labels_to_add = [pro-<recommended_runner>]` +
+`post_create_comments = []`) で enriched_issue を作る。分解が N issue のとき、Workflow 往復
+(issue body の往復 echo + task 通知) を非 UI issue の数だけ controller context から省ける。
+5-0 の follower (同一 surface の非 lead) も `with_design_plan: false` でここに落ちる。
+UI surface の lead と `gate_only` (`--from-record`) は従来どおり Workflow を呼ぶ。
+**§7.5 collision gate は fast path でも必ず実行する** (§7.6 の不変則)。
 
 ### 5-2. enrichment 処理 (`_shared/issue-enrichment.md` 側)
 
@@ -778,10 +908,25 @@ auto-report, pro-feature-expert <UI 影響時は + pro-ux-ui-audit-expert>
 ## enrichment summary
 
 - loops_executed: <N>
-- design_plan: <generated | skipped | failed>
+- design_plan: <generated (gate: human) | 参照 issue[k] (同一 surface の lead) | skipped | failed>
 - cross_review: <passed | passed_with_changes | skipped>
 - critical_high_addressed: <N>
 - medium_low_post_create_comments: <N>
+
+## Design Plan gate checklist (人間 gate、Design Plan を生成した lead issue のみ)
+
+enrichment は ux-ui-audit gate を spawn していない (`design_gate: human`、5-1)。**この承認が gate** なので、
+下記 Issue Body の `## 🎨 Design Plan` 節を以下の観点 (workflow 戻り値 `gate_checklist`) でなぞってから承認する:
+
+- [ ] <gate_checklist[0]: 次の行動が明確になる設計か>
+- [ ] <gate_checklist[1]: 必須 UI state が網羅されているか>
+- [ ] <gate_checklist[2]: エラー復帰導線が設計されているか>
+- [ ] <gate_checklist[3]: 業務フローに合った画面構成か>
+- [ ] <gate_checklist[4]: accessibility 要件が十分か>
+- [ ] <gate_checklist[5]: 見た目に寄りすぎていないか>
+- [ ] <motion-spec 役あり時のみ gate_checklist[6]: motion 安全性>
+
+観点に欠けがあれば「Keep planning with feedback」で指摘する (→ 6-3: 当該 surface の lead だけフェーズ5 を再実行)。
 
 ## Issue Body (full)
 
@@ -791,18 +936,20 @@ auto-report, pro-feature-expert <UI 影響時は + pro-ux-ui-audit-expert>
 複数 Issue に分解された場合 (judge-panel 採用分解が複数 issue を含む等) は、上記 Title / Labels / Issue Body を
 **issue ごとに繰り返す** (起票も フェーズ7 で issue 数ぶん直列実行)。
 
-#### 6-1-judge. 計画 judge-panel の ranked 案提示 (ADR-0014 Wave B)
+#### 6-1-judge. 計画 judge-panel の採用分解提示 (ADR-0014 Wave B)
 
-4-judge が `ok:true` を返した場合、plan file には **採用分解 (recommended)** の Issue 一覧 (各 issue の
-title / domain / expert / scope_summary / depends_on) を主表として出し、その下に **代替案サマリ** を添える:
+4-judge が `ok:true` を返した場合、plan file には **採用分解 (4-6 で align 済)** の Issue 一覧 (各 issue の
+title / domain / expert / scope_summary / depends_on) を主表として出す。代替 angle の比較選定は **4-6 の分解 align gate
+(enrichment 前) で完了している**ため、ここでは要約だけ添える:
 
-- 採用分解: `recommended.angle` の issue 一覧 + 各 issue の enrichment summary / Issue Body (上記テンプレを issue 数ぶん)。
-- 代替案: 他 `candidates[]` を 1 行サマリ (`angle` / issue 数 / `reuse_ratio` / `mvp_ratio` / 一言 assessment) で列挙。
-- evaluator 根拠: `evaluator.rationale` を 2-4 行引用 (なぜこの分解が推奨か、coverage / coherence / risk の裁定理由)。
+- 採用分解: `recommended.angle` (4-6 で切替済ならその angle) の issue 一覧 + 各 issue の enrichment summary / Issue Body
+  (上記テンプレを issue 数ぶん)。
+- 代替案: 他 `candidates[]` を 1 行サマリで列挙 (4-6 で提示済のため「4-6 で align 済」と添える)。単一案なら「なし」。
+- evaluator 根拠: `evaluator.rationale` を 2-4 行引用。`evaluator.skipped:true` (単一案) なら「evaluator なし、4-6 で人間 align」と明記。
 - `recommended.corrected:true` の場合は「evaluator の推奨が無効 angle だったため JS top に矯正」と明記。
 
-ユーザーが別 angle を採りたい場合は「Keep planning with feedback」で angle を指定する (→ 6-3: 採用分解を差し替え、
-その分解で enrichment をやり直して ExitPlanMode 再呼び出し)。
+ここで別 angle に切り替えると enrichment のやり直し (UI issue ぶんの spawn) が発生する。angle の比較は 4-6 で済ませる
+のが既定で、ExitPlanMode 段での切替は例外経路 (→ 6-3)。
 
 ### 6-2. ExitPlanMode 呼び出し
 
@@ -826,7 +973,11 @@ title / domain / expert / scope_summary / depends_on) を主表として出し�
 修正内容に応じて以下を再実行する:
 
 - 軽微な修正 (誤字 / 表現変更) → 司令官が plan file の body を編集して再度 ExitPlanMode を呼ぶ (再 enrichment はしない)
-- 構造的修正 (scope_files 変更 / severity 変更 / domain 変更) → フェーズ 4 から再実行
+- Design Plan への指摘 (人間 gate の観点欠け) → 当該 surface の lead issue だけフェーズ5 を再実行 (Required Changes を
+  `issue_draft.body` に追記して渡す。他 issue は再 enrichment しない)
+- 構造的修正 (scope_files 変更 / severity 変更 / domain 変更 / angle 切替 / issue 構成変更) → フェーズ 4 から再実行
+  (4-6 の分解 align gate を再提示してから enrichment。UI 影響 issue ぶんの spawn が再発生するため、
+  分解レベルの修正は本来 4-6 で吸収する)
 - 設計レベル変更 → フェーズ 1 から再実行
 
 再実行後は再び 6-1 → 6-2 に戻る (ExitPlanMode 承認まで plan mode を抜けない)。
@@ -851,7 +1002,7 @@ v1 互換のフォールバック挙動 (SKILL.md 規律のみでの read-only �
 
 > **いつ読むか**: フェーズ -1 で `EnterPlanMode` 呼び出しが tool 未定義エラーで失敗したとき、
 > またはユーザーが承認 prompt に No を返したときのみ、
-> `references/judge-panel-and-fallbacks.md (>=1)` (EnterPlanMode/ExitPlanMode フォールバック節) を読む。
+> `references/judge-panel-and-fallbacks.md (>=2)` (EnterPlanMode/ExitPlanMode フォールバック節) を読む。
 > 通常の plan mode 遷移が成功するセッションでは読まなくてよい。
 
 ---
@@ -1081,6 +1232,10 @@ for i in $(seq 0 $((ISSUE_COUNT - 1))); do
   #       依存のない issue は marker 行ごと省略する (空 value は lint error — ADR-0019 D1)。
   #   (b) prose "## 依存" セクションを実番号の箇条書きに差し替える。
   #       依存のない issue は "## 依存" セクションごと省略する。
+  #   (c) フェーズ5-0 の follower (同一 surface の非 lead) は "## 🎨 Design Plan" 節の
+  #       "参照: issue[<k>]" を "参照: #${ISSUE_NUMS[$k]}" に差し替える。lead が起票失敗 (ISSUE_NUMS[$k] 空)
+  #       なら FAILED に記録し、節を "参照先 (issue[<k>]) が未起票のため Design Plan なし — apply 時に再構築" に
+  #       差し替える (op-run apply の Design Plan 無し fallback に落とす)。
   # 生成は Write tool で行う (長文・特殊文字が混在するため bash printf/sed より確実)。
   #   → この SKILL.md を参照して実行するエージェントは、
   #     ここで Write tool を呼び出して FINAL_FILE_I を生成してから次の lint に進む。

@@ -29,8 +29,13 @@ const fns = loadPureFns("op-enrichment.js", {
     "blockedHumanAction",
     // Issue #757: severity / UI 影響 / task_complexity による cross-review reviewer 数 gating
     "resolveReviewers",
+    // 2026-09-01: design_gate:"human" で caller の人間 gate に渡す観点リスト (expert gate と同一集合)
+    "humanGateChecklist",
   ],
+  consts: ["GATE_CRITERIA", "GATE_CRITERION_MOTION"],
 });
+// GATE_CRITERIA / GATE_CRITERION_MOTION の値そのものは loadConsts で取り出す (loadPureFns は関数参照のみ返す)。
+const gateConsts = loadConsts("op-enrichment.js", ["GATE_CRITERIA", "GATE_CRITERION_MOTION"]);
 
 // RVW-004 準拠: loadNormalizeArgs はトップレベルで一度だけ呼ぶ (副作用なし・純評価なので毎回構築する必要がない)
 const na = loadNormalizeArgs("op-enrichment.js");
@@ -430,6 +435,44 @@ test("resolveReviewers は Medium 以下 ∩ 非 UI ∩ routine で先頭 1 revi
 });
 
 // ---- fable guard (model-selection.md (>=5) §7.2 F3: enrichment は起票前 review 経路ゆえ fable 禁止) ----
+// ---- design_gate (2026-09-01 op-plan 消費調整): expert 既定 / human は gate spawn なし ----
+test("normalizeArgs は design_gate 未注入時 'expert' に補完し、不正値で throw する", () => {
+  const base = {
+    issue_draft: { title: "t", body: "b", severity: "n/a", domain: "feature", recommended_runner: "feature-expert" },
+    options: { with_design_plan: true, with_cross_review: false, max_review_loops: 2, strict: false },
+    task_complexity: "extension",
+    today: "2026-09-01",
+  };
+  assert.equal(na.run(base).options.design_gate, "expert");
+  assert.equal(na.run({ ...base, options: { ...base.options, design_gate: "human" } }).options.design_gate, "human");
+  assert.throws(() => na.run({ ...base, options: { ...base.options, design_gate: "none" } }), /design_gate must be 'expert' or 'human'/);
+});
+
+test("normalizeArgs は gate_only では design_gate:human を expert に矯正する (提示済 Plan の gate だけが目的)", () => {
+  const out = na.run({
+    issue_draft: { title: "t", body: "b", severity: "n/a", domain: "feature", recommended_runner: "feature-expert" },
+    options: { with_design_plan: "gate_only", with_cross_review: false, max_review_loops: 2, strict: false, design_gate: "human" },
+    task_complexity: "extension",
+    today: "2026-09-01",
+  });
+  assert.equal(out.gate_only, true);
+  assert.equal(out.options.design_gate, "expert");
+});
+
+test("humanGateChecklist は GATE_CRITERIA の 6 観点を返し、motion-spec 役があるときだけ観点 7 を末尾に足す", () => {
+  assert.equal(gateConsts.GATE_CRITERIA.length, 6, "gate 観点は 6 (issue-enrichment.md §5)");
+  const six = fns.humanGateChecklist(["token-curation", "layout-composition"]);
+  assert.deepEqual(six, gateConsts.GATE_CRITERIA);
+  const seven = fns.humanGateChecklist(["token-curation", "component-selection", "layout-composition", "motion-spec"]);
+  assert.equal(seven.length, 7);
+  assert.equal(seven[6], gateConsts.GATE_CRITERION_MOTION);
+  // 非配列 / undefined は 6 観点 (安全側)
+  assert.deepEqual(fns.humanGateChecklist(undefined), gateConsts.GATE_CRITERIA);
+  // 戻り値は copy (呼び出し側の mutation が定数へ漏れない)
+  six.push("x");
+  assert.equal(fns.humanGateChecklist(["layout-composition"]).length, 6);
+});
+
 test("normalizeArgs は role_models の fable を opus へ矯正する", () => {
   const out = na.run({
     issue_draft: {

@@ -1,7 +1,11 @@
 <!--
-schema_version: 1
+schema_version: 2
 last_breaking_change: 2026-07-29
-notes: v1 (2026-07-29): ADR-0029 Wave B1 (controller 層 progressive disclosure) で
+notes: v2 (2026-09-01): op-plan 消費調整。judge-panel の戻り値に `evaluator.skipped` を追加し、
+       候補 1 案 (既定 candidate_count=1) では opus evaluator を spawn しない挙動と、それを
+       従来どおり spawn させる args `evaluate_single_candidate` を記述。代替 angle の提示先を
+       フェーズ6 → フェーズ4-6 (分解 align gate、enrichment 前) に変更 (SKILL.md pointer は (>=2))。
+       v1 (2026-07-29): ADR-0029 Wave B1 (controller 層 progressive disclosure) で
        skills/op-plan/SKILL.md §4-judge (計画 judge-panel 詳細) と §6-6
        (EnterPlanMode/ExitPlanMode 利用不可環境フォールバック) から verbatim 分離。
        いずれも「有効/無効 config gate」または「tool 未定義時のみ発火」する分岐であり、
@@ -59,13 +63,21 @@ const planJudgeRaw = Workflow({
     candidate_count: PJP_CANDIDATE_COUNT,    // op-config (既定 1)
     // angles 省略可: workflow が mvp-first/risk-first/asset-reuse-first を default
     models: { generate: PJP_GEN_MODEL, evaluate: PJP_EVAL_MODEL },  // model-selection §5.1: generate=Sonnet / evaluate=Opus
+    evaluate_single_candidate: PJP_EVALUATE_SINGLE,  // op-config (既定 false): 候補 1 案では opus evaluator を spawn しない
   },
 })
 const planJudge = planJudgeRaw.result ?? planJudgeRaw;  // chat-controller は `.result` にラップ (_shared/workflow-calling.md §2)
-// = { ok, recommended:{angle, plan:{issues[]}, corrected}, candidates:[{angle, issues, score}], js_ranking, evaluator:{recommended_angle, rationale, ranking}, dropped }
+// = { ok, recommended:{angle, plan:{issues[]}, corrected}, candidates:[{angle, issues, score}], js_ranking, evaluator:{recommended_angle, rationale, ranking, skipped}, dropped }
 ```
 
 呼び出し規約 (preflight / `.result.*` unwrap / args 渡し) は `_shared/workflow-calling.md` に従う。
+
+**evaluator の spawn 条件 (2026-09-01 消費調整)**: workflow は **有効 candidate が 2 案以上のときだけ** opus evaluator を
+spawn する。既定 `candidate_count=1` (#676) では比較対象が無く、evaluator は「1 案を 1 位にする」だけの opus spawn に
+なっていたため skip する (`evaluator.skipped:true`、`rationale` に skip 理由、`ranking` は単一案 rank1 の決定論値)。
+単一案の妥当性 (coverage / 粒度) は **フェーズ4-6 の分解 align gate で人間が確認**する。coverage の一次チェックとして
+単一案でも evaluator を回したい場合は op-config `planning_judge_panel.evaluate_single_candidate: true` を注入する
+(`op-config-schema.md` §10)。`candidate_count >= 2` では従来どおり evaluator が主裁定する。
 
 **戻り値の扱い**:
 
@@ -73,9 +85,12 @@ const planJudge = planJudgeRaw.result ?? planJudgeRaw;  // chat-controller は `
 - `ok:true` → `recommended.plan.issues[]` (= 分解された issue: title / domain / scope_summary / files / expert /
   depends_on / reuses_existing / is_mvp) を **フェーズ4 の Issue 群として採用**。各 issue に 4-1 (domain 判定) /
   4-2 (骨格) / 4-4 (fingerprint + dedup) を **per-issue で適用**する (workflow は分解=planning までで、骨格化・dedup・
-  起票は controller)。ranked 代替案 (`candidates` の他 angle) は **フェーズ6 で提示**し、人間が別 angle を選べる。
-- 選定後の フェーズ5 enrichment は **採用分解の各 issue** に対して実施する。フェーズ6 で人間が代替 angle を選んだ場合は
-  その分解で enrichment をやり直す (op-plan は自動進行しないため再 enrichment コストは許容)。
+  起票は controller)。ranked 代替案 (`candidates` の他 angle) と `evaluator.rationale` (skip 時はその旨) は
+  **フェーズ4-6 の分解 align gate (enrichment 前) で提示**し、人間が別 angle を選べる。フェーズ6 では align 済の
+  採用分解を要約提示するだけに留める (6-1-judge)。
+- 選定後の フェーズ5 enrichment は **4-6 で align 済の分解の各 issue** に対して実施する。angle 切替を enrichment の
+  前 (4-6) に置くことで、切替による再 enrichment (UI issue 1 件 3〜4 spawn) を原則発生させない。フェーズ6 で
+  例外的に別 angle を選んだ場合はフェーズ4 から再実行し、その分解で enrichment をやり直す。
 
 ---
 

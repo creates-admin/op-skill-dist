@@ -1,7 +1,10 @@
 <!--
 schema_version: 1
 last_breaking_change: 2026-05-30
-notes: v1.2 相当 additive (2026-07-31): expert-spawn.md v17 (#84) 追従。自己検証節の完了報告手順に
+notes: v1.3 相当 additive (2026-09-01): op-plan の surface 共有 (同一 surface の Design Plan 1 本化、
+       op-plan/SKILL.md 5-0) 追従。designer-expert apply 節に「`## 🎨 Design Plan` 節が `参照: #N` の場合は
+       #N 本文の Design Plan 節を取得して起点にする (再構築しない)」を追加。既存指示の削除なし、schema_version 据置。
+       v1.2 相当 additive (2026-07-31): expert-spawn.md v17 (#84) 追従。自己検証節の完了報告手順に
        「self_check_blocked を true / false のどちらでも必ず含める」を追加 (従来は `true` の場合のみの
        指示だったため、正常完了時に省略され consumer 側 (フェーズ4 入力条件) が fail-closed する
        構造欠落があった)。`true` になる条件の記述 (2 回目の Critical/High / 修正不可能) は不変。
@@ -235,6 +238,10 @@ designer-expert apply の場合は追加で:
 * Design Plan が無い (op-scan / op-patrol 由来 / 人間立て Issue) 場合は、
   ux-ui-audit-expert.md の Usability Invariants と Issue 本文の指示書節から
   最低限の Design Plan を自分で再構築してから実装に入る
+* `## 🎨 Design Plan` 節が `参照: #N` の 1 行 (op-plan が同一 surface の issue 群で lead issue #N に
+  Design Plan を共有した follower、op-plan/SKILL.md 5-0) の場合は、**#N の Issue 本文を取得して
+  その `## 🎨 Design Plan` 節を起点にする** (再構築しない。#N の `## 同一 surface の関連 issue` 節に
+  本 issue が列挙されている)。取得できない場合のみ上記の再構築 fallback に落ちる
 * 既存 design system (theme / token / component / layout pattern) を Grep で
   先に調査し、新規 token / hard-coded style を作らない
 * `### Motion Strategy` 節がある場合、motion は必ず motion token (duration/easing) 経由・

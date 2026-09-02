@@ -24,6 +24,10 @@
  *   - REAL_API 準拠: export const meta (pure literal 第一文) / phase() は body 冒頭のみ / 非決定 API 不使用。
  *   - candidate.issues[] は op-plan フェーズ4 Issue draft 骨格 (pr-templates.md 指示書フル版) の planning 前駆。
  *     controller が選定案を フェーズ4 draft → フェーズ5 enrichment → フェーズ6 承認へ流す。
+ *   - **単一案では evaluator を spawn しない** (2026-09-01): #676 で既定 candidate_count=1 になった後も opus evaluator が
+ *     「1 案を 1 位にする」だけの spawn として毎回走っていた。candidates が 1 件なら shouldRunEvaluator が false を返し
+ *     singleCandidateVerdict (決定論) で戻り値を組む (evaluator.skipped:true)。controller が
+ *     args.evaluate_single_candidate:true を注入すると従来どおり spawn する。
  */
 
 export const meta = {
@@ -139,19 +143,27 @@ if (candidates.length === 0) {
 const jsRanked = candidates.slice().sort((a, b) => b.score.total - a.score.total).map((c) => c.angle);
 
 phase("evaluate");
-const verdictRaw = await agent(buildEvaluatePrompt(candidates, jsRanked, input), {
-  label: "evaluate",
-  phase: "evaluate",
-  schema: evaluatorSchema,
-  agentType: scopedAgentType("feature-expert"),
-  model: input.models.evaluate,
-});
+// candidate が 1 案しか無いとき (#676 既定 candidate_count=1 では常時) opus evaluator は「比較対象なしで
+// 1 案を 1 位にする」だけの spawn になる。op-plan の分解妥当性は フェーズ4-6 align gate で人間が確認するため、
+// 比較が成立しない単一案では evaluator を spawn しない (controller が evaluate_single_candidate:true を
+// 注入した場合のみ従来どおり spawn = coverage 一次チェックとして使いたい caller の逃げ道)。
+const runEvaluator = shouldRunEvaluator(candidates.length, input);
+const verdictRaw = runEvaluator
+  ? await agent(buildEvaluatePrompt(candidates, jsRanked, input), {
+      label: "evaluate",
+      phase: "evaluate",
+      schema: evaluatorSchema,
+      agentType: scopedAgentType("feature-expert"),
+      model: input.models.evaluate,
+    })
+  : null;
 
 // evaluator agent の spawn 失敗 (null 戻り) を未ガード deref で uncaught throw させない。
 // generate 側 (最高コストの N 並列 spawn) は完了済のため、ここで throw すると生成済 candidates が全喪失する。
 // null 時は JS default ranking (jsRanked) へ degrade する空 verdict にフォールバックし、下流の幻覚 angle
 // ガード (jsRanked[0] 矯正) にそのまま乗せる (generate 側の if(!c) null 構造化処理と対称)。
-const verdict = verdictRaw || { recommended_angle: null, rationale: "evaluator agent が応答せず JS default ranking に degrade", ranking: [], synthesis_notes: "" };
+// evaluator skip (単一案) 時は degrade ではなく決定論の単一案 verdict を組む (rationale で skip を明示)。
+const verdict = verdictRaw || (runEvaluator ? { recommended_angle: null, rationale: "evaluator agent が応答せず JS default ranking に degrade", ranking: [], synthesis_notes: "" } : singleCandidateVerdict(candidates));
 
 // evaluator の推奨が実在 angle でなければ JS top に矯正 (幻覚 angle / evaluator 失敗ガード)。
 const validAngles = new Set(candidates.map((c) => c.angle));
@@ -167,11 +179,32 @@ return {
   },
   candidates: candidates.map((c) => ({ angle: c.angle, approach_rationale: c.approach_rationale || "", issues: c.issues, score: c.score })),
   js_ranking: jsRanked,
-  evaluator: { recommended_angle: verdict.recommended_angle, rationale: verdict.rationale, ranking: verdict.ranking, synthesis_notes: verdict.synthesis_notes || "" },
+  evaluator: { recommended_angle: verdict.recommended_angle, rationale: verdict.rationale, ranking: verdict.ranking, synthesis_notes: verdict.synthesis_notes || "", skipped: !runEvaluator },
   dropped,
 };
 
 // ---- 純関数 helpers (段階1.5 logic harness で検証する) ----
+
+// evaluator spawn の要否 (純関数)。比較対象が 2 案以上あるときだけ opus evaluator を起こす。
+// 作成意図: #676 で既定案数が 1 になり、evaluator が「1 案を 1 位にする」だけの opus spawn として毎回走っていた
+//   (op-plan 1 run あたり固定 1 spawn の無駄)。controller が evaluate_single_candidate:true を注入した場合は
+//   単一案でも従来どおり spawn する (override 経路の保持、candidate_count と同じ流儀)。
+function shouldRunEvaluator(candidateCount, a) {
+  if (a && a.evaluate_single_candidate === true) return true;
+  return candidateCount >= 2;
+}
+
+// evaluator skip 時の決定論 verdict (単一案を rank1 に置き、skip 理由を rationale に残す)。
+// controller (op-plan 4-6 align gate) は rationale を見て「evaluator なし」を人間に明示する。
+function singleCandidateVerdict(candidates) {
+  const only = candidates[0];
+  return {
+    recommended_angle: only.angle,
+    rationale: "候補が 1 案のため evaluator (opus) を skip した (比較対象なし)。分解の妥当性は controller の align gate で人間が確認する",
+    ranking: [{ angle: only.angle, rank: 1, assessment: "single candidate (evaluator skipped)" }],
+    synthesis_notes: "",
+  };
+}
 
 // survey findings を asset_audit フィールドに射影する (op-plan フェーズ2.5 → フェーズ3/4 の橋渡し)。
 // 作成意図: SKILL.md §2.5-4 prescriptive fence の正本実装をここに移管し二重定義を解消する (Issue #735)。
@@ -312,6 +345,8 @@ function normalizeArgs() {
     const n = typeof a.candidate_count === "number" && a.candidate_count > 0 ? a.candidate_count : 1;
     a.angles = DEFAULT_ANGLES.slice(0, Math.min(n, DEFAULT_ANGLES.length));
   }
+  // evaluator を単一案でも spawn するか (既定 false = 1 案では skip。shouldRunEvaluator 参照)。
+  if (typeof a.evaluate_single_candidate !== "boolean") a.evaluate_single_candidate = false;
   if (!a.models) a.models = {};
   if (!a.models.generate) a.models.generate = "sonnet";
   if (!a.models.evaluate) a.models.evaluate = "opus";

@@ -356,6 +356,7 @@ design 多役 orchestration (`op-enrichment.js` design-plan phase) の depth 閾
 | `candidate_count` | int | `1` | 生成する案数。既定 1 (#676: Sonnet 1 案 + Opus 1 評価 = 2 spawn の保守側既定)。複雑な区画は 3 に上書き可 (角度は 標準 / risk-first / throughput-first) |
 | `models.generate` | enum | `sonnet` | 案出し (breadth) の model。安く広く N 案を起こす |
 | `models.evaluate` | enum | `opus` | 評価 (depth) の model。score vector を見て tradeoff を裁定する |
+| `evaluate_single_candidate` | bool | `false` | 有効候補が 1 案のときも evaluator を spawn するか。既定 false = 単一案では比較対象が無いため evaluator を skip し、戻り値 `evaluator.skipped:true` + 決定論 verdict を返す (2026-09-01 op-plan 消費調整)。現時点の対応 surface は **op-plan** (`op-plan-judge.js`)。op-run / op-architect の judge は未対応 (従来どおり常に evaluator を spawn) |
 
 > 対象 surface: **op-run clustering** (Wave A) / **op-plan 計画分解** (Wave B、angle: mvp-first/risk-first/asset-reuse-first) / **op-architect アーキ提案** (Wave C、whole-architecture = ADR-worthy 論点をまとめて 1 panel、angle: simplicity/extensibility/robustness-biased)。
 > surface 別 angle は各 workflow が default を持つ (op-run=標準/risk-first/throughput-first、op-plan=mvp-first/risk-first/asset-reuse-first、op-architect=simplicity/extensibility/robustness-biased)。

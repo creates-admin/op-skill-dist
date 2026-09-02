@@ -1,7 +1,10 @@
 <!--
 schema_version: 1
 last_breaking_change: なし
-notes: v1 (2026-07-29): SKILL.md 参照ドキュメント索引への追記 (F10) に伴い、
+notes: v1.1 相当 additive (2026-09-01): op-plan の surface 共有 (同一 surface の Design Plan 1 本化、
+       op-plan/SKILL.md 5-0) 追従。ux-ui-audit / security-aux の入力節に「Design Plan 節が `参照: #N` なら
+       #N 本文から取得」を追記。判定基準・result enum は不変、schema_version 据置。
+       v1 (2026-07-29): SKILL.md 参照ドキュメント索引への追記 (F10) に伴い、
        他 reference ファイルと同形式の schema_version header を additive 追加。
        内容変更なし。
 -->
@@ -66,7 +69,8 @@ security 専用の human-decision result を返してはいけません
 【入力】
 - PR diff: `cd <WT_PATH> && git diff "origin/${OP_RUN_BASE_REF}...HEAD"` で取得 (triple-dot, merge-base 差分)
 - Issue 本文 (必要なら `gh issue view <N>`)
-- Issue 本文の `## 🎨 Design Plan` 節 (op-architect 由来 Issue にあれば)
+- Issue 本文の `## 🎨 Design Plan` 節 (op-architect / op-plan 由来 Issue にあれば。節が `参照: #N` の 1 行なら
+  #N の Issue 本文の同節を取得して使う = op-plan の同一 surface 共有、op-plan/SKILL.md 5-0)
 
 【検証】
 `~/.claude/skills/expert-ux-ui-audit/references/criteria.md` の `<!-- anchor: post-check -->` 節 (Post-check) の 7 観点をすべてチェックしてください。
@@ -200,7 +204,7 @@ security 専用の human-decision result を返してはいけません
 - PR diff: `git diff "origin/${OP_RUN_BASE_REF}...HEAD"` (triple-dot, merge-base 差分)
 - 元 Issue 本文 (Issue scope_in / scope_out)
 - security-expert post-check コメント (<!-- op-security-post-check --> の Required Changes / Notes)
-- Design Plan があれば参照 (op-architect 由来 Issue のみ)
+- Design Plan があれば参照 (op-architect / op-plan 由来 Issue。`参照: #N` なら #N 本文の同節)
 
 【検証 — security 起点の auxiliary 観点】
 1. security mitigation 追加 (overwrite confirm / 削除 stage 等) で workflow step 数が
