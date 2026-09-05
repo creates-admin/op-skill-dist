@@ -120,14 +120,19 @@ active / planned expert の正本リストは `~/.claude/skills/_shared/active-e
 op-run は apply / discover / review の各 expert を **ClusterOrchestrator が `op worktree-provision`
 で用意した cluster worktree 内**で spawn する。このとき feature 正本 (`.claude/rules/<feature>.md`)
 は path-scoped frontmatter (`paths:`) を持ち、spawn された expert が **その `paths:` に該当するファイルを
-touch する作業のとき、対応する正本が native に context へ auto-inject される**
+Read ツールで開いたとき、対応する正本が native に context へ auto-inject される**
 (ADR-0017 W-spike 2026-06-20 で実証済)。
 constitution (`.claude/rules/00-constitution.md`) は always-on。
 
-- **controller は spawn prompt に正本を明示注入しない** — native binding が効くため、明示 inject は
-  native が効かない環境向けの contingency としてのみ残す (二重ロードは context 肥大の原因)。
+- **発火は Read ツール経由に限る (2026-09-05 実測)** — `cat` / `grep` / `sed` で読んだ場合も新規作成から
+  始めた場合も発火しない。auto mode のハーネスが Bash 優先を親・subagent 双方へ注入するため、
+  **放置すると expert は既定経路 (Bash) で読み、binding は silent に効かなくなる**。
+- **controller は spawn prompt に正本の本文を注入しない** (二重ロードは context 肥大の原因)。
+  代わりに contingency として **spawn prompt に「対象パスの正本を Read ツールで開いてから着手する」の
+  1 行を必ず含める** (`expert-spawn.md` の ADR-0017 注記が正本)。
 - **運用条件 = 正本が tracked (commit 済) であること** — untracked だと `git worktree add` で worktree に
-  伝播せず binding が silent に効かなくなる (ADR-0017 G1-op)。
+  伝播せず binding が silent に効かなくなる (ADR-0017 G1-op)。同一チェックアウト内では未コミットの変更も
+  そのまま注入される (2026-09-05 実測)。
 - 正本の所在・spawn 規約の正本は `~/.claude/skills/_shared/expert-spawn.md` のパターン2 注記を参照。
 
 > **検証 (canary)**: 正本に prompt 外の canary 文字列を仕込み、worktree で expert を spawn → expert が

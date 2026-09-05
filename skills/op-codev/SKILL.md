@@ -1020,12 +1020,15 @@ op-codev は feature-expert を **controller の作業ディレクトリ上**で
 (Direct 標準は main checkout 上、background job では controller が worktree 内に居るため
 結果的に worktree 上となる)。いずれの経路でも feature 正本 (`.claude/rules/<feature>.md`) は
 path-scoped frontmatter (`paths:`) を持ち、feature-expert が **その `paths:` に該当するファイルを
-touch する作業のとき、対応する正本が native に context へ auto-inject される**。
+Read ツールで開いたとき、対応する正本が native に context へ auto-inject される**。
+**発火は Read ツール経由に限る (2026-09-05 実測)** — `cat` / `grep` / `sed` 経由や新規作成では発火しない。
 **native binding は main checkout / worktree いずれでも効く** (ADR-0017 W-spike 2026-06-20:
 Q-A=main / Q-B=worktree 両方 PASS)。constitution (`.claude/rules/00-constitution.md`) は always-on。
 
-- **親 (controller) は spawn prompt に正本を明示注入しない** — native binding が効くため、明示 inject は
-  native が効かない環境向けの contingency としてのみ残す (二重ロードは context 肥大の原因)。
+- **親 (controller) は spawn prompt に正本の本文を注入しない** (二重ロードは context 肥大の原因)。
+  ただし auto mode は Bash 優先を注入して expert を既定で `cat` / `grep` に倒すため、contingency として
+  **spawn prompt に「対象パスの正本を Read ツールで開いてから着手する」の 1 行を必ず含める**
+  (`expert-spawn.md` の ADR-0017 注記が正本)。
 - **運用条件 = 正本が tracked (commit 済) であること** — untracked だと `git worktree add` で worktree に
   伝播せず binding が silent に効かなくなる (ADR-0017 G1-op)。main checkout では git 管理下に正本が
   存在すれば常時有効。

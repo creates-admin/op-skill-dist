@@ -42,7 +42,7 @@ notes: v1 (2026-06-26) 初版。ADR-0020 (op-tools/docs/adr/0020-op-rules-render
 
 ## このスキルの位置づけ
 
-正本 (`.claude/rules/`) は機械 (Claude / expert) が path-scoped frontmatter で **native auto-inject** して
+正本 (`.claude/rules/`) は機械 (Claude / expert) が path-scoped frontmatter で **native auto-inject** (発火は Read ツール経由に限る — `expert-spawn.md` の ADR-0017 注記) して
 読むため HTML を必要としない。一方で正本が flat 大規模化すると **人間が「どこに何があるか」を探しにくくなる**
 (ADR-0020 発見性問題)。本 skill はその人間向け発見性を担う read-only 派生ビューアの起動口である。
 

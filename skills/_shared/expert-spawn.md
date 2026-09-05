@@ -6,7 +6,13 @@ additive_only_policy:
   - breaking change (既存フィールドの削除 / 型変更 / required 化 / marker 仕様変更) のみ schema_version を bump する
   - 現行 schema_version 一覧は `~/.claude/skills/_shared/version-check.md` の
     「## _shared ファイル 現行 schema_version 一覧」節を参照する
-notes: v17 (2026-08-07, additive) — 「expert spawn は subagent であること (teammate 化させない)」節を新設。
+notes: v17 (2026-09-05, additive) — ADR-0017 注記を改訂。正本の native auto-inject は
+       **Read ツールでファイルを開いたときにしか発火しない**ことを実測で確定し (cat / grep / 新規作成では発火せず、
+       auto mode のハーネスが Bash 優先を親・subagent 双方へ注入するため既定経路では silent に効かない)、
+       決定 1 の contingency として **spawn prompt へ「対象パスの正本を Read ツールで開いてから着手」の 1 行を必須化**した
+       (正本本文の注入は引き続き禁止)。副産物として HTML コメントが注入時に除去される点も明記。
+       prose 追加のみ・marker schema / field 契約は不変ゆえ schema_version 据置。
+       v17 (2026-08-07, additive) — 「expert spawn は subagent であること (teammate 化させない)」節を新設。
        subagent は単一テキストを親へ返すが teammate は独立 session で idle 通知 + mailbox になるため、
        ClusterSummary (ADR-0016) 等の戻り値契約は worker が teammate 化した時点で壊れる。
        一次対策は環境側 (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` を設定しない = teams 既定無効)、
@@ -317,6 +323,8 @@ Agent({
     あなたは <domain>-expert です。<scope> を read-only で audit してください。
     <... scan prompt 規約に従う ...>
 
+    作業対象のパスが決まったら、対応する `.claude/rules/<feature>.md` を **Read ツールで**開いてから着手すること (cat / grep では正本が読み込まれない)。
+
     <質問禁止 + fallback 5 択ブロック: `_shared/spawn-prompt-common.md` §4 を verbatim で含める (正本。2 択等への縮約禁止)>
     Return the required canonical schema JSON array. Do not mix question text
     into the JSON output.
@@ -347,6 +355,8 @@ Agent({
     Issue #<N> を実装してください。
     <... apply prompt 規約に従う ...>
 
+    作業対象のパスが決まったら、対応する `.claude/rules/<feature>.md` を **Read ツールで**開いてから着手すること (cat / grep では正本が読み込まれない)。
+
     <質問禁止 + fallback 5 択ブロック: `_shared/spawn-prompt-common.md` §4 を verbatim で含める (正本。3 択等への縮約禁止)>
     Do not stop and wait for commander or user replies.
     Return the required apply report and commit. Do not push.
@@ -368,17 +378,34 @@ Agent({
 > `skills/op-run/SKILL.md` / `skills/op-run/cluster-orchestrator-directives.md` を参照。
 > 本パターンの `run_in_background` + Monitor は Direct Mode の手動 fan-out 時にのみ適用する。
 
-> **注記 (ADR-0017): feature 正本の native auto-inject (controller は明示注入しない)**
+> **注記 (ADR-0017 / 2026-09-05 改訂): feature 正本の native auto-inject と、その発火条件**
 > feature 正本 (`.claude/rules/<feature>.md`) は path-scoped frontmatter (`paths:`) を持ち、
-> worktree で spawn された expert が **その `paths:` に該当するファイルを touch する作業のとき、
-> 対応する正本が native に context へ auto-inject される** (W-spike 2026-06-20 で実証済)。
+> spawn された expert が **その `paths:` に該当するファイルを Read ツールで開いたとき**、
+> 対応する正本が native に context へ auto-inject される (W-spike 2026-06-20 で実証済)。
 > constitution (`.claude/rules/00-constitution.md`) は always-on。
-> したがって **controller は spawn prompt に正本を明示注入しない** — native binding が効くため、
-> 明示 inject は native が効かない環境向けの contingency としてのみ残す (二重ロードは context 肥大の原因)。
+>
+> **発火は Read ツール経由に限る (2026-09-05 実測)**。`cat` / `head` / `sed` / `grep` で読んだ場合も、
+> 新規ファイル作成から始めた場合も発火しない。さらに auto mode のハーネスは
+> 「専用の Read / Edit / Write より Bash (cat / grep / sed) を優先せよ」を **親・subagent の双方へ**注入するため、
+> **expert を放置すると既定経路 (Bash) でファイルを読み、binding が silent に効かなくなる**。
+> W-spike の Q-A / Q-B は当時 Read が既定経路だったため PASS しており、**binding モデル自体は今も健在**。
+> 崩れたのは「expert はファイルを Read する」という暗黙の前提の方である。
+>
+> したがって **決定 1 の contingency (「native が効かない環境向け」) をここで発動する**:
+>
+> - **正本の本文は依然 spawn prompt に注入しない** — 二重ロード = context 肥大を避ける原則は不変。
+> - 代わりに **spawn prompt へ次の 1 行を必ず含める** (パターン1 / 2 / 3 および OP skill の全 spawn):
+>   `作業対象のパスが決まったら、対応する .claude/rules/<feature>.md を Read ツールで開いてから着手すること (cat / grep では正本が読み込まれない)`
+> - この 1 行は正本を**複製しない**まま native 経路を復活させるための最小手であり、
+>   「正本本文を prompt に貼る」旧 fallback とは別物 (貼る方は引き続き禁止)。
+>
 > **運用条件 = 正本が tracked (commit 済) であること** — untracked だと `git worktree add` で worktree に
-> 伝播せず binding が silent に効かなくなる (ADR-0017 G1-op)。
+> 伝播せず binding が silent に効かなくなる (ADR-0017 G1-op)。なお **同一チェックアウト内では未コミットの
+> 変更もそのまま注入される** (2026-09-05 実測) — tracking は worktree 伝播の条件であって鮮度の条件ではない。
 > **binding は worktree / main checkout いずれでも効く** (W-spike Q-A=main / Q-B=worktree 両方 PASS)。
 > apply / review 等の worktree spawn にも等しく適用される。
+> **HTML コメントは注入時に除去される (2026-09-05 実測)** — 正本に置く指示を `<!-- -->` の中に書いてはならない
+> (書くと人間には見えてエージェントには届かない、最悪の片効きになる)。
 
 ### パターン3: review 用 (独立性確保が最重要)
 
@@ -394,6 +421,8 @@ Agent({
 
     あなたはこの PR を書いていない独立 reviewer (review-expert) です。
     <... review prompt 規約に従う、独立性確保節を必須 ...>
+
+    作業対象のパスが決まったら、対応する `.claude/rules/<feature>.md` を **Read ツールで**開いてから着手すること (cat / grep では正本が読み込まれない)。
 
     You must not ask interactive questions.
     You must not modify code, commit, or push.
