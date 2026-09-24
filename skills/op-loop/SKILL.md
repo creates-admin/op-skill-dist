@@ -107,6 +107,7 @@ controller 自身のフローとして実行する (`Skill(op-run)` は呼ばな
 
 - clustering / Stage 2 競合検出 / CO のフェーズ / worktree 規約はそのまま (同層で競合があれば層内直列化される)。
 - 層内の停止条件は op-run SKILL.md「止まってよい条件」と同じ。層内で人間に確認を求めず 2-2 まで進める。
+- CO が `nested_spawn_unavailable` を返したら op-run の 2-Orchestrate-inline に従い、以降の層でも CO を spawn しない。
 - `--relay` 時のみ、CO spawn prompt に `references/relay-protocol.md` 柱2 の報告契約を追加する。
 
 ### 2-2. 層完了集約

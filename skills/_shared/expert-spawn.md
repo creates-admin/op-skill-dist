@@ -27,6 +27,13 @@ plugin 内 component は `op-skill:` prefix 付きで登録される。Agent too
 - spawn に個体名を付けない。識別は `description` (例: `"ClusterOrchestrator: c1"`) で行う。prompt で「teammate として」「チームを作って」と要求しない
 - `run_in_background` は既定に委ね、CO 配下も同期直列に固定しない。`In-process teammates cannot spawn background agents` が返った場合のみ `false` で再送する
 
+## subagent 内からの spawn
+
+- 実行環境によっては subagent に Agent tool が渡されない (subagent から配下を spawn できない)
+- 配下を spawn する subagent (CO 等) は起動直後に Agent tool の有無を確かめ、無ければ何も実行せず専用の verdict で返す
+- 呼出側はその verdict を受けたら、同じ run の残りを subagent に頼らず、その手順書を自分の context で実行して配下を直接 spawn する
+- 環境変数やホスト種別から推測して事前に切り替えない (判定は subagent 自身のツール一覧だけで行う)
+
 ## spawn の3パターン
 
 prompt 冒頭に「あなたはこのコードを <書いた / 書いていない>」を明記する (review は「書いていない」)。
@@ -43,7 +50,8 @@ prompt 冒頭に「あなたはこのコードを <書いた / 書いていな�
 - prompt は `spawn-prompt-common.md` §1 / §2 (apply) / §4 を含み、ブランチ名・触ってよいファイルを明示する
 - commit まで行い push しない (push は司令官)。返却は「修正完了報告 schema」
 - op-run では ClusterOrchestrator が apply → PR → post-check → review → round 管理を完結させ ClusterSummary だけを返す
-  (正本: op-run skill の `cluster-orchestrator-directives.md`)
+  (正本: op-run skill の `cluster-orchestrator-directives.md`)。CO が配下を spawn できない環境では controller が同書を実行する
+  (「subagent 内からの spawn」)
 
 ### パターン3: review 用
 

@@ -26,6 +26,7 @@ op-run はマージしない。マージは人間が `/op-skill:op-merge` (監�
 - claim はすべての verdict で release する (2-E-0)。
 - spawn できるのは `_shared/active-expert-registry.md` の active expert のみ (1-2-c/d で正規化、上位契約: `_shared/runtime-contract.md`)。
 - CO は subagent として spawn する (`_shared/expert-spawn.md`「expert spawn は subagent であること」)。teammate だと ClusterSummary が戻り値で返らない。
+  CO が `nested_spawn_unavailable` を返したら 2-Orchestrate-inline に切り替える。
 - Fable は 1-2-g で人間が承認した cluster の apply spawn のみ。それ以外 (CO / 探知 / post-check / review) は Opus 天井。
 - 人間判断待ち Issue は manual_review_bucket に分離し apply しない (1-1-a)。
 - PR / Issue のラベル操作は controller または CO だけが行う。expert subagent は label を触らない。
@@ -338,6 +339,19 @@ Agent({
 
 chain 内のクラスタは、前の CO が ClusterSummary を返してから次を起動する (prompt・payload は parallel と同じ)。
 直列化はこの戻り値待ちで強制する。
+
+#### 2-Orchestrate-inline. CO が配下を spawn できない場合
+
+CO が verdict `nested_spawn_unavailable` を返したら (`_shared/expert-spawn.md`「subagent 内からの spawn」)、
+この run の残りでは CO を spawn せず、controller が CO を兼ねる。
+
+- 対象: `nested_spawn_unavailable` を返したクラスタと未起動のクラスタすべて。切替時に人間へ 1 行で知らせる。
+- 順序: 1 クラスタずつ直列に実行する (parallel_clusters → serial_chains の chain 順)。
+- 手順: `${skill_dir}/cluster-orchestrator-directives.md` を Read し、そのクラスタの `ClusterOrchestratorInput` を入力として
+  フェーズ0 (Agent tool の確認は省く) 〜フェーズ8 を実行する。apply / post-check / review の expert は controller が直接 spawn する。
+- 終了: フェーズ8 の JSON を `$RUN_DIR/summary-<id_short>.json` に書き、ターンを終えずに次のクラスタへ進む。全クラスタ後に 2-D / 2-E へ。
+- context: 次のクラスタへ進むときは ClusterSummary だけを保持し、finding 全文・review raw data を後続の判断に持ち込まない。
+- 不変則は CO と同じ: コードは expert に編集させる、apply と review は別 subagent、model を決め直さない。
 
 ### 2-D. Post-run conflict check (実 diff の最終検証)
 

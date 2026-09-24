@@ -58,7 +58,11 @@ interface ClusterOrchestratorInput {
 }
 ```
 
-受け取り直後に fail-fast する。
+最初に自分のツール一覧に Agent tool があるかを確かめる。無ければ Issue 読込・worktree・GitHub に一切触れず、
+verdict `nested_spawn_unavailable` (`round: 0`, `critical_count: 0`, `pr_url: null`) でフェーズ8 へ進む
+(`_shared/expert-spawn.md`「subagent 内からの spawn」)。
+
+続けて fail-fast する。
 
 ```bash
 : "${CLUSTER_ID:?}" "${TASK_ID:?}" "${BRANCH:?}" "${SKILL_DIR:?}"
@@ -270,7 +274,8 @@ printf '%s' "$FOLLOWUP_FINDINGS_JSON" | jq -r --arg round "$REVIEW_ROUND" '
 interface ClusterSummary {
   cluster_id:          string;
   pr_url:              string | null;
-  verdict:             "approved" | "approve_with_followup" | "needs_human_decision" | "pr_open_degraded_mcp_channel";
+  verdict:             "approved" | "approve_with_followup" | "needs_human_decision" | "pr_open_degraded_mcp_channel"
+                     | "nested_spawn_unavailable";
   round:               number;
   followup_findings?:  string[];        // approve_with_followup 時のみ。follow-up finding の 1 行要約
   critical_count:      number;
@@ -281,6 +286,7 @@ interface ClusterSummary {
 ```
 
 `pr_open_degraded_mcp_channel` は approve を捏造しないための verdict で、controller は needs_human_decision と同様に人間へ提示する。
+`nested_spawn_unavailable` は何も実行していないことを示し、controller が本書を自分で実行する (op-run SKILL.md「2-Orchestrate-inline」)。
 
 ```bash
 jq -n \
