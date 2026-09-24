@@ -27,7 +27,7 @@ apply 中の expert は起票しない。起票要求は完了報告で返し、
 op scan dedup --findings-json drafts.json --json   # mcp channel では --input-json で既存 Issue 素材を注入
 ```
 
-- fingerprint は `dedup-policy.md` のとおり CLI で生成する。
+- fingerprint と `drafts.json` の形は `dedup-policy.md` のとおり (fingerprint は CLI で生成する)。
 - 既存 Issue と重複 → 起票しない (必要なら既存 Issue にコメント)。
 - 類似 (warn) → 対話経路は人間に提示して判断を仰ぐ。`--auto` は manual_review_bucket。
 - 同一 run の draft 同士で fingerprint が一致したら 1 件に統合する。

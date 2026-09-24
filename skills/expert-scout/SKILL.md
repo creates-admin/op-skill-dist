@@ -25,8 +25,10 @@ severity は起票可否に使わない (ラベルと本文の記述にのみ使
 起票前ゲートの正本は `~/.claude/skills/_shared/filing-gate.md` (op-report の起票前レビュー = scout の実在確認)。1 件ずつ次の順で行う。
 
 1. fingerprint 生成: `op core fingerprint --plain --domain <domain> --title "<title>" --file <files[0]> [--symbol <symbol>]`
-2. 重複チェック: finding を JSON に書き、`op scan dedup --finding-json draft.json --json` を実行する。
-   - 重複 → `duplicate` で返す。類似 (warn) → 起票せず `needs_human_decision` で返す (既存 Issue の URL を options に含める)
+2. 重複チェック: finding を 1 要素の配列で `draft.json` に書き (形は `~/.claude/skills/_shared/dedup-policy.md`)、
+   `op scan dedup --findings-json draft.json --json` を実行する。`domain` / `title` / `files[0]` / `symbols[0]` は 1 と同じ値にする。
+   `MISSING_REQUIRED_INPUT` なら `warnings` の指摘どおり入力を直して再実行する (手作業の検索で代替しない)。
+   - `details.results[0]` で判定する。重複 → `duplicate` で返す。類似 (warn) → 起票せず `needs_human_decision` で返す (既存 Issue の URL を options に含める)
    - `OP_GITHUB_CHANNEL=mcp` では既存 Issue を `mcp__github__search_issues` で取得して保存し `--input-json <file>` で渡す
      (`~/.claude/skills/_shared/github-channel.md` §6)
 3. 本文組立: `~/.claude/skills/_shared/pr-templates.md`「Issue 本文 (指示書フル版)」。marker は同ファイル「Issue 本文 hidden marker」、

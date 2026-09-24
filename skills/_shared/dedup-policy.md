@@ -11,6 +11,12 @@
 
 通常 finding の形式は `<domain>:<normalized_title>:<primary_file>:<symbol>` (symbol が空でも 4 segment)。
 
+`op scan dedup --findings-json` の入力は finding の配列 (1 件でも配列):
+`[{"domain": "<d>", "title": "<t>", "files": ["<path>[:LINE]", ...], "symbols": ["<symbol>", ...]}]`。
+`files` / `symbols` は文字列配列 (`file` / `symbol` の単数キーは読まれない)、`files` は 1 件以上必須。
+`domain` は `debug` / `refactor` / `feature` / `optimize` / `test` / `design` / `ux-ui` / `security` / `env` のいずれか。
+入力不備は `MISSING_REQUIRED_INPUT` で block され、不備の内容は `warnings` に出る。
+
 ## バッチ Issue 用 fingerprint (3-seg 形式)
 
 `bulk_group` ごとに finding をまとめて起票する bulk Issue (1 Issue = N 個の同種問題) は 3-seg
