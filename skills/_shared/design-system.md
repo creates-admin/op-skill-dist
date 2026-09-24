@@ -26,7 +26,23 @@ Claude Design (`/design` Artifact) は作り込み中の作業台であり、正
 ## repo ごとの設定
 
 `op-config.yaml` の `design_system` (`op-config-schema.md` §12)。導入は新規・既存 repo とも `/op-skill:op-component --init`
-(唯一の導入手順。既存 UI の見た目は変えずに整理・登録する)。
+(唯一の導入手順。既存 UI の見た目は変えずに整理・登録する)。既存プロジェクトの OP 移行全体は `/op-skill:op-adopt` から始める。
+
+置き場所は固定しない (フレームワークに従う)。固定するのは入口だけ:
+
+- 場所の地図: `op-config.yaml` の `design_system`
+- repo 固有の決まりと部品一覧: `.claude/rules/design-system.md` (雛形 `templates/rules-design-system.md`)。`paths` に部品・トークン・
+  契約・カタログの glob を持つので、それらを触ると自動で読み込まれる。閲覧は `/op-skill:op-rules`
+- 見た目の確認: カタログページ (実物)
+
+カタログの既定の置き場所 (既存のものがあればそれに従う):
+
+| スタック | カタログ | URL |
+|---|---|---|
+| Nuxt | `app/pages/catalog.vue` (または `pages/catalog.vue`) | `/catalog` |
+| Vue SPA (vue-router) | `src/pages/CatalogPage.vue` + route | `/catalog` |
+| Tauri + Vue | 上記と同じ (dev ビルドのみ表示) | `/catalog` |
+| Flutter | `lib/catalog/catalog_page.dart` (debug ビルドのみ) | アプリ内の隠しルート |
 
 未導入の repo では、各 skill は既存 UI を踏襲して進めてよい。UI を含む計画・起票・実装の提示時に
 「デザインシステム未導入: `/op-skill:op-component --init` を推奨」と 1 行添える。登録制 (確定部品だけを使う) は導入済みの repo でだけ強制する。

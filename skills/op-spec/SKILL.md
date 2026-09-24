@@ -45,6 +45,8 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "not a git repo"; 
 ls .claude/rules/*.md 2>/dev/null || echo "[.claude/rules] 正本なし — lazy 構築で作ります"
 ```
 
+`.claude/rules/_schema.md` か `00-constitution.md` が無い repo は OP 未移行。先に `/op-skill:op-adopt` (正本の土台と feature 地図) を案内する。
+
 ---
 
 ## フェーズ1: Worklist 構築

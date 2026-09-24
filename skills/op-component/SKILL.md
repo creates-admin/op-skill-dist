@@ -34,8 +34,10 @@ description: UI 部品を 1 つずつ作り込み、人間が OK したものだ
 2. 導入計画を人間に提示して承認を得る: カタログの形 (既存の Storybook 等があればそれを使う、無ければ実描画ページを新設)、
    トークン 3 層の置き場、契約の置き場、既存部品の扱い (見た目を変えずにカタログへ掲載し、人間の確認後に `status: 確定`、
    未確認のものは `status: draft`)。
-3. designer-expert が worktree で骨組みを作る: カタログページ、トークン 3 層のファイル (既存値の集約。新しい値は作らない)、
-   契約の置き場、既存部品のカタログ掲載、`op-config.yaml` の `design_system` (`_shared/op-config-schema.md` §12)。
+3. designer-expert が worktree で骨組みを作る: カタログページ (置き場所の既定は `_shared/design-system.md`)、トークン 3 層のファイル (既存値の集約。新しい値は作らない)、
+   契約の置き場、既存部品のカタログ掲載、`op-config.yaml` の `design_system` (`_shared/op-config-schema.md` §12)、
+   `.claude/rules/design-system.md` (雛形 `~/.claude/skills/_shared/templates/rules-design-system.md`。`[code]` の決定と部品一覧を埋める。
+   `.claude/rules/` が無い repo では先に `/op-skill:op-adopt` で正本の土台を作る)。
 4. カタログ上の実物を人間が確認し、確定してよい部品を指示 → `status: 確定` に更新 → PR (フェーズ4 と同じ)。
 5. 直書き値のトークン化や部品の統合など見た目・構造を変える整理は、この PR に含めず Issue として列挙する
    (op-plan / op-scan の通常の経路で扱う)。
@@ -75,6 +77,7 @@ description: UI 部品を 1 つずつ作り込み、人間が OK したものだ
   スクリーンショット取得を designer-expert に依頼する)。
 - 修正指示があれば designer-expert に戻す (フェーズ2 の worktree を継続)。
 - **OK ②** が出たら、designer-expert に `status: 確定` への変更と CHANGELOG 等 repo の記録規約への追記を指示する。
+  あわせて `.claude/rules/design-system.md` の「部品一覧」の該当行を追加・更新する (登録に伴う機械的な更新。規則の変更は op-spec)。
 
 ## フェーズ4: PR
 
