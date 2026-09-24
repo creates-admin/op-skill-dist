@@ -108,20 +108,22 @@ focus 不可視 / contrast 破綻に限る。
    見た目の目標にする。モックは目標であり、実装は既存 design system / component で行う
 3. `references/project-design-system-lookup.md` で既存 token / component / layout を探す。DS が見つからないときは
    hard-code で埋めず `needs_human_decision` で返す
-4. 既存資産で実装する。`~/.claude/skills/_shared/design-ng.md` の NG を 1 つも入れない (モックに含まれていても採用しない)
+4. 部品を作る・変えるとき (op-component) は契約 → 部品単位トークン → 部品本体 → カタログ掲載の順に作り、冒頭は `status: draft`。
+   `status: 確定` への変更は controller が指示したときだけ行う (`~/.claude/skills/_shared/design-system.md`)
+5. 既存資産で実装する。`~/.claude/skills/_shared/design-ng.md` の NG を 1 つも入れない (モックに含まれていても採用しない)
    - Vuetify: `createVuetify` の `theme.themes` と既存 `<v-btn>` / `<v-dialog>` 等
    - Tailwind: `tailwind.config.*` の token を class で参照
    - Flutter (Material 3): `Theme.of(context).colorScheme` / `textTheme`
    - その他: CSS Custom Properties の 3 層 (primitive → semantic → component)
-5. 実装する状態はモックの artboard と Issue scope にある状態だけ。6 状態 (loading / success / failure / empty / disabled /
+6. 実装する状態はモックの artboard と Issue scope にある状態だけ。6 状態 (loading / success / failure / empty / disabled /
    focus) を機械的に全実装しない。該当しない状態は `not_applicable_reason` を 1 行書く。既存 UI の visual refactor /
    token migration では新規状態を足さず、既存状態を壊していないかを `States Preserved` として確認する
-6. accessibility を実装する (`<button>` 要素、`:focus-visible`、`aria-*`、contrast)
-7. motion を使う場合は `references/motion-patterns.md` (token 経由 / transform・opacity のみ / reduced-motion fallback)。
+7. accessibility を実装する (`<button>` 要素、`:focus-visible`、`aria-*`、contrast)
+8. motion を使う場合は `references/motion-patterns.md` (token 経由 / transform・opacity のみ / reduced-motion fallback)。
    Tier ③④ (orchestrated / 物理 spring) は作り込まない。chart は `references/data-viz-patterns.md`
-8. 1〜2 ファイルごとにビルド検証。可能ならブラウザで目視確認
-9. `references/visual-quality-rubric.md` で自己採点
-10. `~/.claude/skills/_shared/apply-completion-checklist.md` の手順で完了 (code-review → commit)。commit 形式は
+9. 1〜2 ファイルごとにビルド検証。可能ならブラウザで目視確認
+10. `references/visual-quality-rubric.md` で自己採点
+11. `~/.claude/skills/_shared/apply-completion-checklist.md` の手順で完了 (code-review → commit)。commit 形式は
     `~/.claude/skills/_shared/commit-convention.md`。message に Components Used / Tokens Used / States Covered /
     Skipped States / States Preserved / Motion Applied (使用時) を書く。push はしない
 
@@ -181,7 +183,7 @@ Summary / Scan / Patrol モードは invoke しない (`code_review_invoked: fal
 | # | 観点 | NG 例 |
 |---|------|-------|
 | 1 | design token bypass | `color: #3b82f6` / `padding: 13px` 等の hard-coded 値が theme/token を回避 |
-| 2 | 共通 component bypass | 既存 `<Button>` を使わず素の `<button>` で同等 UI を再実装 |
+| 2 | 共通 component bypass | 既存 `<Button>` を使わず素の `<button>` で同等 UI を再実装。画面が未登録 (`status: draft`) の部品を使う |
 | 3 | 同一用途 UI の分裂 | 同じ「確認ダイアログ」が複数 component で別実装、見た目もバラバラ |
 | 4 | typography scale 不一致 | font-size / line-height / weight が token を外れて散在 |
 | 5 | spacing scale 不一致 | spacing token を使わない ad-hoc な margin / padding が画面ごとに散らばる |

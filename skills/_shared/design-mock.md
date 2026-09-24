@@ -1,6 +1,8 @@
 # デザインモック (/design Artifact)
 
-UI の見た目は文章で指示せず、`/design` Artifact のモックで人間と合意する。op-plan / op-architect / op-explore が使う。
+UI の見た目は文章で指示せず、`/design` Artifact のモックで人間と合意する。op-component (部品単体) / op-plan・op-architect
+(画面) / op-explore が使う。モックは作業台であり、正本は repo のカタログ (`design-system.md`)。Design System の同期はしない。
+画面のモックは登録済みの部品で組み、表現できないものには `ds:new` と注記して部品 issue に回す。
 
 ## 作成 (司令官 = main session が行う)
 

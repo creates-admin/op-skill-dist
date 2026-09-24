@@ -234,6 +234,11 @@ UI 列の surface は 5-0 のグルーピング結果。別画面が束ねられ
 
 UI issue が無ければフェーズ6 へ進む。Issue 本文に見た目の仕様 (レイアウト・配色・コンポーネント仕様) を文章で書かない。
 
+デザインシステム導入済みの repo では、画面は登録済み (確定) の部品だけで組む (`_shared/design-system.md`。未導入なら既存 UI を
+踏襲し、提示時に `--init` を推奨する)。モックの結果、登録済みの部品で表現できない見た目が
+要る場合は、その部品を **部品 issue** (`/op-skill:op-component` で作り込む。op-run には回さない) として分解に加え、
+画面 issue を `op-depends-on` でつなぐ。部品 issue の本文には「`/op-skill:op-component <部品名> --issue <N>` で実施」と書く。
+
 ### 5-0. surface グルーピング
 
 同じ画面 (surface) を触る UI issue 群はモックを 1 つ共有する。

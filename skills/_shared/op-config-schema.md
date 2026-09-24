@@ -24,6 +24,7 @@ project 単位の OP skill 設定ファイル `op-config.yaml` の schema 正本
 | `review` | §6.2 | review depth proportional lens gating |
 | `bulk_group` | §7 | バッチ起票の閾値 |
 | `design_system_baseline` | §11 | craft floor 一貫性検査の baseline |
+| `design_system` | §12 | カタログ・トークン・契約の所在と登録状態の書き方 |
 | `op_survey` | §13 | op-plan フェーズ2.5 discovery |
 
 **優先順位**: CLI flag > env var (`OP_QUALITY` / `OP_FABLE_DISABLE` / `OP_REVIEW_*` 等、対応する key のみ) > `op-config.yaml` > 既定値。
@@ -164,6 +165,22 @@ craft floor の一貫性検査が読む数値 baseline。Hard blocker 一覧の�
 | `grid_unit` | int | `8` | spacing が整数倍であるべき grid 単位 (px)。広範囲逸脱は Hard blocker |
 | `scale_ratios` | list[string] | `["1.2", "1.25", "1.333", "1.5"]` | type scale の許容 modular ratio 候補 (画面性格別に 1 つ選ぶ)。候補外の中間値混入は Hard blocker |
 | `max_accent_colors` | int | `3` | accent 色種類数の上限。超過は Hard blocker。未設定なら warning 扱い |
+
+---
+
+## §12 `design_system`
+
+`_shared/design-system.md` と op-component が読む。未設定なら designer-expert の Summary Mode で探す。
+
+| key | 型 | 例 | 意味 |
+|---|---|---|---|
+| `catalog` | string | `apps/site/app/pages/catalog.vue` | カタログページのファイル |
+| `catalog_url` | string | `/catalog` | ローカル起動時のカタログの URL パス |
+| `components` | glob | `apps/site/app/components/*.vue` | 部品本体 |
+| `contracts` | glob | `packages/types/src/*.ts` | 部品の契約 |
+| `tokens` | list[path] | `[apps/site/tokens/, apps/site/theme.ts]` | トークン定義 (primitive / semantic / 部品単位) |
+| `status_marker` | string | `status:` | 部品冒頭で登録状態 (`draft` / `確定`) を書く目印 |
+| `changelog` | path | `CHANGELOG.md` | 部品変更の記録先 (あれば) |
 
 ---
 

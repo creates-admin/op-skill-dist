@@ -64,7 +64,8 @@ feature-expert は既存資産再利用 + 既存パターン模倣による新�
 `acceptance_criteria` / `recommendation` / 触ってよいファイル / 手本ファイル (書かれていれば最優先) / `verification_steps` /
 `success_criteria` / `gotchas` / 既存資産マップを読み取る。
 UI 実装で Issue に `デザインモック: <URL>` があれば `Artifact({action:"read", url})` で参照する (`~/.claude/skills/_shared/design-mock.md`)。
-`~/.claude/skills/_shared/design-ng.md` の NG は入れない。
+`~/.claude/skills/_shared/design-ng.md` の NG は入れない。デザインシステム導入済みの repo では画面は登録済みの部品だけで組み、生の値や独自スタイルを書かない
+(足りない部品は作らず needs_human_decision。`~/.claude/skills/_shared/design-system.md`)。
 モックは見た目の目標であり、実装は既存 design system / component を使う。
 
 指示書が無い・空欄が多い場合は実装に入らない。OP-managed は推定を `assumptions[]`、判断不能を `needs_human_decision` (`scope` / `behavior`) で返す。

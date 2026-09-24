@@ -277,7 +277,9 @@ UI を持つ種別 (Tauri v2 + Vue 3 / Vue 3 SPA / Nuxt / Flutter) で `ui_impac
    新規画面でも業務ロジック・API・store 中心 → `feature-expert`。
 2. `_shared/design-mock.md` に従ってモックを作り、人間と合意して URL を確定する。同じ画面を触るマイルストーンはモックを共有し、
    共有のしかた (lead / follower と `参照: issue[k]`) は op-plan フェーズ5-0 に従う (key は `M<n>`)。
-3. 新規 surface で design token / base component が無い場合は、スケルトン直後に foundation 整備のマイルストーンを置くことを提案する。
+3. UI を持つプロジェクトでは、スケルトン直後に **デザインシステム基盤** のマイルストーンを置く。本文は
+   「`/op-skill:op-component --init` で実施」(`_shared/design-system.md`)。以降の部品は `/op-skill:op-component` で
+   1 つずつ登録し、画面マイルストーンは登録済みの部品に `depends_on` でつなぐ。
 
 ---
 
