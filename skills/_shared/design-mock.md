@@ -5,13 +5,14 @@ UI の見た目は文章で指示せず、`/design` Artifact のモックで人�
 ## 作成 (司令官 = main session が行う)
 
 1. 既存 UI がある repo では、必要に応じて designer-expert に **read-only** で既存の design token / component / layout パターンの
-   要約を依頼し、モックに反映する (新しい見た目を発明しない)。
+   要約を依頼し、モックに反映する (新しい見た目を発明しない)。作成前に `design-ng.md` を読む。
 2. `Artifact({action:"quickstart", intent:"design"})` を呼び、返る Design type の `type_url` で
    `Artifact({type_url, title, auto_open:"after_first_write"})` を作成する。以降は作成結果に含まれる type の指示に従って
    artboard を埋める。対象 repo の Design System Artifact があれば使う。
 3. 画面・状態ごとに artboard を分ける (通常 / 空 / 読み込み中 / エラー など、実装で必要な状態)。
    複数案を比較したいときは案ごとに artboard を並べる。**どの案を採るかは人間が決める。**
-4. 人間のフィードバックで更新し、合意したら URL を確定する。
+4. 人間に見せる前に `design-ng.md` の NG に 1 つも該当しないことを確認する (該当したら直してから見せる)。
+5. 人間のフィードバックで更新し、合意したら URL を確定する。
 
 ## 利用
 

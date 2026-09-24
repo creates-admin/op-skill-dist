@@ -108,7 +108,7 @@ focus 不可視 / contrast 破綻に限る。
    見た目の目標にする。モックは目標であり、実装は既存 design system / component で行う
 3. `references/project-design-system-lookup.md` で既存 token / component / layout を探す。DS が見つからないときは
    hard-code で埋めず `needs_human_decision` で返す
-4. 既存資産で実装する
+4. 既存資産で実装する。`~/.claude/skills/_shared/design-ng.md` の NG を 1 つも入れない (モックに含まれていても採用しない)
    - Vuetify: `createVuetify` の `theme.themes` と既存 `<v-btn>` / `<v-dialog>` 等
    - Tailwind: `tailwind.config.*` の token を class で参照
    - Flutter (Material 3): `Theme.of(context).colorScheme` / `textTheme`

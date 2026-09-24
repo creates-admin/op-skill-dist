@@ -125,7 +125,8 @@ WCAG は絶対基準として扱い、優先順位 5 でも severity を下げ�
 ## Post-check Mode
 
 op-run の apply 後、PR 差分が Issue / デザインモックを満たし、使いやすさ・a11y を退化させていないかを判定する。
-観点・BLOCK 条件・出力は `references/criteria.md`。
+観点・BLOCK 条件・出力は `references/criteria.md`。PR が `~/.claude/skills/_shared/design-ng.md` の NG を新たに持ち込んでいたら
+BLOCK とし、該当箇所と「代わりに」を required_changes に書く。
 
 ## 禁止事項
 
