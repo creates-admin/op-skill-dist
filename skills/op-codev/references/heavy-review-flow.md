@@ -1,20 +1,15 @@
 # op-codev: Review 選択 2 — review-expert (7-lens)
 
-SKILL.md「Review 選択 2」を選んだ場合のみ実行する。前提: `PR_NUMBER` / `BRANCH_NAME` (Step D で確定)。
-fence 間で変数は引き継がれないため、各 fence で値を明示的に設定する。
+SKILL.md「Review 選択 2」を選んだ場合のみ実行する。前提: `PR_NUMBER` / `BRANCH_NAME` (Step D で確定)。各 fence で値をリテラルで設定する。
 
 ## 1. active lens tier / model の決定
 
-`op-run/references/global-review-spawn.md` の §4-1-b (`REVIEW_MODEL` / `REVIEW_SENSITIVE_TOUCHED`) と
-§4-2-a-pre2 (`REVIEW_ACTIVE_LENS_JSON`) と同じ判定を行う (ロジックはそちらが正本)。安全弁:
-
-- **core lens (`security` / `spec` / `test-regression`) は全 tier で必須** — 省略・bundle 禁止
-- **sensitive PR は tier 分岐を無効化し 7-lens フル** — `REVIEW_SENSITIVE_TOUCHED != 0` なら `REVIEW_ACTIVE_LENS_JSON='[]'`
-- **lens gate は `REVIEW_SENSITIVE_TOUCHED` に key し `REVIEW_MODEL` には依存しない**
+op-run skill の `references/global-review-spawn.md` §4-1-b (`REVIEW_MODEL` / `REVIEW_SENSITIVE_TOUCHED`) と
+§4-2-a-pre2 (`REVIEW_ACTIVE_LENS_JSON`) の fence をそのまま流用する (不変則もそちらが正本)。
 
 ## 2. review_round の導出 (spawn 前必須)
 
-round は PR 通算の attempt 数 (head SHA で絞らない)。正本は `global-review-spawn.md` §4-2-pre。
+正本は op-run skill の `global-review-spawn.md` §4-2-pre。
 
 ```bash
 PR_NUMBER=<PR番号>
@@ -26,9 +21,11 @@ echo "REVIEW_ROUND=$((PREV_ROUND + 1))"
 初回 review のときだけ session id を生成し、以降の round でも同じ値を使う:
 `SESSION_ID="opcodev-$(date -u +%Y%m%dT%H%M%SZ)-pr${PR_NUMBER}-$(git rev-parse --short HEAD)"`。
 
-`REVIEW_ROUND > max_review_fix_rounds + 1` (= 3) になる場合は spawn せず、人間に判断を仰ぐ。
+`REVIEW_ROUND` が 3 を超える場合は spawn せず、人間に判断を仰ぐ。
 
 ## 3. review-expert spawn
+
+`<§rules>` / `<§4>` は SKILL.md フェーズ 3「spawn prompt 共通」のとおり展開する。
 
 ```javascript
 Agent({
@@ -44,10 +41,12 @@ Agent({
     models: { investigate: "<REVIEW_MODEL>", verify: "opus", gate: "opus" }
     review_round: <REVIEW_ROUND>
 
-    作業対象のパスが決まったら、対応する \`.claude/rules/<feature>.md\` を **Read ツールで**開いてから着手すること (cat / grep では正本が読み込まれない)。
+    <§rules>
 
     修正・commit・push は行わないでください。PR へのコメント投稿もしないでください。
     結果は review-finding payload (\`op help payload review-finding\`: meta + findings) で返してください。
+
+    <§4>
   `
 })
 ```
@@ -60,7 +59,7 @@ review_result と finding 一覧 (severity / lens / file:line / summary) を提�
 
 ## 5. approve / approve_with_followup: publish
 
-1. expert は commit-only のため、fix round があった場合は **controller が push** してから publish する。
+1. expert は commit-only のため、fix round があった場合は controller が push してから publish する。
    `git rev-parse HEAD` と `op pr view <PR> --include meta` の head SHA が一致するまで push する。
 2. publish (review state への attempt push + `pro-reviewed` 付与を atomic に行う):
 

@@ -6,8 +6,6 @@ UI / a11y / 視覚秩序の検証で、runtime (Playwright / dev server / screen
 - runtime が使える範囲は runtime で検証し、不能な項目は static 代理、それも不能なら `requires_runtime` にする。
 - static 代理が成立した項目は `evidence_grade: direct` として扱ってよい (Critical 起票可)。
 
----
-
 ## 検証対象 × 手段マトリクス
 
 | 領域 | 観点 | static 代理 | `requires_runtime` になる条件 |
@@ -30,22 +28,17 @@ UI / a11y / 視覚秩序の検証で、runtime (Playwright / dev server / screen
 | hierarchy | empty / loading / error state 描画 | template の条件分岐 (`v-if` / `&&`) と state 名 | props 経由の動的 state |
 | hierarchy | 高密度テーブルの行高 | `line-height` / `min-height` token | — |
 
----
-
 ## 「runtime に逃げてはいけない」項目 (Hard blocker 系)
 
-以下は static 代理が成立する。`requires_runtime` を理由に Hard blocker を素通りさせない。
-「runtime 不可だから採点しない」は不可。static 代理でも検出できないときに限り `requires_runtime` に降格する。
+以下は static 代理が成立する。runtime 不可を理由に Hard blocker を素通りさせず、static 代理でも検出できないときに限り `requires_runtime` に降格する。
 
 | Hard blocker | 必須 static 代理 |
 |--------------|---------------|
 | focus が見えない | `:focus-visible` ルールが定義されている、または `outline: none` を打ち消し済 |
 | keyboard 到達不可 | `<button>` 要素の使用、`<div @click>` の不在、`tabindex="-1"` の不在 |
 | contrast 不足 | token 値同士の WCAG 計算で 4.5:1 / 3:1 を満たす |
-| 状態が見えない | template に loading / success / failure / empty / disabled / focus の各分岐が存在 |
+| 状態が見えない | その UI に適用される状態 (loading / success / failure / empty / disabled / focus のうち該当するもの) の分岐が template に存在。該当しない状態は要求しない |
 | 危険操作が保護されていない | 確認 dialog component の参照、`@click` 直結ではない |
-
----
 
 ## runtime 不可時の報告
 

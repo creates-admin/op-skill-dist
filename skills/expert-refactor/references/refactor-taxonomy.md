@@ -11,11 +11,11 @@ bulk_group / subtype の正式カタログ。ここに無い bulk_group は使�
 | `refactor-large-file` | 1 ファイルが複数責務を抱え変更理由が複数化 | `structure-health.md`「Large File」 |
 | `refactor-large-component` | Vue / Flutter component が表示・状態・通信・変換・副作用を抱えすぎ | `structure-health.md`「Large Component」 |
 | `refactor-directory-structure` | feature / domain / shared / infra / UI の置き場が崩れ変更箇所を予測できない | `directory-structure.md` |
-| `refactor-boundary-mixing` | UI / domain / IO / persistence / infra / config の混線 | |
-| `refactor-duplicate-logic` | 同じ判断・変換・条件分岐が散っている | |
+| `refactor-boundary-mixing` | UI / domain / IO / persistence / infra / config の混線 | — |
+| `refactor-duplicate-logic` | 同じ判断・変換・条件分岐が散っている | — |
 | `refactor-dependency-direction` | import / 依存方向の逆流 (shared → domain、UI → infra 直接、backend path policy と frontend path construction の二重化) | `directory-structure.md`「Dependency Direction Rules」 |
 | `refactor-utils-dumping-ground` | utils / common / helpers が feature 固有処理のゴミ箱 | `directory-structure.md` |
-| `refactor-feature-leakage` | feature 固有の型・関数・path・状態が shared / global に漏れている | |
+| `refactor-feature-leakage` | feature 固有の型・関数・path・状態が shared / global に漏れている | — |
 | `refactor-dead-code` | active path と紛らわしい dead code が変更判断を誤らせる | `structure-health.md`「Dead Code」 |
 
 ## subtype

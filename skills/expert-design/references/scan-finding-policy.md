@@ -1,6 +1,6 @@
 # Scan / Patrol Finding Policy (design domain)
 
-scan / patrol で何を起票してよいかの基準。起票範囲は観測可能な design system 破綻に厳格に絞る。
+scan / patrol で何を起票してよいかの基準。起票範囲は観測可能な design system 破綻に絞る。
 共通の報告ルールは `~/.claude/skills/_shared/severity-rubric.md`、ux-ui ドメインの基準は expert-ux-ui-audit skill。
 
 ## UI surface が無い scope は即終了
@@ -14,16 +14,21 @@ UI surface が 1 つも無ければ、すぐに `{"findings": []}` を返す。
   Dockerfile / `.github/` / terraform
 - Tauri 等の mixed scope は Glob で UI surface の有無を確認してから判断する
 
-## 起票してよい (Critical / High のみ)
+## severity
 
-- token bypass / 共通 component bypass が複数箇所に広がっている (confirmed 5 箇所以上で High。主要 surface の 50% 以上で観測、
-  または theme 切替を物理的に阻害していれば Critical 検討)
-- hard-coded style が theme 切替・dark mode・brand 切替を物理的に不可能にしている
-- 同じ用途の UI が複数実装に分裂し、ユーザーが「同じ操作」と認識できない
-- visual hierarchy の崩壊が業務上の判断を妨げている (重要操作が補助操作に埋もれる)
-- 一画面の design 不一致が他画面と並んだとき認知負荷を生む
-- 見た目優先の実装が原因の contrast 破綻 / focus 不可視
-- design system の将来変更を妨げる構造的負債
+`severity-rubric.md`「判定の手順」step 3〜4 の design 版。
+
+- Critical: design system の構造的負債が theme / dark mode / brand 切替を物理的に不可能にしている /
+  bypass が主要 surface の 50% 以上に広がり confirmed 30 件以上 / 共通 component bypass の蔓延がユーザーに「同じ操作」と認識されない実害を生んでいる
+- High:
+  - token bypass / 共通 component bypass が confirmed 5 件以上
+  - 同じ用途の UI が複数実装に分裂している
+  - visual hierarchy の崩壊が業務上の判断を妨げている (重要操作が補助操作に埋もれる)
+  - 色記号体系の崩壊 (success / error の意味揺れ)
+  - 一画面だけ別プロダクト化した design 不一致
+  - 見た目優先の実装が原因の contrast 破綻 / focus 不可視
+
+`design_principle_violated` (SKILL.md の観点 1〜9) と `bypass_count` / `affected_screens` の観測値を示せないなら起票しない。
 
 ## 起票してはいけない
 
@@ -33,12 +38,8 @@ UI surface が 1 つも無ければ、すぐに `{"findings": []}` を返す。
 | 単発の 2px ずれ | 影響が観測できない (bulk で 5 件以上なら別) |
 | design system が未定義な領域での主観提案 | 定義がないなら破綻ではない |
 | 「将来こうなったら」 | 観測事実 + 影響経路がない |
-| 使いやすさ・必須 state・a11y 全般 | ux-ui-audit-expert の領域 |
+| 使いやすさ・必須 state・a11y 全般 | ux-ui-audit-expert の領域 (見た目優先の実装が原因の contrast 破綻 / focus 不可視だけは designer が起票してよい) |
 | 未読箇所の推測 | 見たものだけ報告する |
-
-### patrol 限定の追加制約
-
-好みのデザイン批評 / 命名・スタイルの好み / 「将来不安」だけの指摘 / 全体 redesign 提案 / Medium・Low は一切出さない。
 
 ## bulk_group 命名規則
 
@@ -57,7 +58,7 @@ design:visual-hierarchy-break # 重要度と視覚重みの不一致
 
 ## カウント (candidate / excluded / confirmed)
 
-raw grep 件数で判定しない。3 つのカウンタを分ける。
+raw grep 件数で判定しない。
 
 | フィールド | 意味 |
 |----------|-----|
@@ -78,7 +79,7 @@ raw grep 件数で判定しない。3 つのカウンタを分ける。
 **/brand/** **/chart-config/** **/*.chart.{ts,js,json}
 ```
 
-追加 allowlist は対象 repo の CLAUDE.md / `docs/design/scan-overrides.md` が上書きする。
+追加 allowlist と閾値は、対象 repo の CLAUDE.md / `docs/design/scan-overrides.md` があればそちらが上書きする。
 
 | confirmed_bypass_count | 判定 |
 |---|---|
@@ -98,17 +99,10 @@ raw grep 件数で判定しない。3 つのカウンタを分ける。
 
 共通 component の bypass は、それを使っている画面数で数える。判別不能な monorepo では「画面とみなした path」を evidence に列挙する。
 
-## evidence_grade の design 例
+## evidence_grade
 
-定義は severity-rubric。design での例:
-
-- `direct`: `Button.vue:42` で `color: #3b82f6` を観測
-- `inferred`: 親で hard-code、子で再定義していそう
-- `requires_runtime`: theme 切替後の contrast、SR 読み上げ順 (`reproduction_hint` 必須)
-
-static 代理が成立すれば `direct` にしてよい (`~/.claude/skills/_shared/runtime-verification.md`): focus 視認性
-(`:focus-visible` 定義 + `outline: none` 打ち消し不在) / 定数 token 同士の contrast / theme 連動 (hard-code 色 grep 0 件) /
-keyboard 到達 (`<button>` + `tabindex="-1"` 不在)。Hard blocker を `requires_runtime` に逃がさない。
+定義は severity-rubric、static 代理は `~/.claude/skills/_shared/runtime-verification.md`。
+例: `direct` = `Button.vue:42` で `color: #3b82f6` を観測 / `requires_runtime` = theme 切替後の contrast (`reproduction_hint` 必須)。
 
 ## scan の経済性 (打ち切り基準)
 
@@ -136,32 +130,3 @@ canonical schema と envelope は `~/.claude/skills/_shared/expert-spawn.md`。`
 - `recommended_runner: designer-expert` 固定
 - `post_check_expert`: UI ファイルを触るなら `ux-ui-audit-expert`、そうでなければ `null` (省略しない)
 - `blocking` / `blocking_reason`: 新規変更が既存 debt を悪化させるなら `true` + 理由、そうでなければ `false` + `null`
-
-```json
-{"findings": [
-  {
-    "title": "<検出パターン>が<N>箇所に散在し<影響>を阻害",
-    "severity": "high",
-    "domain": "design",
-    "files": ["<path>:<line>"],
-    "design_principle_violated": "観点 <1-9>: <principle 名>",
-    "bypass_count": "<confirmed_bypass_count>",
-    "affected_screens": "<画面数>",
-    "bulk_group": "design:<category>",
-    "recommended_runner": "designer-expert",
-    "post_check_expert": "ux-ui-audit-expert",
-    "blocking": false,
-    "blocking_reason": null
-  }
-]}
-```
-
-(canonical 必須の残りフィールドは省略せず埋める。上は design 固有部分のみ)
-
-## 起票前の自己点検
-
-- [ ] 観測事実か / ファイル・行・token を示せるか
-- [ ] 影響範囲 (画面数 / ユーザー操作) を 1 文で説明できるか
-- [ ] severity_reason を書けるか
-- [ ] ux-ui-audit-expert の責務や DS 未定義領域に踏み込んでいないか
-- [ ] patrol なら Medium / Low を出していないか

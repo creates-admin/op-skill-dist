@@ -1,15 +1,14 @@
 # op-run plan mode gate (フェーズ -1 / フェーズ 1-3)
 
 対話モード専用。`--auto`、または他 skill から OP-managed で起動された場合は plan mode を使わず、
-`--auto` の除外ルール (競合あり / Critical 系 / `low` confidence を除外) で進む。
+SKILL.md「実行モード」の `--auto` 除外規則で進む。
 
 ## フェーズ -1: EnterPlanMode
 
 起動直後、フェーズ0 の前に `EnterPlanMode` を呼ぶ (既に plan mode なら no-op)。ユーザーが拒否した場合は
-その旨を伝え、以下の read-only 規律を自分で守って続行する。
+その旨を伝え、次の規律を自分で守って続行する。
 
-- 可: Read / Grep / Glob、`op issue list|view` / `op pr view` などの読み取り、git の読み取り系、read-only の subagent。
-- 1-3 の承認後に行う: Issue / PR への書き込み、`git push` / `op pr create`、worktree 作成、apply spawn。
+- Issue / PR への書き込み、`git push` / `op pr create`、worktree 作成、apply spawn は 1-3 の承認後に行う。
 - 例外: 1-2-e の `op claim acquire` は計画提示前に行う (他 instance が作業中の Issue を plan から外すため)。
 
 ## フェーズ 1-3: ExitPlanMode + plan file
@@ -45,6 +44,8 @@ model: 全 cluster Opus 天井 (Fable 昇格なし) | <id_short> のみ Fable �
 | ID | Issue | 理由 |
 ### 人間判断待ち (manual_review_bucket、apply しない)
 | Issue | label | 理由 |
+### op-component で実施 (apply しない)
+| Issue | 部品名 |
 
 ---
 
@@ -56,21 +57,12 @@ worktree provision → 探知 (2-A) → Stage 2 再検出 (2-B) → CO 起動 (a
 <依存マニフェスト / 基盤ファイルを触るクラスタ、Stage 2 で直列化されうるクラスタ、Critical 機能を触るクラスタ>
 ```
 
-expert は 1-2-d 正規化後の名前を出す。cluster table には confidence と根拠を必ず含める。
+expert は 1-2-d 正規化後の名前を出す。cluster table には confidence と根拠を含める。
 
-クラスタ別解説の例 (そのまま流用せず対象に合わせて書く):
+### 1-3-2. ExitPlanMode の承認
 
-> auth-1 は #42 #43 の login 失敗バグ 2 件を一括修正する。src-tauri/src/auth/ 配下のセッショントークン処理を
-> debug-expert が直し、OAuth コールバック後にセッションが失われる現象が解消される。他クラスタとファイル重複なしのため並列実行する。
-
-### 1-3-2. ExitPlanMode 呼び出しと 4 オプション挙動
-
-| 承認オプション | フェーズ2 以降 |
-|---|---|
-| **Approve and accept edits** (推奨) | permission prompt なしで worktree 作成 / spawn / PR open が進む |
-| Approve and start in auto mode | auto mode の classifier 判定で進む (ブロックされたら prompt)。`--auto` フラグとは別物で、除外ルールは適用しない |
-| Approve and review each edit manually | 各 spawn / push / PR 作成ごとに prompt |
-| Keep planning with feedback | plan mode に留まる (1-3-3) |
+どの承認オプションでもフェーズ2 以降に進む (auto mode で承認されても `--auto` の除外規則は適用しない)。
+「Keep planning with feedback」は 1-3-3。
 
 ### 1-3-3. Keep planning with feedback
 

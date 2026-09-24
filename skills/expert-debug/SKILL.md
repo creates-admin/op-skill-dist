@@ -1,32 +1,21 @@
 ---
 name: expert-debug
-description: debug-expert agent の方法論教科書。Rust / Tauri v2 / Vue 3 / TypeScript / Flutter を主対象とする不具合探知・最小修正エージェントの調査手順・バグパターン・検証ラダーを提供する。直接 invoke は想定せず、agent.md の skills フィールド経由で自動プリロードされる前提で動作する知識ベース。
+description: debug-expert に preload される方法論。
 ---
 
 # expert-debug: debug-expert の知識ベース
 
-調査メソドロジー (5 ステップ)・3-bucket triage・Severity Policy・Repro Lock・Verification Ladder に従って自走する。
-
 | mode / 状況 | Read する references |
 |---|---|
-| scan (detect) | `references/patterns.md`「catalog 索引 (top 20)」節 |
-| scan で patrol_sample / candidate_report / bulk_group 付与 | `references/scan-contract.md` §1 / §2 / §3 |
+| scan (detect) | `references/patterns.md`「catalog 索引 (top 20 — active stack 集中版)」節 |
+| scan で patrol_sample / bulk_group 付与 | `references/scan-contract.md` §1 / §3 |
 | apply (fix) で再現テストを書く | `references/tools.md`「再現テストの言語別最小テンプレ」節 |
-| Level 1 以上の検証 | `references/tools.md` + `~/.claude/skills/_shared/project-profile.md`「検証コマンド (スタック別)」 |
-
----
-
-## Technology Profile
-
-- 対象: Rust / Tauri v2 / Vue 3 (Composition API + Pinia + Vuetify) / TypeScript / Dart / Flutter。
-- Python / FastAPI: `pyproject.toml` / `requirements.txt` / FastAPI import がある repo でのみ報告。
-- React / Go: 報告しない (`ignored_noise`)。
 
 ---
 
 ## Severity Policy (報告閾値)
 
-報告は **Critical / High のみ**。共通骨格は `~/.claude/skills/_shared/severity-rubric.md`「scan 報告ルール (共通)」節 (scan 前に Read)。
+報告ルールは `~/.claude/skills/_shared/severity-rubric.md`「scan 報告ルール (共通)」節 (scan 前に Read)。debug 固有の基準:
 
 ### Critical
 
@@ -48,24 +37,20 @@ description: debug-expert agent の方法論教科書。Rust / Tauri v2 / Vue 3 
 - Flutter で dispose 後に setState / Stream 受信
 - Vue state と Rust backend state の不整合 (二重管理 / 競合)
 
-Medium / Low は報告しない (`ignored_noise`)。
+Python / FastAPI は `pyproject.toml` / `requirements.txt` / FastAPI import がある repo でのみ報告する。
 
 ---
 
-## 核心メソドロジー (5 ステップ)
+## 核心メソドロジー
 
 コードを読んで推測せず、実際の値を確認する。静的分析は仮説立案、検証は実行時データで行う。
 
-1. **症状 → 仮説 (3〜5 個)**: エラー・スタックトレース・再現手順から原因カテゴリを推定し、データフロー (入力 → 処理 → 出力) を追う。
-   Tauri アプリでは「Vue → invoke → Rust command → fs/proc → Result → Vue」の境界を最初に疑う。有力仮説から検証する。
-2. **テスト駆動検証 (主要手段)**: 該当関数に最小テストを書き、境界値・空・null・型不一致・日本語パス・大量件数で発生点を特定する。
-3. **ログ挿入 (フォールバック)**: テストで届かない領域 (UI 連携・状態依存・タイミング・OS 差分) のみ。
-   仮説を 1 回の再現で切り分けられる最小の点 (データ入口 / invoke 境界の serde 前後 / 条件分岐 / データ出口) に挿す。
-   **`[DEBUG]` プレフィックス必須、修正後に全削除。**
-4. **最小修正**: リファクタを混ぜない。例外を握りつぶさない (Rust は `?` / Result、TS は catch でログ + 上位へ再 throw)。
-   修正理由をコメント 1 行。1〜2 ファイルごとに Level 1〜2 を回す。
-5. **リグレッション確認**: Repro Lock の `repro_command` を再実行して解消を確認。影響範囲の既存テストを実行。
-   `grep '\[DEBUG\]'` で 0 件を確認。残存リスクを完了報告に書く。
+- 仮説はデータフロー (入力 → 処理 → 出力) で立てる。Tauri アプリでは「Vue → invoke → Rust command → fs/proc → Result → Vue」の境界を最初に疑う。
+- 検証の主手段は該当関数への最小テスト (境界値・空・null・型不一致・日本語パス・大量件数)。
+- ログ挿入はテストで届かない領域 (UI 連携・状態依存・タイミング・OS 差分) のみ。仮説を 1 回の再現で切り分けられる点
+  (データ入口 / invoke 境界の serde 前後 / 条件分岐 / データ出口) に挿す。`[DEBUG]` プレフィックスを付け、修正後に全削除する。
+- 修正は最小。リファクタを混ぜない。例外を握りつぶさない。コメントは `~/.claude/skills/_shared/project-profile.md`「コメント作法」
+  (修正理由は commit message に書く)。
 
 ---
 
@@ -96,133 +81,37 @@ Tauri / Flutter / ファイル処理では条件依存性を最初に確認す�
 
 `symptom` / `expected` / `actual` / `affected file` または `suspected entrypoint` / `repro_command` または `repro_steps` が埋まるまで修正に入らない。
 
-不足時:
-
-- コードを変更しない。
-- Direct Mode: 不足項目を人間に提示してよい。
-- OP-managed Mode: 質問せず、`assumptions[]` と `needs_human_decision` (`decision_type: "behavior"`) を完了報告に返す。
-- 例外: 静的に Critical と断定できる panic / data loss / path traversal は最小修正してよい
-  (コミットメッセージに「静的 Critical のため Repro Lock 不完全のまま修正」、OP-managed では `assumptions` にも記録)。
+不足時はコードを変更せず、不足項目を `assumptions[]` と `needs_human_decision` (`decision_type: "behavior"`) で返す (Direct Mode では人間に提示してよい)。
+例外: 静的に Critical と断定できる panic / data loss / path traversal は最小修正してよい
+(commit message に「静的 Critical のため Repro Lock 不完全のまま修正」、OP-managed では `assumptions` にも記録)。
 
 ---
 
 ## 実行モード
 
-scan = detect mode、apply = fix mode。
-
 ### scan (detect) モード — read-only
 
-- Read / Grep / Glob のみ。scope mode (`explicit_paths` / `changed_files` / `patrol_sample`) は
-  `~/.claude/skills/_shared/expert-spawn.md`「scan scope mode 契約 (3 モード)」節 (探索対象を選ぶ前に Read)。
-- patrol_sample では対象を選ぶ前に `references/scan-contract.md` §1 を Read する。
-
-#### 内部 triage: 3-bucket 分類
-
-この分類を経てから JSON にマップする。
-
-1. **confirmed_findings** — 静的証拠 (コード引用・呼出経路) だけで Critical / High と断定できる → `{"findings": [...]}` に入れる。
-2. **investigation_candidates** — 怪しいが重大さが入力データや実行条件に依存する → 既定では出力しない。
-   `candidate_report: true` が明示された時だけ `references/scan-contract.md` §2 に従う。
-3. **ignored_noise** — React / Go 由来 / Medium・Low / 静的根拠が弱い / 規約どおりのコード → 捨てる。
-
-#### scan 出力
-
-`~/.claude/skills/_shared/expert-spawn.md`「scan 出力 envelope 契約」節と scan-finding schema に従う。debug 固有の値:
-
-- `domain: "debug"` / `recommended_runner: "debug-expert"`
-- `post_check_expert`: security 境界が絡めば `security-expert`、それ以外は `null`
-- `bulk_group`: 付与前に `references/scan-contract.md` §3 を Read
-- 検出 0 件なら `{"findings": []}`
+- scope mode は `~/.claude/skills/_shared/expert-spawn.md`「scan scope mode 契約 (3 モード)」節。patrol_sample では対象を選ぶ前に `references/scan-contract.md` §1 を Read する。
+- 静的証拠 (コード引用・呼出経路) だけで Critical / High と断定できるものだけを findings に入れる。入力データや実行条件に依存するもの、React / Go 由来、規約どおりのコードは捨てる。
+- 出力値: `domain: "debug"` / `recommended_runner: "debug-expert"` / `post_check_expert`: security 境界が絡めば `security-expert`、それ以外は `null` /
+  `bulk_group`: 付与前に `references/scan-contract.md` §3 を Read。
 
 ### apply (fix) モード — worktree 隔離
 
-契約:
+1 Issue = 1 bug class = 1 minimal fix。複数種類のバグ・リファクタ・仕様変更を混ぜない。
 
-- 1 Issue = 1 bug class = 1 minimal fix。複数種類のバグ・リファクタ・仕様変更を混ぜない。
-- 失敗する再現テストを先に書き (Repro Lock の `repro_command` と一致させる)、最小修正後に同じテストが通ることを確認する。
-- 実行できなかった検証は理由と残存リスクを完了報告に書く。
-
-手順:
-
-1. Issue 指示書 (`expert-spawn.md` の apply 入力契約) を把握する。
-2. Repro Lock を埋める。
-3. 5 ステップで自走する (OP-managed では質問せず、不足は `assumptions[]` / `needs_human_decision` / `blocked_actions[]` で返す)。
-4. 再現テスト (書く前に `references/tools.md`「再現テストの言語別最小テンプレ」を Read) → 最小修正 → pass 確認。
-5. 1〜2 ファイルごとに Level 1〜2、修正完了後に Level 3 を 1 回。
-6. `[DEBUG]` ログ 0 件を確認し、リグレッション確認。
-7. commit (形式は `~/.claude/skills/_shared/commit-convention.md`。修正理由・Repro Lock 要点・残したテストの判定根拠を message に)。push しない。
-8. 完了報告: 修正ファイル / Level 別検証結果 / 残したテスト / 残存リスク / 実行できなかった検証。
-
----
-
-## Verification Ladder (検証梯子)
-
-| Level | 種類 | Rust | Vue/TS | Flutter | Tauri v2 統合 |
-|---|---|---|---|---|---|
-| 0 | static scan | `rg` 危険パターン | 同左 | 同左 | 同左 |
-| 1 | type / lint | `cargo check` / `cargo clippy -- -D warnings` | `vue-tsc --noEmit` / `eslint .` | `flutter analyze` | frontend / backend 各 Level 1 |
-| 2 | unit test | `cargo test` | `vitest run` | `flutter test` | `cd src-tauri && cargo test` |
-| 3 | package build | `cargo build` | `npm run build` | `flutter build <target>` (必要時) | backend + frontend の dev build |
-| 4 | integration | — | — | — | `tauri build` / `tauri dev` (capability の完全チェックを含む) |
-| 5 | E2E / 実機 | — | — | `flutter test integration_test/` | Tauri WebDriver / Windows 実機 / InDesign COM / network drive |
-
-- detect mode は Level 0 のみ (`severity-rubric.md`「scan 実行レベル」。scan で最初のコマンドを打つ前に Read)。
-- fix mode は Level 1〜3。壊し得る境界で決める: 型・シグネチャ → Level 1 / ロジック・分岐・状態遷移 → Level 2 /
-  依存・ビルド構成・IPC 境界・公開 API → Level 3。迷ったら上に倒す。
-- Level 4 は司令官が明示した場合のみ。Level 5 は fix mode で実施しない (dedicated Issue)。
-- コマンドは存在確認してから実行。ツール非導入は「未実行: Level X (理由)」として報告する。
-
----
-
-## バグパターン catalog
-
-探知優先度 1 の 4 領域: Tauri v2 境界 (最頻出) / Rust / Vue 3 + TypeScript / Flutter / Dart。
-scan では当たりを付ける前に `references/patterns.md`「catalog 索引 (top 20)」節を Read する (検出兆候の正本)。
+1. Repro Lock を埋める。
+2. 失敗する再現テストを先に書く (Repro Lock の `repro_command` と一致させる。書く前に `references/tools.md`「再現テストの言語別最小テンプレ」を Read)。
+3. 最小修正 → 同じテストが通ることを確認する。1〜2 ファイルごとに Level 1〜2、修正完了後に Level 3 を 1 回
+   (`~/.claude/skills/_shared/project-profile.md`「Verification Ladder」)。
+4. `repro_command` を再実行して解消を確認し、影響範囲の既存テストを実行する。`rg '\[DEBUG\]'` で 0 件を確認する。
+5. commit (debug の必須節は `~/.claude/skills/_shared/commit-convention.md` §4)。完了報告に残存リスクを書く。
 
 ---
 
 ## テスト残存ルール (test-expert との境界)
 
-debug-expert が残すのは修正に直結するリグレッションテストのみ。周辺カバレッジ穴・ゴミ整理・fixture 改善は test-expert へ。
+残すのは修正に直結する再現テスト 1 本だけ。仮説検証テストは削除し、情報は commit message に残す。
+周辺のエッジケース・カバレッジ拡張・fixture 整理は完了報告の `delegated_test_issue_request[]` で test-expert 向けに要求する (起票はしない)。
 
-| テスト種類 | 扱い |
-|---|---|
-| 再現テスト (本命) | 残す |
-| 仮説検証テスト | 削除 (情報はコミットメッセージへ) |
-| エッジケース 1 本 | 残す |
-| エッジケース複数 | test-expert へ Issue 起票 |
-
----
-
-## 実装完了後の code-review invoke
-
-手順は `~/.claude/skills/_shared/apply-completion-checklist.md`。skip 条件なし (apply 後は必ず invoke)。
-
----
-
-## CLAUDE.md 規約との整合
-
-共通骨格は `~/.claude/skills/_shared/project-profile.md`「対象 repo 規約への準拠 (worker 共通)」節 (apply で最初のファイルを編集する前に Read)。debug 固有:
-
-- 修正で深いネストを増やさない (ガード節優先)
-- 修正理由をコメント 1 行
-- バグ修正とリファクタは別 PR
-- 実行不能だった Level を完了報告に書く
-
----
-
-## 参照ドキュメント
-
-| Path | 用途 |
-|---|---|
-| `~/.claude/skills/_shared/runtime-contract.md` | runtime spawn 境界 / apply 可否 |
-| `~/.claude/skills/_shared/expert-spawn.md` | scan-finding schema / envelope / apply 入力契約 |
-| `~/.claude/skills/_shared/common-setup.md` | Explore 委譲プロトコル |
-| `~/.claude/skills/_shared/read-economy.md` | 再 Read 抑制 (R1〜R5) |
-| expert-ux-ui-audit skill の `references/a11y-checklist.md` | UI 起因バグ (focus / aria / keyboard) の確認観点 |
-
----
-
-## Direct Expert Run (直接実行時の対話型入口)
-
-共通手順は `~/.claude/skills/_shared/invocation-mode.md`。debug-expert は **scan-first**: 原因特定後、ユーザー許可があれば apply。
+UI 起因バグ (focus / aria / keyboard) の確認観点は expert-ux-ui-audit skill の `references/a11y-checklist.md`。

@@ -1,19 +1,19 @@
 ---
 name: op-doctor
-description: コードでなく「環境・依存・toolchain・lockfile・CI・OSV」の repo 健康診断を行う独立 OP skill。env inventory / command matrix (build・test・lint・audit の存在) / 依存 + OSV summary / lockfile 整合 / toolchain drift / CI-local 不一致 の 6 項目を診断し、OP Doctor Report (人間可読) + Critical/High のみ recommended Issue を起票する。Direct Mode 固定。「op-doctor」「健康診断」「環境診断」「doctor」「依存チェック」「toolchain」「lockfile」等のキーワードで起動。
+description: コードでなく「環境・依存・toolchain・lockfile・CI・OSV」の repo 健康診断を行う独立 OP skill。6 項目を診断して OP Doctor Report を出し、Critical/High のみ Issue を起票する。Direct Mode 固定。「op-doctor」「健康診断」「環境診断」「doctor」「依存チェック」「toolchain」「lockfile」等のキーワードで起動。
 ---
 
 # op-doctor: 環境・依存・toolchain の repo 健康診断
 
 repo の環境健全性を診断し、OP Doctor Report を出力する。コードの欠陥は見ない (op-scan / op-patrol の責務)。
-診断は read-only。Issue 起票はユーザー承認後のみ (`--auto` を除く)。Direct Mode 固定 (`skills/_shared/invocation-mode.md`)。
+診断は read-only。人間起動専用 (`~/.claude/skills/_shared/invocation-mode.md`「Direct 固定 skill に op_managed が渡った場合」)。
 
 ## 起動
 
 ```text
-/op-doctor                          # 6 項目を診断 → Report 表示 → 承認後に Critical/High を起票
-/op-doctor --auto                   # Critical/High を自動起票 (auto-policy 準拠)
-/op-doctor --check deps,lockfile    # 診断項目を限定 (項目名は下表の --check 名)
+/op-skill:op-doctor                          # 6 項目を診断 → Report 表示 → 承認後に Critical/High を起票
+/op-skill:op-doctor --auto                   # Critical/High を自動起票 (auto-policy 準拠)
+/op-skill:op-doctor --check deps,lockfile    # 診断項目を限定 (項目名は下表の --check 名)
 ```
 
 ## 診断 6 項目
@@ -31,7 +31,7 @@ CLI は `op doctor env` のみ。項目 5 / 6 は controller がその生デー�
 
 ## フェーズ0: 環境確認
 
-`skills/_shared/common-setup.md` の git/gh check に従う。
+`~/.claude/skills/_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」に従う。gh channel で未認証なら中断する。
 
 ## フェーズ1: 決定論 inventory
 
@@ -52,8 +52,8 @@ OK / WARN / FAIL と severity は controller がフェーズ3で判定する。
 | コマンド失敗 / toolchain 互換の深い推論が要る | `op-skill:debug-expert` (失敗コマンドと出力、`toolchains[]` を渡す) |
 | tool install policy / org policy 等の方針判断 | spawn せず `needs_human_decision` |
 
-spawn schema は `skills/_shared/expert-spawn.md`。env-expert は spawn しない。routing 値に env-expert が出たら
-`skills/_shared/planned-experts.md` の substitute に normalize する。
+spawn prompt は `~/.claude/skills/_shared/spawn-prompt-common.md` §1〜§5 (exploration-only variant) を含め、返却は `expert-spawn.md` の canonical schema。
+env-expert は spawn しない。routing 値に env-expert が出たら `~/.claude/skills/_shared/planned-experts.md` の substitute に normalize する。
 
 ## フェーズ3: OP Doctor Report
 
@@ -75,11 +75,10 @@ spawn schema は `skills/_shared/expert-spawn.md`。env-expert は spawn しな�
 - [Medium] <summary>
 ```
 
-- severity は `skills/_shared/severity-rubric.md` で判定する。
+- severity は `~/.claude/skills/_shared/severity-rubric.md` で判定する。
 - 診断ツールが PATH に無い項目は FAIL にせず SKIPPED (理由付き) とする。
 
 ## フェーズ4: 起票
 
-起票は `skills/_shared/filing-gate.md` に従う。Critical / High のみ起票し、Medium 以下は Report に記すだけ。
-対話では Report 提示後にユーザー承認を得てから起票する。`--auto` は `skills/_shared/auto-policy.md` の 8 条件をすべて満たすものだけを起票し、
-`requires_runtime` / `inferred` / low confidence は manual_review_bucket に残す。
+起票は `~/.claude/skills/_shared/filing-gate.md` に従う (対話は Report 提示後の承認、`--auto` は同 §1)。Critical / High のみ起票し、Medium 以下は Report に記すだけ。
+marker とラベルは `pr-templates.md`「domain → marker / ラベル表」(deps 系は `security`、toolchain / command / CI 系は `debug` の domain で扱う)。

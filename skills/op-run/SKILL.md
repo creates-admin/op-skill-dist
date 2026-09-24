@@ -16,26 +16,19 @@ op-run はマージしない。マージは人間が `/op-skill:op-merge` (監�
 
 ## 不変則
 
-- **司令官 (main Claude) はコードを直接編集しない。** apply / fix / post-check / review はすべて subagent に委譲する。
-- **コンフリクトは起こさない**: Stage 1 (1-2) / Stage 2 (2-B、探知後) / 実 diff (2-D) の 3 段で検出する。どれも省略しない。
-  直列化は prompt hint ではなく **起動順 (serial_chains の controller 側直列ループ)** で保証する。
-- **apply と review は別 context** (別 Agent・別 worktree)。同じセッションで reviewer を演じない。
+- 司令官 (main Claude) はコードを直接編集しない。apply / fix / post-check / review はすべて subagent に委譲する。
+- コンフリクトは起こさない: Stage 1 (1-2) / Stage 2 (2-B、探知後) / 実 diff (2-D) の 3 段で検出する。どれも省略しない。
+  直列化は prompt hint ではなく起動順 (serial_chains の controller 側直列ループ) で保証する。
+- apply と review は別 context (別 Agent・別 worktree)。同じセッションで reviewer を演じない。
 - 全クラスタは同じ `OP_RUN_BASE_SHA` から分岐する (0-base)。`origin/main` を直接参照しない。
-- **失敗 worktree は自動削除しない** (`_shared/worktree-ops.md` の隔離に従い、人間が判断する)。
-- `op issue create` / `op pr create` / `op issue comment` は **1 件ずつ直列** (並列化・background 禁止)。
-- claim は **すべての verdict で release** する (2-E-0)。
-- spawn できるのは `_shared/active-expert-registry.md` の active expert のみ。planned expert (env / release /
-  compatibility) と Utility Worker (spec-expert / scout) は spawn しない (1-2-c で正規化)。Issue の marker / label は
-  routing metadata であり spawn 許可ではない (上位契約: `_shared/runtime-contract.md`)。
-- Agent tool の `subagent_type` は `op-skill:<name>`。cluster / payload / 表示では bare 名を保持する
-  (`_shared/expert-spawn.md`「Plugin scoped-name 規約」)。
-- **CO は subagent として spawn する** (teammate 不可。teammate だと ClusterSummary が戻り値で返らず直列保証も壊れる)。
-- Fable は 1-2-g で **人間が承認した cluster の apply spawn のみ**。それ以外 (CO / 探知 / post-check / review) は Opus 天井。
+- 失敗 worktree は自動削除しない (`_shared/worktree-ops.md` の隔離に従い、人間が判断する)。
+- `op issue create` / `op pr create` / `op issue comment` は 1 件ずつ直列 (並列化・background 禁止)。
+- claim はすべての verdict で release する (2-E-0)。
+- spawn できるのは `_shared/active-expert-registry.md` の active expert のみ (1-2-c/d で正規化、上位契約: `_shared/runtime-contract.md`)。
+- CO は subagent として spawn する (`_shared/expert-spawn.md`「expert spawn は subagent であること」)。teammate だと ClusterSummary が戻り値で返らない。
+- Fable は 1-2-g で人間が承認した cluster の apply spawn のみ。それ以外 (CO / 探知 / post-check / review) は Opus 天井。
 - 人間判断待ち Issue は manual_review_bucket に分離し apply しない (1-1-a)。
-- UI Issue の本文に `デザインモック: <URL>` があれば、CO が apply / ux-ui post-check の spawn prompt に URL を渡し
-  `Artifact({action:"read", url})` させる (`_shared/design-mock.md`)。
-- spawn prompt には「対象パスの正本 (`.claude/rules/`) を **Read ツールで** 開いてから着手する」の 1 行を含め、
-  正本本文は注入しない (`_shared/expert-spawn.md`)。正本は commit 済みでないと worktree に伝播しない。
+- PR / Issue のラベル操作は controller または CO だけが行う。expert subagent は label を触らない。
 - fence 間の値は一時ファイル (`$RUN_DIR`) 経由で渡し、受け側は `:?` で検証する (`_shared/bash-fence-convention.md`)。
 - controller の Read 規律は `_shared/read-economy.md`「Controller への適用」。
 
@@ -45,30 +38,26 @@ op-run はマージしない。マージは人間が `/op-skill:op-merge` (監�
 
 | モード | 起動 | 挙動 |
 |-------|------|------|
-| 対話 (デフォルト) | `/op-run` | plan mode で計画 → ExitPlanMode で人間承認後に実行 |
-| 自動 | `/op-run --auto` | plan mode なし。競合あり / Critical 系 / `low` confidence を除外して残りを実行 |
-| 指定 | `/op-run #42 #43` | 指定 Issue のみ |
-| ラベル絞り | `/op-run --label bug` | 該当ラベルのみ |
-| 正規化同期 | `/op-run --normalize` | partial Issue を op-scan `--from-issue` に委譲し、派生 Issue を取り込んで続行 |
-| 正規化非同期 | `/op-run --no-wait-normalize` | 委譲だけして今回は除外 (次回 op-run で拾う) |
+| 対話 (デフォルト) | `/op-skill:op-run` | plan mode で計画 → ExitPlanMode で人間承認後に実行 |
+| 自動 | `/op-skill:op-run --auto` | plan mode なし。競合あり / Critical・High のセキュリティ Issue / `low` confidence を除外して残りを実行 |
+| 指定 | `/op-skill:op-run #42 #43` | 指定 Issue のみ |
+| ラベル絞り | `/op-skill:op-run --label bug` | 該当ラベルのみ |
+| 正規化同期 | `--normalize` | partial Issue を op-scan `--from-issue` に委譲し、派生 Issue を取り込んで続行 (`--auto --normalize` で委譲まで自動) |
+| 正規化非同期 | `--no-wait-normalize` | 委譲だけして今回は除外 (次回 op-run で拾う) |
 
-`--auto` 単独では partial Issue は委譲しない (`requires-normalization` を付けて除外)。`--auto --normalize` で委譲まで自動。
-
+`--auto` 単独では partial Issue は委譲しない (`requires-normalization` を付けて除外)。
 並列上限は Workflow runtime / Agent 並列が透過的にキューイングする。controller は chunk 分割などの人為 cap をしない。
 
----
+### 止まってよい条件
 
-## 参照ドキュメント
+1-3 の承認後 (`--auto` は起動後) は、フェーズ5 の完了報告まで人間に確認を求めずに進める。途中で止まってよいのは次だけ:
 
-- `cluster-orchestrator-directives.md` (本 skill ディレクトリ) — CO 指示書 (入力契約 / 10 フェーズ / ClusterSummary = フェーズ8)
-- `references/` — `plan-mode-gate.md` (-1 / 1-3) / `issue-health-check.md` (1.5) /
-  `expert-resolution.md` (1-2-c/d) / `apply-prompt-directives.md` (CO へ注入する expert 別指示) /
-  `post-check-dispatcher.md` / `post-check-prompts.md` (3.5) / `global-review-spawn.md` (4) / `review-fix-loop.md` (4.5)
-- `~/.claude/skills/_shared/`: `runtime-contract.md` / `active-expert-registry.md` / `planned-experts.md` /
-  `expert-spawn.md` / `invocation-mode.md` / `clustering.md` / `worktree-ops.md` / `model-selection.md` /
-  `op-config-schema.md` / `pr-templates.md` / `common-setup.md` / `workflow-calling.md` / `github-channel.md` /
-  `markers/claim-markers.md` / `design-mock.md` / `filing-gate.md` / `read-economy.md` / `bash-fence-convention.md`
-- `~/.claude/workflows/op-run-discover.js` — 2-A 探知 workflow (args / 戻り値 schema は冒頭コメント)
+- worktree hard cap 超過 (2-A-1)
+- contract error (registry と agent frontmatter の矛盾、unregistered expert)
+- op CLI / Workflow の致命的エラー (fail-closed と明記された exit)
+
+`needs_human_decision` のクラスタ・2-D の競合・取りこぼし回収はフェーズ5 で提示し、他クラスタの進行を止めない。
+status table の再 render は途中経過であり、ターンを終える理由にしない。
 
 ---
 
@@ -88,13 +77,14 @@ Issue/PR の書き込み・worktree 作成・apply spawn は 1-3 の承認後に
 
 ### 0-cap. Dynamic Workflows capability preflight
 
-`op-run-discover` を呼ぶため、Workflow tool の capability preflight を行う。利用不可なら即停止し、
+`op-skill:op-run-discover` を呼ぶため、Workflow tool の capability preflight を行う。利用不可なら即停止し、
 フォールバックしない (`_shared/workflow-calling.md` §1)。
 
 ### 0-base. BASE_REF 決定 (OP_RUN_BASE_REF / OP_RUN_BASE_SHA)
 
 run 全体で 1 つの base を確定し、worktree / apply / PR `--base` / post-check diff / global review のすべてで共有する。
-呼出側 (op-loop 等) が `OP_RUN_BASE_SHA` を注入済みなら、その値を尊重して再計算しない。
+呼出側 (op-loop 等) が base を注入する場合は、この fence 冒頭で `OP_RUN_BASE_REF` / `OP_RUN_BASE_SHA` を
+リテラル (または呼出側の env ファイルの `source`) で設定する。設定済みなら再計算しない。
 
 ```bash
 : "${OP_RUN_TASK_BUNDLE_ID:=op-run-bundle-$(date +%Y%m%d-%H%M%S)}"   # claim owner ID (run 全体で共有)
@@ -127,7 +117,7 @@ op issue list --label "auto-report" --state open \
   --search "-label:op:in-progress -label:op-state -label:do-not-close" --limit 50
 ```
 
-除外: `Fixes #N` する open PR が既にある Issue / `superseded-by-scan` ラベル付き / (`--auto` のみ) Critical・High のセキュリティ Issue。
+除外: `Fixes #N` する open PR が既にある Issue / `superseded-by-scan` ラベル付き / `--auto` の除外対象 (実行モード表)。
 ファイルパスが無い Issue も弾かずフェーズ1.5 に回す。
 
 #### 1-1-a. 人間判断待ち Issue の分離 (manual_review_bucket)
@@ -137,7 +127,7 @@ op issue list --label "auto-report" --state open \
 
 例外 (通常 apply に流す):
 - `needs:human-decision` + `needs:human-decision-followup` の両方 → apply 担当は `safe_first_step` のみ実行し
-  `blocked_actions[]` を守り、残る判断を PR 本文「残存リスク / follow-up」に転記する (`apply-prompt-directives.md`)。
+  `blocked_actions[]` を守り、残る判断を PR 本文「残存リスク / follow-up」に転記する。
 - `needs:boundary-decision` 単独 (参考タグで apply を止めない)。
 
 本文に `実施: /op-skill:op-component` を含む Issue (部品 issue、`_shared/design-system.md`) は apply しない。plan の「op-component で実施」節に
@@ -152,15 +142,15 @@ op issue list --label "auto-report" --state open \
 1. 各 Issue の対象ファイル / module / domain (fingerprint 第 1 segment) / 1-2-c の expert を集め、
    `op run cluster plan --findings-json -` に渡して初期 ClusterPlan を得る
    (グルーピング・confidence・Stage 1 競合・global_conflict_files の正本は CLI と `_shared/clustering.md`)。
-2. 司令官が結果を確認して **1 案** に確定する (`needs_serialization` / 低 confidence の直列化、上限 5 Issue / cluster)。
+2. 司令官が結果を確認して 1 案に確定する (`needs_serialization` / 低 confidence の直列化、上限 5 Issue / cluster)。
    案の比較や複数案生成はしない。人間は 1-3 で承認・修正する。
 3. 確定した cluster の Issue 番号を `$RUN_DIR/clustered-issues.txt` に 1 行 1 件で書き出す (1-2-e の入力)。
 
 #### 1-2-pre. blocking finding の最優先化
 
-`op:blocking-finding` ラベル付き Issue は他と混ぜず **1 Issue = 1 cluster** にし、他クラスタより先に直列で実行する。
-複数ある場合も互いに直列 (severity → Issue 番号昇順)。blocking がある run では他クラスタに着手しない
-(blocking の PR が人間にマージされた後、op-run を再実行する)。plan では「最優先 (blocking)」として別表に出す。
+`op:blocking-finding` ラベル付き Issue は他と混ぜず 1 Issue = 1 cluster にする。blocking がある run では blocking cluster だけを
+直列 (severity → Issue 番号昇順) で実行し、他クラスタには着手しない (blocking の PR が人間にマージされた後、op-run を再実行する)。
+plan では「最優先 (blocking)」として別表に出す。
 
 ```bash
 op issue list --label "auto-report" --label "op:blocking-finding" --state open --limit 50 | jq '[.details.issues[].number]'
@@ -168,20 +158,17 @@ op issue list --label "auto-report" --label "op:blocking-finding" --state open -
 
 ### 1-2-b. global_conflict_files
 
-依存マニフェスト / lockfile / アプリ基盤ファイル / DB・生成コード / CI 設定などを触りうるクラスタは原則直列化する。
-対象リストの正本は `op run cluster plan` (出力 `global_conflict_files`)。判定不能なら直列化する。
-Stage 1 で並列可でも 2-B で再検証する。
+`op run cluster plan` の `global_conflict_files` に当たるクラスタは直列化する。判定不能も直列化する。Stage 1 で並列可でも 2-B で再検証する。
 
 ### 1-2-c. expert 解決ロジック (apply / post-check の決定)
 
 Issue ごとに `op run expert-resolve` で apply / post-check expert を解決・正規化する。
-CLI で決まらない規則 (既知不一致を含む) は `references/expert-resolution.md`。
+CLI で決まらない規則は `references/expert-resolution.md`。
 
 ### 1-2-d. Active Apply Expert Normalization (planned expert を runtime に漏らさない)
 
-1-2-c の結果は active expert / `needs_human_decision` / planned-skip / abort のいずれかでなければならない。
-`needs_human_decision` の Issue は spawn せず manual_review_bucket に回す。正規化後の expert を `cluster.expert` に保持し、
-plan にも正規化後の名前を出す。契約の詳細: `references/expert-resolution.md`。
+正規化後の expert を `cluster.expert` (bare 名) に保持し、plan にも正規化後の名前を出す。
+`needs_human_decision` の Issue は spawn せず manual_review_bucket に回す。契約: `references/expert-resolution.md`。
 
 ### 1-2-e. claim acquire (Plan mode 前の排他取得)
 
@@ -214,45 +201,19 @@ claim できなかった Issue を除いて cluster を再構成してから 1-2
 
 ### 1-2-g. Fable escalation gate (apply spawn の昇格提案、model-selection.md §7.2)
 
-cluster 確定後・1-3 の plan gate 直前に、難度の高い cluster の **apply spawn** を Fable へ上げるかを人間に提案する。
-controller は自動昇格しない。提案はこの 1 回だけ (実行中に判明しても追加提案せず、フェーズ5 に次 run 向けメモを 1 行残す)。
+cluster 確定後・1-3 の plan gate 直前に 1 回だけ、候補 cluster の apply spawn を Fable へ上げるかを人間に提案する。
+候補条件・D1〜D6・skip 条件は `_shared/model-selection.md`「§7.2 F4」「§7.2 F7」、承認の扱いは「§7.2 F5」。
+実行中に候補が判明しても追加提案せず、フェーズ5 に次 run 向けメモを 1 行残す。
 
-**skip** (全 cluster Opus): `--auto` (plan / report に 1 行記録して続行) / `OP_FABLE_DISABLE=1` /
-op-config `fable_escalation.enabled: false` / 候補 0 件。
-
-**候補** (cluster ごとに AND): `cluster.model == "opus"`、model degrade 中でない、難度シグナルが 2 つ以上
-(定義の正本は §7.2 F4)。この時点での判定材料:
-
-| id | 判定材料 |
-|---|---|
-| D1 | `files_declared` の module 数 >= 3 または file 数 >= 10 |
-| D2 / D3 | cluster 内 Issue の `task_complexity` に `api-design` / `integration` を含む |
-| D4 | Issue 本文の risks に並行性・状態機械・トランザクション整合が現れる |
-| D5 | `files_declared` が §7.1.3 の sensitive glob に該当 (`global-review-spawn.md` の `SENSITIVE_PATTERNS`) |
-| D6 | 前 run で `requires_redo` / `review_round >= 2` を経験 (判らなければ不成立) |
-
-**提案** (`AskUserQuestion`、既定は Opus 維持):
-
-```
-質問: cluster <id_short> (#<issues>) の実装 model を Fable へ昇格しますか?
-  1. Opus のまま実行する (推奨・既定)
-  2. Fable へ昇格する — コストが上振れします
-説明に含める: 担当 expert / base model (opus) / 成立した難度シグナル (D<n>: 1 行根拠) /
-              影響範囲 (この cluster の apply spawn のみ。review・post-check・探知は Opus 固定)
-```
-
-- 複数候補は `multiSelect: true` で選ばせてよい。無応答・曖昧な返答は非承認。
-- 起動時に人間が「この Issue は Fable で」と明示していた cluster は承認済みとして扱う。
-- 反映: 承認 → `cluster.apply_model = "fable"`、それ以外 → `cluster.apply_model = cluster.model`。
-  `cluster.model` (CO 自身の model) は上げない。承認 scope は当該 cluster の apply (review-fix の再 apply 含む)、同 session 内。
-- 承認結果は plan の実行サマリに 1 行、PR 本文に自然文で 1 行残す。
+- この時点の D 判定材料: `files_declared` (D1 / D5)、cluster 内 Issue の `task_complexity` (D2 / D3)、Issue 本文の risks (D4)、前 run の review_round (D6、判らなければ不成立)。
+- 提示は `AskUserQuestion` (既定は Opus 維持)。1 cluster ごとに「担当 expert / 成立した D<n> と 1 行根拠 / 影響範囲 (この cluster の apply spawn のみ)」を示す。複数候補は `multiSelect: true` でよい。
+- 反映: 承認 → `cluster.apply_model = "fable"`、それ以外 → `cluster.apply_model = cluster.model`。`cluster.model` (CO 自身の model) は上げない。
 
 ### 1-3. ユーザー承認 (対話モード: ExitPlanMode + plan file)
 
 plan file を書き出して `ExitPlanMode` を呼ぶ。plan file の構成・承認オプション・「Keep planning with feedback」時の
 戻り先は `references/plan-mode-gate.md`。承認前に worktree 作成 / spawn をしない。
-
-**`--auto`**: plan file と ExitPlanMode を skip し、競合のあるクラスタ・Critical 系・`low` confidence を除外して残りを実行する。
+`--auto` は plan file と ExitPlanMode を skip し、実行モード表の除外規則で残りを実行する。
 
 ---
 
@@ -297,7 +258,7 @@ apply worktree は post-check / global review が終わるまで prune しない
 
 ```javascript
 const discoverRaw = Workflow({
-  name: 'op-run-discover',
+  name: 'op-skill:op-run-discover',
   args: {
     clusters: approved_clusters.map(c => ({
       id: c.id, id_short: c.id_short,
@@ -325,23 +286,16 @@ reports を `[{"cluster_id","files_likely_to_modify","needs_serialization"}]` �
 
 ```bash
 op run cluster recheck --results-json "$RUN_DIR/cluster-recheck.json"
-# payload.recheck_clusters[].needs_serialization / competing_file_groups / density
+# payload.recheck_clusters[].needs_serialization / competing_file_groups
 ```
 
 直列化対象: `files_likely_to_modify` が他と重複 / `needs_serialization: true` / `risk_files` を共有 /
-`files_likely_to_modify` が空。対話モードでは再構成した計画を提示する。`--auto` では重複が出たら自動で直列に切り替える。
+`files_likely_to_modify` が空。再構成結果は提示のみで、承認は取り直さない (直列化は 1-3 の承認範囲内)。
 
 #### 2-B-partition. parallel_clusters / serial_chains の確定
 
-- **parallel_clusters**: 直列化対象に該当しない独立クラスタ (CO を 1 メッセージ内で並列 spawn)
-- **serial_chains**: 競合関係にあるクラスタを chain にまとめる (controller 側の直列ループで逐次 await)
-
-```markdown
-| クラスタ | files_likely_to_modify | partition | 理由 |
-|---------|------------------------|-----------|------|
-| auth-1  | src/auth/**, lib.rs    | serial_chains | core-1 と lib.rs 重複 |
-| ui-1    | pages/login/**         | parallel_clusters | 重複なし |
-```
+- parallel_clusters: 直列化対象に該当しない独立クラスタ (CO を 1 メッセージ内で並列 spawn)
+- serial_chains: 競合関係にあるクラスタを chain にまとめる (controller 側の直列ループで逐次 await)
 
 ### 2-Orchestrate. ClusterOrchestrator 並列/直列起動
 
@@ -359,13 +313,9 @@ declare -p OP_RUN_SESSION_ID >> "$RUN_DIR/env"
 
 #### 2-Orchestrate-parallel. parallel_clusters の並列起動
 
-各クラスタの `ClusterOrchestratorInput` (正本: directives フェーズ0) を組み立て、**1 メッセージに全 Agent 呼び出しを並べる**。
-`expert_directives_text` は `references/apply-prompt-directives.md` の common 節 + 当該 expert 節を結合したもの (未注入は契約違反)。
+各クラスタの `ClusterOrchestratorInput` (正本: directives フェーズ0) を組み立て、1 メッセージに全 Agent 呼び出しを並べる。
 
 ```javascript
-// CLUSTER_INPUT = { cluster_id, id_short, task_id, branch, skill_dir, issues, expert, model, apply_model,
-//   module, worktree_path, investigation_report, files_likely_to_modify, files_allowed, files_forbidden,
-//   base_sha, base_ref, ts, session_id, code_review_effort }
 // skill_dir = この skill の Base directory (Skill 読み込み時に表示される絶対パス)。相対パスは plugin 配布では解決しない
 // code_review_effort = model-selection.md §5.5 で派生 (未決なら "auto")
 Agent({
@@ -380,18 +330,9 @@ Agent({
 
     入力 payload (JSON):
     ${CLUSTER_INPUT}
-
-    expert_directives_text (apply-expert prompt 注入用):
-    ${expert_directives_text}
-
-    background child (apply-expert / review-expert) が rest 状態になっても無限待ちせず、
-    git log / completion 情報でフェーズを先へ進めること。
-    完了したら ClusterSummary (JSON) を返してください。
   `
 })
 ```
-
-CO に名前を付けない (teammate 化させない)。`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` は設定しない。
 
 #### 2-Orchestrate-serial. serial_chains の直列起動 (controller-side)
 
@@ -413,8 +354,8 @@ op run cluster-overlap --clusters-json "$RUN_DIR/cluster-worktrees.json" --base-
 
 | 状況 | 対処 |
 |------|------|
-| 該当クラスタが直列実行だった | 提示のみ (rebase で解消可能) |
-| 並列実行されていた | **人間に competing diff を提示**し、片方を破棄 / rebase / 手動統合のいずれかを決めてもらう |
+| 該当クラスタが直列実行だった | 提示のみ (op-merge の merge commit で解消可能) |
+| 並列実行されていた | 人間に competing diff を提示し、片方を破棄 / 手動統合のいずれかを決めてもらう |
 
 ### 2-E. ClusterSummary 受領と進捗監視
 
@@ -425,7 +366,7 @@ ClusterSummary の schema は `cluster-orchestrator-directives.md` フェーズ8
 | verdict | controller の動作 |
 |---------|-----------------|
 | `approved` | claim release → status table 更新 |
-| `approve_with_followup` | claim release → `followup_issue_url` を follow-up 候補に記録 |
+| `approve_with_followup` | claim release → `followup_findings` をフェーズ5 の follow-up 候補に記録 |
 | `needs_human_decision` | claim release → `blocker_reason` を人間に提示 |
 | `pr_open_degraded_mcp_channel` | claim release → `degrade_note` を提示し、ローカル (gh channel) での後続実施を案内 |
 
@@ -442,18 +383,12 @@ done
 
 #### 2-E-3. CO write 取りこぼし回収 (mandatory)
 
-- `pending_label` が非 null → `op pr edit-labels --pr <N> --add "<label>"` で補完する
-  (mcp channel は fresh な `search_pull_requests` 素材を `--input-json` で渡し、`github-channel.md` §3-§4 で完遂)。
-- `unfiled_followup` が非 null → 本文を `op core marker-lint --strict` で検証し、`op issue create` で起票して
-  follow-up 候補に記録する (直列)。
+`pending_label` が非 null → `op pr edit-labels --pr <N> --add "<label>"` で補完する
+(mcp channel は fresh な `search_pull_requests` 素材を `--input-json` で渡し、`github-channel.md` §3-§4 で完遂)。
 
 #### 2-E-1. status table 再 render 規約
 
-CO が 1 つ返るたびに status table を再 render する。
-
-| # | cluster_id | Issue | expert | Claim | Status | PR | verdict |
-|---|---|---|---|---|---|---|---|
-| 1 | auth-1 | #42, #43 | debug-expert | owned (task=<bundle-id>) | done | https://github.com/owner/repo/pull/210 | approved |
+CO が 1 つ返るたびに status table を再 render する (列: # / cluster_id / Issue / expert / Claim / Status / PR / verdict)。
 
 - Claim: `owned (task=<id>)` / `not-owned (skipped)` / `—`
 - Status: `running` / `done` / `blocked` / `failed` / `terminal` / `pending`
@@ -461,41 +396,15 @@ CO が 1 つ返るたびに status table を再 render する。
 
 ---
 
-## フェーズ3: PR 作成 (CO 内部)
+## フェーズ3〜4.5: PR 作成 / Post-check / Global Review / Review Fix Loop (CO 内部)
 
-フェーズ3〜4.5 はすべて CO が行い (`cluster-orchestrator-directives.md` フェーズ4〜7)、controller は直接実行せず
-ClusterSummary を受け取るだけ。review / post-check の結果は PR body の op-review-state 文書
+controller は直接実行せず ClusterSummary を受け取るだけ。review / post-check の結果は PR body の op-review-state 文書
 (`op review state pull/push`) が唯一の記録で、mcp channel でも成立する。
 
-### 3-1-a. follow-up / 残存リスクの転記
-
-apply 報告の `recommended_followup_experts[]` / `needs_human_decision` / `assumptions[]` / `blocked_actions[]` は
-CO が PR 本文に転記する。controller は `followup_issue_url` をフェーズ5 の follow-up 候補に列挙する。
-
-## フェーズ3.5: Post-check Dispatch
-
-CO が `references/post-check-dispatcher.md` の 3.5-A (UX/UI、ux-ui-audit-expert) / 3.5-B (Security、security-expert) を実行する。
-
-## フェーズ4: Global Review
-
-CO が別 worktree で review-expert を spawn する (`references/global-review-spawn.md`)。
-
-## フェーズ4.5: Review Fix / Specialist Decision Loop
-
-CO が `references/review-fix-loop.md` に従って specialist に再委任する。round 上限に達したら CO は PR に blocked label を
-付けて停止し、`needs_human_decision` (`blocker_reason`) を返す (PR の close / 新規 PR 作成はしない)。
-
-## ラベル遷移 (op pr label-transition)
-
-- PR / Issue のラベル操作は controller または CO だけが行う。expert subagent は label を触らない。
-- review / post-check のラベル遷移は `op pr label-transition --pr <N> --target <review|security-post-check|ux-post-check|aux-ux-post-check> --result <値>` で行う
-  (add/remove の遷移表は CLI が内蔵)。内部 result 値は次のとおり CLI 値に変換する:
-  - review `needs-specialist-review` → `needs-fix`
-  - post-check `block` → `needs-fix-post-check`
-  - security `needs_human_decision` → `needs-human-decision`
-  - post-check `pass_with_notes` → `pass-with-notes`
-- 汎用ラベル `needs:human-decision` は自動で外さない。
-- post-check expert の spawn が失敗したときは `--result skipped` で遷移させる。
+- フェーズ3 (PR 作成): CO フェーズ4
+- フェーズ3.5 (Post-check Dispatch): CO フェーズ5.5 / `references/post-check-dispatcher.md` (3.5-A UX/UI、3.5-B Security)
+- フェーズ4 (Global Review): CO フェーズ5-6 / `references/global-review-spawn.md`
+- フェーズ4.5 (Review Fix / Specialist Decision Loop): CO フェーズ7 / `references/review-fix-loop.md`
 
 ---
 
@@ -511,20 +420,16 @@ CO が `references/review-fix-loop.md` に従って specialist に再委任す�
 ### needs_human_decision / pr_open_degraded_mcp_channel クラスタ
 - <cluster>: <blocker_reason / degrade_note>。方針決定後に PR を更新または close する
 
-### approve_with_followup クラスタ
-- <cluster>: follow-up Issue: <URL>
+### follow-up 候補 (自動起票しない)
+- <cluster / PR>: approve_with_followup の Medium/Low finding (followup_findings) / recommended_followup_experts / 未解消 assumptions / blocked_actions 抵触候補
 
 ### model 昇格 (1-2-g)
 - 承認された昇格 / 「なし (全 cluster Opus 天井)」/ skip 理由
 - (該当時) 次 run で #<issues> は Fable 昇格の候補: <理由>
 
-### follow-up 候補 (自動起票しない)
-- <recommended_followup_experts / needs_human_decision (opt-out 経路) / 未解消 assumptions / blocked_actions 抵触候補がある PR>
-
 ### 次のステップ
 - `/op-skill:op-merge` で監査・順序付け・マージする (または GitHub で手動マージ)。`pro-reviewed` はマージ判断の参考シグナル。
   Issue は PR 本文の `Fixes #N` で close される。手動マージ時の worktree 片付けは op-cleanup。
+- follow-up を Issue 化するかは人間が判断する。する場合はマージ後に `/op-skill:op-scan --from-merged-pr <PR...>`
 - needs_human_decision: blocker_reason を確認して方針を決める
 ```
-
-follow-up を Issue 化したい場合は、マージ後に `/op-scan --from-merged-pr <PR...>` を使う。

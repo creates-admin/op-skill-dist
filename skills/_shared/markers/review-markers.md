@@ -1,7 +1,7 @@
 # Review Markers
 
 review lifecycle の唯一の記録は PR body の review state 文書。コメントは人間向けの自然文だけで、機械は読まない。
-JSON shape の正本は `op-core::review_state` (Rust 型)、review-expert の返却 payload は `op help payload review-finding`。
+review-expert の返却 payload は `op help payload review-finding`。
 
 ## `<!-- op-review-state -->` body block
 
@@ -77,17 +77,11 @@ block が無い PR への初回 push は空 state から作る。手編集しな
 |---|---|
 | review attempt | `<session>-r<round>-attempt` |
 | post-check | `<session>-postcheck-<expert>-r<N>` |
+| specialist review | `<session>-r<round>-specialist-<RVW id>` |
 | controller terminal | `<session>-terminal` |
 
 aux post-check (security 起点の ux-ui-audit) は `post_checks` のキーを `<expert>@aux` にし、entry の `triggered_by` を `security-expert` にする。
 
-### finding の null 許可範囲
+### finding
 
-| field | 規則 |
-|---|---|
-| `recommended_fix_expert` | `result` が `needs-fix` / `needs-specialist-review` なら必須。`blocked` なら null 可。`review-expert` / `ux-ui-audit-expert` は不可 |
-| `requires_post_check` | `ux-ui-audit-expert` / `security-expert` / `null`。不要でも省略せず `null` を書く |
-| `reclassified_from` / `reclassified_to` / `reclassification_reason` | 再分類したときだけ 3 つ揃えて書く |
-
-`recommended_fix_expert` は提案であり、最終 apply 担当は op-run の解決ロジックが決める。
-approve の attempt でも Medium / Low の follow-up 候補 finding (`scope: new-issue`) は記録してよい。
+field の必須性・null 許可範囲は `op help payload review-finding`。`recommended_fix_expert` は提案であり、最終 apply 担当は op-run の解決ロジックが決める。

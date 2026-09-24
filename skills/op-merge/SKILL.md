@@ -21,11 +21,11 @@ effort: high
 ## 起動
 
 ```
-/op-merge                   # open PR のうち head が auto/* または pro-reviewed ラベル付き
-/op-merge #210 #212         # 指定 PR のみ
-/op-merge --label <name>    # ラベルで絞る
-/op-merge --all             # 人間の PR を含む open PR すべて
-/op-merge --strategy merge  # マージ方式 (squash | merge | rebase)。既定は repo の慣習、不明なら squash
+/op-skill:op-merge                   # open PR のうち head が auto/* または pro-reviewed ラベル付き
+/op-skill:op-merge #210 #212         # 指定 PR のみ
+/op-skill:op-merge --label <name>    # ラベルで絞る
+/op-skill:op-merge --all             # 人間の PR を含む open PR すべて
+/op-skill:op-merge --strategy merge  # マージ方式 (squash | merge | rebase)。既定は repo の慣習、不明なら squash
 ```
 
 ## フェーズ0: 環境確認
@@ -146,7 +146,15 @@ op run worktree create --task-prefix merge-pr<N> --base-ref <headRefName> --base
 # → details の worktree_path / task_id を控える (local branch は auto/merge-pr<N>-<ts>)
 ```
 
-expert は PR の `op-run-expert` marker の expert (紐づく Issue 本文。無ければ `feature-expert`)。
+expert は紐づく Issue を `op run expert-resolve` で解決した apply expert (marker の値を直接 `subagent_type` にしない。
+`needs_human_decision` / 解決不能 / Issue が無い場合は `feature-expert`):
+
+```bash
+# BODY / LABELS_JSON はフェーズ2 の `op issue view <M> --include meta` で得た本文とラベル名配列
+jq -n --argjson n <M> --arg body "$BODY" --argjson labels "$LABELS_JSON" \
+  '{issue_number:$n, body:$body, labels:$labels}' | op run expert-resolve --stdin \
+  | jq -r '.payload.apply_expert // "feature-expert"'
+```
 
 ```
 Agent({
@@ -187,7 +195,7 @@ Agent({
   description: "merge-resolution review: PR #<N>",
   prompt: """
     invocation_mode: op_managed
-    <`_shared/spawn-prompt-common.md` §1 / §4 を全文>
+    <`_shared/spawn-prompt-common.md` §2 (exploration-only) / §4 を全文>
 
     op-merge のコンフリクト解消 commit を軽くレビューしてください。read-only (編集・commit・push 禁止)。
     - 作業ディレクトリ: <worktree_path>、対象: merge commit <sha> (`git show --cc <sha>` と `git diff <headRefOid> <sha>`)
@@ -246,7 +254,7 @@ op pr view <N> --include meta    # state が MERGED になったことを確認
 
 ### 保留した PR
 - #214: CI fail (test_y) → 修正して再実行
-- #216: 解消に仕様判断が必要 (<needs_human_decision.reason>) → 方針を決めて /op-merge #216。隔離 worktree: <path>
+- #216: 解消に仕様判断が必要 (<needs_human_decision.reason>) → 方針を決めて /op-skill:op-merge #216。隔離 worktree: <path>
 - #217: #216 に依存するため保留
 
 ### 計画から外した PR (フェーズ2 で要修正 / 保留)

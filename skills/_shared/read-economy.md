@@ -4,11 +4,11 @@
 
 ## ルール一覧
 
-- **R1: 既読ファイルの再 Read 禁止** — 一度 context に取り込んだ内容は再 Read しない (「念のため最新を確認」も不可)。
-- **R2: Edit 後の確認 re-Read 禁止** — Edit / Write がエラーを返さなければ成功。確認が要るなら `grep` で対象行のみ。
-- **R3: 必要最小範囲だけ読む** — 全文 Read を既定にしない。構造把握は `op read outline --file <file>` (シンボル一覧 + 行範囲)、特定の関数・型は `op read symbol --file <file> --symbol <name>`、それ以外は `grep` で行番号を特定して `offset` / `limit` で読む。未対応言語は warning が出るので通常の範囲 Read に切り替える。
-- **R4: 未読範囲の読みは禁止しない** — 同一ファイルでも未読の関数・節を新たに読むのは可。禁止対象は既に context にある内容の再 Read のみ。
-- **R5: context 参照を優先** — 既に context にある内容はツール再呼び出しなしに参照する。追跡が困難なら re-Read より `grep`。
+- R1: 既読ファイルの再 Read 禁止 — 一度 context に取り込んだ内容は再 Read しない (「念のため最新を確認」も不可)。
+- R2: Edit 後の確認 re-Read 禁止 — 確認が要るなら `grep` で対象行のみ。
+- R3: 必要最小範囲だけ読む — 全文 Read を既定にしない。構造把握は `op read outline --file <file>` (シンボル一覧 + 行範囲)、特定の関数・型は `op read symbol --file <file> --symbol <name>`、それ以外は `grep` で行番号を特定して `offset` / `limit` で読む。未対応言語は warning が出るので通常の範囲 Read に切り替える。
+- R4: 未読範囲の読みは禁止しない — 同一ファイルでも未読の関数・節を新たに読むのは可。禁止対象は既に context にある内容の再 Read のみ。
+- R5: context 参照を優先 — 既に context にある内容はツール再呼び出しなしに参照する。追跡が困難なら re-Read より `grep`。
 
 ## Controller への適用
 

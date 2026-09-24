@@ -1,11 +1,7 @@
 # op-run: Post-check Dispatcher (Phase 3.5)
 
-ClusterOrchestrator (CO、`cluster-orchestrator-directives.md` フェーズ5.5) が global review の**前に**実行する、
-Issue 固有の domain-specific 再監査。global review (review-expert) とは別工程:
-
-- **post-check**: 元 Issue の success_criteria を満たしたか / 元 finding が解消したか / 修正が新たな露出面を生んでいないか
-- **global review**: PR 全体の副作用・PR 本文整合・検証記録・横断的観点 (7 lens)
-
+ClusterOrchestrator (CO、`cluster-orchestrator-directives.md` フェーズ5.5) が global review の前に実行する、
+Issue 固有の再監査 (元 Issue の success_criteria / 元 finding の解消 / 新たな露出面)。PR 全体の横断観点は global review が見る。
 review-expert は post-check expert にしない。
 
 ## フェーズ3.5: Post-check Dispatcher (post_check 解決済みクラスタのみ)
@@ -32,10 +28,11 @@ CO が Agent tool で spawn する (`subagent_type`: `"op-skill:ux-ui-audit-expe
 | issues | 元 Issue 番号 |
 | prompt_text | `post-check-prompts.md` の該当節 (3.5-A / 3.5-B-1 / 3.5-B-4) の本文 |
 | base_ref | `OP_RUN_BASE_REF` |
+| head_sha | apply worktree の HEAD (push 済み。expert は worktree HEAD との一致を確認する) |
 | design_mock_url | Issue の `デザインモック:` 行の URL (ux-ui のみ、あれば) |
 
 - post-check expert は監査専任 (`commits_added: []`)。label 操作は CO だけが行い、expert は `gh pr edit` / label 操作をしない。
-- 判定確定後、CO は **label 遷移 → state push** の順に行う (下記テンプレ)。
+- 判定確定後、CO は label 遷移 → state push の順に行う (下記テンプレ)。
 
 ### 判定後処理テンプレ (3.5-A-2 / 3.5-B-2 / 3.5-B-4 共通)
 
@@ -90,12 +87,12 @@ UI 影響の path 判定は `_shared/project-profile.md`「UI 影響判定 path 
 
 ux-ui-audit-expert を post-check モードで spawn する。
 
-### 3.5-A-2. 判定に応じた処理 (controller 主語)
+### 3.5-A-2. 判定に応じた処理 (CO 主語)
 
 | 判定 | 動作 |
 |---|---|
 | PASS / PASS_WITH_NOTES | review へ進む |
-| BLOCK | review を呼ばず、designer-expert (または feature-expert) を再 spawn して Required Changes を実装させる (当該クラスタのみフェーズ2 から再実行)。再実装は 2 回まで、3 回目は `blocked` として human escalation report (PR / クラスタ / Required Changes / 履歴) を返す |
+| BLOCK | review を呼ばず、designer-expert (または feature-expert) を再 spawn して Required Changes を実装させる (CO フェーズ2 から再実行)。再実装は 2 回まで。3 回目の BLOCK は verdict `needs_human_decision` (blocker_reason に要約、Required Changes の全文は PR コメント) |
 
 再 audit で PASS / PASS_WITH_NOTES になるまで review に進まない。
 
@@ -105,12 +102,12 @@ security-expert を post-check モードで spawn し、Issue 固有の深掘り
 IO・IPC・shell・path・capability) をさせる。脅威アクター視点・不正利用は review-expert の Security/Abuse Lens が扱う。
 security-expert が spawn 不能 (agent 不在) なら `RESULT=skipped` の失敗時扱いにする。
 
-### 3.5-B-2. 判定に応じた処理 (controller 主語)
+### 3.5-B-2. 判定に応じた処理 (CO 主語)
 
 | 判定 | 動作 |
 |---|---|
 | PASS / PASS_WITH_NOTES | `requires_aux_post_check: true` なら 3.5-B-4 を先に実行。そうでなければ review へ (light モード) |
-| BLOCK | review を呼ばず、判定優先順位に従い apply expert (security-expert / debug-expert) を再 spawn して Required Changes を実装させる。再実装は 2 回まで、3 回目は `blocked` + `needs_human_decision` を返す |
+| BLOCK | review を呼ばず、apply expert (security-expert / debug-expert) を再 spawn して Required Changes を実装させる。再実装は 2 回まで。3 回目の BLOCK は verdict `needs_human_decision` |
 | NEEDS_HUMAN_DECISION | review を呼ばず停止。`needs_human_decision` (decision_type / options / safest_default / blocked_actions) を ClusterSummary の blocker_reason に要約し、PR コメントに全文を残す |
 
 `needs:human-decision` label は他 domain と共有のため、security PASS だけで自動 remove しない。
@@ -138,9 +135,7 @@ env-expert は planned のため spawn しない。
 2. release / installer / updater / distribution 方針判断が主題 (`needs_human_decision`) なら人間レビューに回す。
 3. それ以外は PR に「env-expert は未実装のため post-check を実施していない」旨を自然文で 1 コメント残し、review へ進む。
 
-post_check_expert 解決の最後に、`env-expert` かつ (apply expert が security-expert、または Issue 本文 / label に
-OSV / 依存脆弱性 / supply-chain / secret / credential / permission の signal がある) なら post_check_expert を
-`security-expert` に付け替えて 3.5-B を動かす。
+security signal がある env-expert Issue は 1-2-c で `security-expert` に付け替え済み (`expert-resolution.md` 規則1)。
 
 ## 3.5-E. Default Branch (unknown / unregistered / 他 planned post-check)
 

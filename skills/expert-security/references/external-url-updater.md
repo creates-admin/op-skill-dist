@@ -6,18 +6,8 @@ updater・installer・signing の設計変更は planned expert (release) の領
 
 - **scheme** — WebView の navigation・API・updater payload は https のみ。`file:` / `data:` / `javascript:` は明示許可した場面以外 reject。
 - **host** — production domain の allowlist。sub-domain wildcard は最小限。
-- **redirect** — 追跡先の scheme / host が allowlist 外なら止める。
-
-  ```rust
-  let allowed = ["api.example.com", "cdn.example.com"];
-  let client = reqwest::Client::builder()
-      .redirect(reqwest::redirect::Policy::custom(move |a| {
-          if a.url().scheme() == "https" && allowed.contains(&a.url().host_str().unwrap_or("")) { a.follow() } else { a.stop() }
-      }))
-      .build()?;
-  ```
-
-- **TLS** — `accept_invalid_certs(true)` / `danger_accept_invalid_hostnames(true)` を使わない。既定 (rustls + system roots)、必要なら custom CA を明示。
+- **redirect** — 追跡先の scheme / host が allowlist 外なら止める (reqwest は `redirect::Policy::custom`)。
+- **TLS** — 検証無効化 flag を使わない。
 - **updater** — public key は binary に hard-code (env / config から読まない)。signature 検証を省略・warning 扱いにしない。
   version 検証で downgrade を防ぐ。payload size 上限。manifest URL は https の trusted host。展開は `parser-boundary.md`。
 - **download の保存** — 保存先 path は境界 E と同じ検査 (`path-file-io.md`)。

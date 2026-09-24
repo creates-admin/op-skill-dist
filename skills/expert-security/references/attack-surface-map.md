@@ -17,12 +17,6 @@ scan / patrol で「どこを見るか」の一覧。到達可能性の判定は
 | `parser` | serde / quick_xml / PDF・image parser / zip・tar・IDML 展開 / CSV・TOML | `parser-boundary.md` |
 | `installer` | bundler 設定 / signing / artifact の完全性検証 | 下記 |
 
-## P0 (最優先)
-
-`src-tauri/**` / `#[tauri::command]` / `std::fs`・`tokio::fs` / `Command::new` / tauri-plugin-shell・fs / capability・permission 設定 /
-user-selected path / import・export / InDesign・ExtendScript・COM / updater・external URL / archive 展開 / parser /
-log・error 出力。
-
 ## カタログの無い領域
 
 **temp / cache / backup**
@@ -49,4 +43,4 @@ log・error 出力。
 
 `#[tauri::command]` / `std::fs`・`tokio::fs` / `Command::new`・tauri-plugin-shell / capability・permission / import・export /
 external URL・HTTP / parser・archive 展開 / log・error 表示 / InDesign・ExtendScript・COM / drag-drop・clipboard handler。
-区画の選定は op-patrol controller が行い、本 expert は渡された area を監査する。
+scan でも上記と `src-tauri/**`・user-selected path を最優先 (P0) で見る。区画の選定は op-patrol controller が行い、本 expert は渡された area を監査する。

@@ -1,12 +1,12 @@
 # デザインモック (/design Artifact)
 
 UI の見た目は文章で指示せず、`/design` Artifact のモックで人間と合意する。op-component (部品単体) / op-plan・op-architect
-(画面) / op-explore が使う。モックは作業台であり、正本は repo のカタログ (`design-system.md`)。Design System の同期はしない。
-画面のモックは登録済みの部品で組み、表現できないものには `ds:new` と注記して部品 issue に回す。
+(画面) / op-explore が使う。見た目の正本は repo のカタログ (`design-system.md`)。Design System の同期はしない。
+画面のモックは登録済みの部品で組み、表現できないものは部品 issue (`design-system.md`「部品 issue」) に回す。
 
 ## 作成 (司令官 = main session が行う)
 
-1. 既存 UI がある repo では、必要に応じて designer-expert に **read-only** で既存の design token / component / layout パターンの
+1. 既存 UI がある repo では、必要に応じて designer-expert に read-only で既存の design token / component / layout パターンの
    要約を依頼し、モックに反映する (新しい見た目を発明しない)。作成前に `design-ng.md` を読む。
 2. `Artifact({action:"quickstart", intent:"design"})` を呼び、返る Design type の `type_url` で
    `Artifact({type_url, title, auto_open:"after_first_write"})` を作成する。以降は作成結果に含まれる type の指示に従って

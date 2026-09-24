@@ -2,8 +2,6 @@
 
 op-run は各クラスタを独立した git worktree に隔離して並列実装する。本ファイルはパス規則・作成・cleanup・滞留数 gate の正本。
 
----
-
 ## ディレクトリ規約
 
 | 状態 | パス |
@@ -12,13 +10,8 @@ op-run は各クラスタを独立した git worktree に隔離して並列実�
 | 失敗・隔離 | `~/cwork/worktrees-failed/<repo-name>/<task-id>-<timestamp>/` |
 | メイン作業 | `<repo-path>/` (司令官専用、編集禁止) |
 
-- `<repo-name>`: `basename $(git rev-parse --show-toplevel)`
-- `<task-id>`: `<verb>-<short>-<YYYYMMDD-HHMMSS>-<cluster-id>` (例: `fix-auth-20260502-143052-c1`)。`<cluster-id>` は `c1` / `c2` 等。cluster が 1 つだけ (op-merge の単独 worktree 等) なら省略可
-- ブランチ名: `auto/<task-id>`
+- パス・task-id (`<verb>-<short>-<YYYYMMDD-HHMMSS>[-<cluster-id>]`)・branch `auto/<task-id>` は `op run worktree create` が決める。worktree を main リポジトリ配下に作らない。
 - OP skill が自動生成する branch の一般形: `auto/<source>-<verb>-<short>-YYYYMMDD-HHMMSS[-<cluster-id>]` (`<source>` = `run` / `architect` / `plan` 等。op-run の source 省略形も有効)。手動 branch (`fix/*` / `feat/*`) は `auto/` を持たず op-sweep の対象外
-- worktree を main リポジトリ配下に作らない。
-
----
 
 ## 作成手順
 
@@ -34,46 +27,21 @@ op run worktree-provision --task-id <task-id> --base-sha "$OP_RUN_BASE_SHA" --cl
 
 ### 外部 base 注入 (op-loop 等の上位 orchestrator による層ごとの base 前進)
 
-op-run 起動前に `OP_RUN_BASE_SHA` / `OP_RUN_BASE_REF` を `export` しておくと、フェーズ0-base はその値を尊重して SHA 再計算を skip する (op-loop が層 N+1 の base を層 N のマージ後 HEAD へ前進させる用途、詳細: ADR-0019)。
-
-```bash
-export OP_RUN_BASE_SHA="<layer-N-merged-head-sha>"
-export OP_RUN_BASE_REF="main"   # base_sha が指すブランチ名と整合させる
-```
+op-run フェーズ0-base の fence 冒頭で `OP_RUN_BASE_SHA` / `OP_RUN_BASE_REF` が設定済みなら、0-base はその値を尊重して SHA 再計算を skip する (op-loop が層 N+1 の base を層 N のマージ後 HEAD へ前進させる用途)。
+値は fence 間で引き継がれないので、呼出側が env ファイル (`declare -p` で保存) を用意し、0-base の fence 冒頭で `source` するかリテラルで書く (`bash-fence-convention.md`)。
 
 - SHA と REF の整合は呼出側の責務。不整合時の動作は未定義。
 - 注入時も 1 回の op-run 起動内では全 cluster が同じ SHA を使う。
 
----
+## subagent への受け渡しと push
 
-## subagent 起動時の prompt に渡す情報
+apply subagent に渡す値 (worktree path / branch / base SHA / scope_in / scope_out) の正本は op-run の
+`cluster-orchestrator-directives.md`。subagent は worktree で作業し commit までで止まる。push は controller 側 (op-run では ClusterOrchestrator のフェーズ4) が行い、例外はない (review subagent を含む。review-expert の禁止事項は `agents/review-expert.md`、no-apply expert は `runtime-contract.md` §8)。
 
-```
-- 作業ディレクトリ: <WT_PATH>
-- ブランチ: <BRANCH>          ← prompt 内のすべての参照箇所でこの値を使う (apply / review / post-check 共通)
-- base ref: ${OP_RUN_BASE_REF}
-- 起点 commit: ${OP_RUN_BASE_SHA}
-- 触ってよいファイル: <マニフェスト>
-- 並列タスクが触るファイル: <マニフェスト> ← 触らない
-- push は司令官が実施する: subagent は push しない (commit までで停止)
-```
+## ファイル競合の回避 (op-run の責務)
 
-subagent は worktree で作業し commit まで行う。push は司令官が op-run フェーズ2-D (Post-run conflict check) で実 diff の重複検証を通した後に行う。push の例外はない (review subagent を含む。review-expert の禁止事項は `expert-spawn.md` / `runtime-contract.md` §8)。
-
----
-
-## ファイル競合検出 (op-run の責務)
-
-並列実行前に司令官が行う:
-
-1. 各クラスタの「触る予定ファイル」をマニフェスト化
-2. クラスタ間で突き合わせ、重複ファイルを検出
-3. 重複あり → そのペアは **直列化** (一方を完了 → main にマージ → もう一方を rebase)
-4. 直列化困難 (両方 Critical 等) → ユーザーに相談し片方を遅延
-
-競合の疑いがあれば並列化せず直列化する。
-
----
+cluster 間で触るファイルが重なる場合は並列化せず、op-run の serial_chains (起動順による直列実行) に回す
+(`op-run/SKILL.md` 2-B-partition)。判定不能なら直列化する。
 
 ## cleanup タイミング
 
@@ -83,10 +51,8 @@ subagent は worktree で作業し commit まで行う。push は司令官が op
 | op-run review 完了 (pro-reviewed 付与) | 保持 (マージ後に削除) |
 | op-merge でマージ成功 | op-merge が完全削除 (worktree remove + branch -D)。GitHub で手動マージした場合は op-cleanup |
 | op-merge で保留 / PR クローズ | 保持 (ユーザーが再開する可能性) |
-| apply 失敗 (テスト落ち等) | `~/cwork/worktrees-failed/` へ隔離し、ユーザーに報告 |
-| 30 分タイムアウト | 隔離 (失敗と同じ) |
-
----
+| apply 失敗 (テスト落ち等) | `~/cwork/worktrees-failed/` へ隔離し、ユーザーに報告 (自動削除しない。1 週間以上滞留したら報告して判断を仰ぐ) |
+| subagent タイムアウト | 隔離 (失敗と同じ) |
 
 ## cleanup コマンド
 
@@ -97,18 +63,9 @@ op run worktree cleanup --task-id <task-id> --success
 op run worktree cleanup --task-id <task-id> --failure
 ```
 
----
-
-## 司令官のクリーンアップポリシー
-
-- 削除は merge 後のみ。レビュー済みでも未マージの PR の worktree は残す。
-- 1 週間以上滞留している隔離 worktree はユーザーに報告して判断を仰ぐ (自動削除しない)。
-
----
-
 ## 並列度 hard cap / soft warning gate
 
-op-run controller は並列実装の開始直前に `git worktree list | wc -l` のスナップショットで滞留数を確認する (snapshot 判定のみ。後から増える worktree は対象外)。`op cluster max-parallel` の論理上限とは独立の物理ガード。
+op-run controller は並列実装の開始直前に `git worktree list | wc -l` のスナップショットで滞留数を確認する (snapshot 判定のみ)。
 
 | 状態 | 閾値 | 挙動 |
 |------|------|------|

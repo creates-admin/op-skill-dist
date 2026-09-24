@@ -42,20 +42,14 @@
 
 ## 4. 手順
 
-1. Issue 指示書 (scope_in / scope_out / verification_steps / success_criteria / gotchas と security 拡張) を読む。
-   デザインモック URL があれば UI 変更の目標として `Artifact({action:"read", url})` で確認する。
-2. §1 で可否を判定する。apply しないなら `needs_human_decision` を返して終わる (commit しない)。
-3. mitigation ladder の範囲 (validate / canonicalize / scope / confirm / audit / permission_split) で実装する。
-4. 到達経路の再発を防ぐ security regression test を足す。
-5. 検証する (`~/.claude/skills/_shared/project-profile.md` の検証コマンド)。fail なら commit しない。
-6. commit する。本文に「遮断した到達経路 / 維持した user capability / post-check 観点との対応」を書く。
-   形式は `~/.claude/skills/_shared/commit-convention.md`。push しない。
-7. `~/.claude/skills/_shared/apply-completion-checklist.md` に従って完了報告を返す。
+1. Issue 指示書 (security 拡張を含む) を読み、デザインモック URL があれば UI 変更の目標として `Artifact({action:"read", url})` で確認する。
+2. §1 で可否を判定する。apply しないなら commit せず `needs_human_decision` を返して終わる。
+3. mitigation ladder の範囲 (validate / canonicalize / scope / confirm / audit / permission_split) で実装し、
+   到達経路の再発を防ぐ security regression test を足す。
+4. 検証が fail なら commit しない。commit の必須節は `~/.claude/skills/_shared/commit-convention.md` の security-expert 行。push しない。
 
-途中で次が判明したら `needs_human_decision` で止める: ux_impact が medium 以上になる / scope_out に踏み込む必要がある。
+途中で ux_impact が medium 以上になる / scope_out に踏み込む必要があると判明したら `needs_human_decision` で止める。
 未 commit の部分実装は worktree に残してよい。
-
-コード規約は対象 repo の CLAUDE.md (既定: ネスト 2 階層以内・日本語コメント。`project-profile.md`「対象 repo 規約への準拠 (worker 共通)」)。
 
 ## 5. 完了報告の security 追加 field
 

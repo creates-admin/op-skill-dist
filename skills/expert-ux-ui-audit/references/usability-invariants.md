@@ -1,24 +1,22 @@
 # Usability Invariants (10 不変条件)
 
-監査時に順に確認する不変条件。違反は Critical / High で報告し、`broken_invariant` に番号を書く。Medium 以下は出さない。
+監査時に順に確認する不変条件。違反は Critical / High で報告し、`broken_invariant` に番号を書く。
 
 ## 10 不変条件
 
-1. **次の行動が明確である** — 主要 CTA が一目でわかる。primary が複数並列で序列が読めないのは違反
-2. **該当する状態が網羅されている** — UI 種別ごとの必須状態が定義・実装されている (`recovery-and-states.md` の早見表)。
-   6 状態を機械的に全要求しない。該当しない状態は `not_applicable_reason` 付きで省略可。
+1. 次の行動が明確である — 主要 CTA が一目でわかる。primary が複数並列で序列が読めないのは違反
+2. 該当する状態が網羅されている — UI 種別ごとの必須状態 (`recovery-and-states.md`) が実装されている。
    正常系だけ実装して終わりは最大の違反。どの状態が欠落しているかを `broken_invariant` に書く
-3. **エラー時に復帰できる** — 原因と次の行動を示し、retry / 戻る / 別の方法がある。戻る手段が無い画面は Critical
-4. **危険操作に確認または取り消し導線がある** — 削除・不可逆操作にダイアログまたは Undo。「OK」が default focus は危険。
+3. エラー時に復帰できる — 原因と次の行動を示し、retry / 戻る / 別の方法がある。戻る手段が無い画面は Critical
+4. 危険操作に確認または取り消し導線がある — 削除・不可逆操作にダイアログまたは Undo。「OK」が default focus は危険。
    destructive を primary と同色・同位置にしない
-5. **入力エラーが対象フィールドと結びついている** — `aria-describedby` で関連付けた inline error。toast 単独は SR / keyboard 利用者に届かない
-6. **操作可能 / 不可能 / 選択中が区別できる** — disabled / active / selected が視覚的に明確。色だけで区別しない
-7. **keyboard 操作と focus visible が保たれている** — `:focus-visible` あり、`outline:none` で消していない。Tab 順序が論理的。
-   `<div @click>` でなく `<button>`。shortcut はドキュメント化されている
-8. **contrast が破綻していない** — 本文 4.5:1 以上、非テキスト UI 3:1 以上。placeholder / metadata も最低基準を割らない
-9. **業務フローのクリック数・判断回数を不必要に増やしていない** — 主要導線で「戻る → 進む」往復、同種操作で毎回モーダル確認、
+5. 入力エラーが対象フィールドと結びついている — `aria-describedby` で関連付けた inline error。toast 単独は SR / keyboard 利用者に届かない
+6. 操作可能 / 不可能 / 選択中が区別できる — disabled / active / selected が視覚的に明確。色だけで区別しない
+7. keyboard 操作と focus visible が保たれている (`a11y-checklist.md`)。shortcut はドキュメント化されている
+8. contrast が破綻していない (`a11y-checklist.md`)
+9. 業務フローのクリック数・判断回数を不必要に増やしていない — 主要導線で「戻る → 進む」往復、同種操作で毎回モーダル確認、
    大量項目に bulk action が無い、は違反
-10. **美しさのために使いやすさを犠牲にしていない** — 装飾で focus を消す、アニメで操作を塞ぐ、視覚優先で keyboard を壊す、
+10. 美しさのために使いやすさを犠牲にしていない — 装飾で focus を消す、アニメで操作を塞ぐ、視覚優先で keyboard を壊す、
     見た目のために復帰導線を消す
 
 ## bulk_group 命名規則 (5 件以上で bulk 起票)

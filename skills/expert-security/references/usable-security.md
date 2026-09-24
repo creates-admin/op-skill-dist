@@ -4,15 +4,8 @@
 
 ## 1. NG / OK
 
-| NG (提案も実装もしない) | OK |
-|---|---|
-| 任意ファイル操作を禁止する | OS picker 経由の path を user-granted として扱い、検査する |
-| 保存先を固定する / ユーザーに選ばせない | canonicalize し、symlink / reparse point / `..` を検査する |
-| 外部ファイルをすべて拒否する | 拡張子 / scheme / reserved path を検査する |
-| shell 連携・外部アプリ連携を削除する | shell 文字列を args 配列にする |
-| import / export を削除する | overwrite / delete / external launch に確認を入れる |
-| capability 全体を deny にする | 実際に未使用の permission だけを縮小する |
-| 認証・権限モデルや updater 設計を作り直す | log / error から secret・絶対 path を除去する / IPC 入力検証を足す |
+NG は「その capability の UI・導線を消す / 固定する / 形式を 1 つに絞る」こと (§2「禁止される deny」)。
+OK は §2 の ladder で入力を検査・正規化し、実際に未使用の permission だけを縮小すること。
 
 ## 2. Mitigation ladder
 

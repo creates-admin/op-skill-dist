@@ -9,30 +9,13 @@ log は障害解析に必要なので消さない。出力内容の sanitize と
 - 漏れるもの: secret (API key / OAuth・refresh token / session / 秘密鍵)、production path (ユーザー名入りの絶対 path / 内部構造)、
   document content (文書本文 / 個人情報 / 顧客名)、URL query の token (`?api_key=` → log / referer に残る)。
 
-## 2. sanitize
+## 2. 対処
 
-```rust
-// NG: 絶対 path と source chain がそのまま出る
-log::error!("failed to write {}: {:?}", path.display(), err);
-return Err(format!("file not found: {}", path.display()));
+- log は workspace 相対 path か error kind のみ。frontend には kind に応じた汎用 code を返し、error chain (`{:?}`) を返さない。
+- Toast / dialog は業務向けの文言。生成 artifact の metadata にユーザー名・内部 path を入れない。token は URL query に載せない。
+- log file は Unix 0600 / directory 0700 (Windows はユーザー専用 ACL)。production の既定 level は info / warn まで。
 
-// OK: log は workspace 相対か kind のみ、frontend には汎用 code
-let rel = path.strip_prefix(&workspace_root).unwrap_or(Path::new("<outside>"));
-log::error!(target: "io", "failed to write {}: {}", rel.display(), err.kind());
-return Err("file_not_found".into());
-```
-
-- `anyhow::Error` / `Box<dyn Error>` の chain を `format!("{:?}")` で frontend に返さない。詳細は log、frontend には kind に応じた code。
-- Toast / dialog は業務向けの文言 (「保存先を確認してください」)。技術詳細と絶対 path は出さない。
-- 生成 artifact の metadata にユーザー名・内部 path を入れない。JSX / JSON / CSV に production path や secret を hard-code しない。
-- token は URL query ではなく header / body で送る。
-
-## 3. log 権限と level
-
-- log file は Unix 0600 / directory 0700、Windows はユーザー専用 ACL を確認する。
-- production の既定 level は info / warn まで。debug / trace を env で有効化できても既定は off。
-
-## 4. 典型 finding
+## 3. 典型 finding
 
 | パターン | severity 目安 | mitigation |
 |---|---|---|

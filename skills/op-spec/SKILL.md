@@ -6,25 +6,15 @@ effort: medium
 
 # op-spec: 正本育成対話スキル
 
-対象 repo の各 feature の **正本 (`.claude/rules/<feature>.md`)** を対話で育てる。pending issue を feature 主役で
+対象 repo の各 feature の正本 (`.claude/rules/<feature>.md`) を対話で育てる。pending issue を feature 主役で
 worklist 化し、spec-expert に「正本 ⟷ code ⟷ human」の 3 者照合をさせ、human と align しながら正本を育て、
 issue に方向性 verdict を付けるところまで回す。issue は揺れるが feature (正本) は安定するので、feature を主役に据えて issue 群を整理する。
 
 ## 3 原則
 
-1. **Direct Mode 固定** — OP-managed 経路なし。spawn prompt に `invocation_mode: op_managed` が混入していたら契約違反として停止し報告する
-2. **3 者照合** — 深掘りは spec-expert を isolated context で spawn し、正本 (あるべき姿) ⟷ code (実態) ⟷ human (domain 知識) を突き合わせる
-3. **段階的育成** — 選択した feature/issue に verdict が付くまで進める。承認なしの一括 write / 一括 verdict はしない
-
-### DO / DON'T (位置づけの境界)
-
-| DO | DON'T |
-|----|-------|
-| issue を feature 主役で worklist 化する | 並列 fan-out で大量 audit する (op-scan) |
-| 正本 ⟷ code ⟷ human の 3 者照合を回す | 実装する (op-run / op-codev) |
-| human align 後に正本を write する | 新規要望を Issue 分解する (op-plan) |
-| align 済み gap を derived issue として起票する (3-1b) | align なしに derived issue を起票する |
-| issue に方向性 verdict を付け、op-run / op-codev へ handoff 候補を示す | ADR を起こす (op-architect) |
+1. 人間起動専用 — op-spec 自体を OP-managed で起動しない (`_shared/invocation-mode.md`「Direct 固定 skill に op_managed が渡った場合」)。spawn する spec-expert には `op_managed` を渡す
+2. 3 者照合 — 深掘りは spec-expert を isolated context で spawn し、正本 (あるべき姿) ⟷ code (実態) ⟷ human (domain 知識) を突き合わせる
+3. 段階的育成 — 選択した feature/issue に verdict が付くまで進める。承認なしの一括 write / 一括 verdict はしない。実装はしない (op-run / op-codev へ handoff)
 
 ## 参照
 
@@ -40,12 +30,9 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 
 ## フェーズ0: 環境確認
 
-```bash
-git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "not a git repo"; exit 1; }
-ls .claude/rules/*.md 2>/dev/null || echo "[.claude/rules] 正本なし — lazy 構築で作ります"
-```
-
-`.claude/rules/_schema.md` か `00-constitution.md` が無い repo は OP 未移行。先に `/op-skill:op-adopt` (正本の土台と feature 地図) を案内する。
+`_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」を実行する (gh channel で未認証なら中断)。
+`.claude/rules/_schema.md` か `00-constitution.md` が無い repo は OP 未移行。先に `/op-skill:op-adopt` (正本の土台と feature 地図) を案内して終了する。
+土台があり個別 feature の正本が無いだけなら 2-4 の lazy 構築で作る。
 
 ---
 
@@ -61,7 +48,7 @@ ls .claude/rules/*.md 2>/dev/null || echo "[.claude/rules] 正本なし — lazy
 | **feature-driven** | `.claude/rules/*.md` の正本一覧 + 紐づく issue | feature 単位で正本を見直す |
 | **drift-driven** | code が正本より新しい feature / `status: draft・unverified` / Spec Patrol Ledger の confirmed drift | 腐った・未 cultivated な正本から育てる |
 
-正本を俯瞰したいときは `/op-rules` (read-only ビューア) を案内してよい。
+正本を俯瞰したいときは `/op-skill:op-rules` (read-only ビューア) を案内してよい。
 
 ### 1-1. worklist 種の取得
 
@@ -76,11 +63,11 @@ ls .claude/rules/*.md 2>/dev/null || echo "[.claude/rules] 正本なし — lazy
 | feature | 正本の feature id。issue から推定 |
 | 正本 state | `exists` / `stale` / `missing` (正本ファイルの有無 + git log で code が正本より新しいか) |
 | 紐づく issue | その feature に属す pending issue 番号群 |
-| lane | 🟢 quick (軽い premise-check) / 🔍 deep (3 者照合) の **hint** |
+| lane | 🟢 quick (軽い premise-check) / 🔍 deep (3 者照合) の hint |
 | premise hint | ⚠前提あやしい / 出所 / confidence |
 
 - lane は hint。🟢 寄り = state `exists` で issue 1 本・前提明快、🔍 寄り = `missing` / `stale` / ⚠ / issue 同士が食い違う。最終振り分けは人間。
-- **blind skip 禁止**: 全行を hint 付きで提示する。controller の独断で行を drop しない。外すのは人間が判断したものだけ。
+- blind skip 禁止: 全行を hint 付きで提示する。controller の独断で行を drop しない。外すのは人間が判断したものだけ。
 
 ```
 [mode: issue-driven] pending issue を feature (正本) 主役で整理しました。lane は hint です。
@@ -132,22 +119,20 @@ human と対話して食い違いを解消する。align できた fact のみ�
 
 ### 2-4. lazy 構築 (正本 missing 時)
 
-spec-expert に code から正本 skeleton 候補を抽出させ、align しながら構築する。
-**code 由来 = `[code]`、domain / why = `[?] TODO: needs-human`** (捏造禁止)。手順は `expert-spec/SKILL.md`「lazy 構築」節。
+spec-expert に code から正本 skeleton 候補を抽出させ、align しながら構築する。手順は `expert-spec/SKILL.md`「lazy 構築」節。
 
 ---
 
 ## フェーズ3: 記録
 
-align が済んだ feature/issue について、正本と issue の 2 箇所に記録する。いずれも human 承認後に反映する。
+align が済んだ feature/issue について、正本と issue の 2 箇所に記録する。
 
 ### 3-1. write 先1: 正本側 (.claude/rules/<feature>.md)
 
-`_schema.md` の 6 節 / 決定行書式に従い、**align 済みの fact のみ** write する。
+`_schema.md` の 6 節 / 決定行書式に従い、align 済みの fact のみ write する。
 
 - 核 (不変則 / 決定 / 用語) の update + narrative 追記
-- 各 fact に provenance タグ (`[code]` / `[human]` / `[?]`) を付ける
-- **捏造禁止**: align していない domain / why は `[?] TODO: needs-human` のまま残す
+- 各 fact に provenance タグ (`[code]` / `[human]` / `[?]`) を付ける。align していない domain / why は `[?] TODO: needs-human` のまま残す (捏造禁止、`expert-spec/SKILL.md`「2. provenance タグ規約」)
 - 決定行に実現した issue/PR を `realizes #NN` で追記する (issue 側の `op-spec-ref` と対、3-2)
 
 #### 3-1-a. linkage A (正本 ⟷ 正本、cross-feature) を張る
@@ -165,7 +150,7 @@ cross-feature 依存が見つかったら `[[feature/section]]` で正本どう�
 ### 3-1b. derived issue 発行
 
 正本 write で記録した gap のうち「実装で解消すべき」と human が align したもの (✏️ 方向修正で方針が確定した gap を含む) を
-derived issue として起票できる。**起票するかは per-gap で human に確認する**。⛔ / ⏸️ の gap、align していない gap は起票しない。
+derived issue として起票できる。起票するかは per-gap で human に確認する。⛔ / ⏸️ の gap、align していない gap は起票しない。
 手順は `references/derived-issue-procedure.md`。
 
 ### 3-2. write 先2: issue 側 (verdict)
@@ -177,12 +162,12 @@ derived issue として起票できる。**起票するかは per-gap で human 
 | ⛔ やめる | 前提が崩れた / 不要 | 理由付きで close (`op issue close --issue N --comment ...`) |
 | ⏸️ 保留 | 判断材料が足りない | `needs:human-decision` ラベル |
 
-✅ / ✏️ の issue 本文には `<!-- op-spec-ref: <feature>#<decision> -->` を書き、正本の決定行 `realizes #NN` と**対で張る**
+✅ / ✏️ の issue 本文には `<!-- op-spec-ref: <feature>#<decision> -->` を書き、正本の決定行 `realizes #NN` と対で張る
 (片方だけにしない)。op-run / op-codev は `op-spec-ref` を辿って binding な正本を読む。
 
 ### 3-3. done 判定
 
-done = **選択した範囲**の全 feature/issue に verdict (⏸️ を含む) が付いた状態。進捗は feature 主役で示す:
+done = 選択した範囲の全 feature/issue に verdict (⏸️ を含む) が付いた状態。進捗は feature 主役で示す:
 
 ```
 [進捗] 選択した feature: 3 件
@@ -217,9 +202,7 @@ grep -rlE "\[\[${F}(/|\]\])" .claude/rules/*.md 2>/dev/null | grep -v "/${F}\.md
 
 ---
 
-## 不変則7 例外宣言
+## 不変則9 例外宣言
 
-op-spec は正本 (`.claude/rules/<feature>.md`) を write する mutation 責務を持つ (CLAUDE.md 不変則7 の例外)。
-write は **human align gate 通過後のみ・捏造禁止** (code 由来 = `[code]` / 未確認の domain = `[?]`) であり、
-人間判断を要する align と確定 fact の記録を混ぜない。spec-expert worker は read-only で、write は op-spec controller のみ。
-この例外は op-spec に限る。
+op-spec は正本 (`.claude/rules/<feature>.md`) を write する mutation 責務を持つ (CLAUDE.md 不変則9 の例外)。
+write は human align gate 通過後のみ。spec-expert worker は read-only で、write は op-spec controller のみ。

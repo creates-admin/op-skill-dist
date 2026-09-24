@@ -7,12 +7,12 @@ description: canonical spec (`.claude/rules/`) の人間向け派生 HTML ビュ
 
 人間が正本 (`.claude/rules/`) を俯瞰するための派生 HTML ビューアを起動する。Direct Mode 固定。
 
-- **read-only**: 正本を write しない。expert を spawn しない。起票しない。
-- 正本の問題に気づいたら `/op-spec` へ handoff する (正本 write は op-spec 専任)。
+- read-only: 正本を write しない。expert を spawn しない。起票しない。
+- 正本の問題に気づいたら `/op-skill:op-spec` へ handoff する (正本 write は op-spec 専任)。
 
 ## フェーズ0: 確認
 
-`.claude/rules` が無ければ停止する (viewer の対象がない。先に `/op-spec` で正本を起こす)。
+`.claude/rules` が無ければ停止する (viewer の対象がない。先に `/op-skill:op-spec` で正本を起こす)。
 
 ## フェーズ1: モード選択
 
@@ -33,12 +33,12 @@ op rules render --out-file "$OUT" && echo "file://$(cd "$(dirname "$OUT")" && pw
 
 `op rules serve` は foreground で待ち受け続けるので、skill 内で実行しない。ユーザーに次のどちらかで起動してもらう:
 
-- `! op rules serve --port 7878` (`!` プレフィックス)
-- 別ターミナルで `op rules serve --port 7878`
+- `! op rules serve` (`!` プレフィックス)
+- 別ターミナルで `op rules serve`
 
-起動後 `http://127.0.0.1:7878` を開く (`/code?path=...` で最新コードを表示)。ポート競合時は `--port` を変える。
+起動後 `http://127.0.0.1:7878` を開く (`/code?path=...` で最新コードを表示)。ポート競合時は `--port <N>` で変える。
 
 ## フェーズ2: handoff
 
 viewer 上で正本の問題 (古い記述 / 関係の不整合 / provenance の欠落 等) に気づいたら、アノテーション機能で選択 → JSON export し、
-その内容を持って `/op-spec` を起動するよう案内して終了する。
+その内容を持って `/op-skill:op-spec` を起動するよう案内して終了する。

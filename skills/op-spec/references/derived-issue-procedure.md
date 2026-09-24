@@ -1,7 +1,7 @@
 # op-spec: derived issue 起票手順 (3-1b)
 
 正本 write で記録した gap のうち、human が「実装で解消する」と align したものだけを起票する。
-起票前ゲートは `_shared/filing-gate.md` に従う (対話経路 = 人間承認)。
+起票前ゲートは `_shared/filing-gate.md` に従う (対話経路 = 人間承認。severity の例外は同 §1)。
 
 ## 1. per-gap 承認
 
@@ -21,12 +21,10 @@ fingerprint は `op core fingerprint --plain --domain feature --title "<normaliz
 op scan dedup --findings-json "$DRAFTS_JSON" --json
 ```
 
-- 既存 Issue と重複 → 起票せず既存 Issue 番号を提示する。
-- 類似 (warn) → 提示して human に判断を仰ぐ。
-- dedup 自体が失敗 → 起票せず中断し、手動確認を促す。
+重複 / 類似の扱いは `filing-gate.md` §2。dedup 自体が失敗したら起票せず中断し、手動確認を促す。
 
 feature が `design-system` で、gap が部品の作成・変更・登録状態 (カタログ掲載・契約・部品単位トークン・`status:`) に関わるものは
-**部品 issue** として起票する (書式は `_shared/design-system.md`「部品 issue」。fingerprint の domain は `design`、
+部品 issue として起票する (書式は `_shared/design-system.md`「部品 issue」。fingerprint の domain は `design`、
 `op-run-expert: designer-expert`、ラベルは `auto-report,pro-designer-expert`)。それ以外の gap は下記のとおり。
 
 ## 3. 起票 (1 件ずつ直列)

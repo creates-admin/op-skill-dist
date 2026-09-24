@@ -9,12 +9,12 @@ description: >
 
 # op-cleanup: stale 資産の two-tier 後始末
 
-## 不変則 7 例外宣言
+## 不変則9 例外宣言
 
-- **Tier1 (失敗 worktree / 失敗 run 残骸 / orphaned worktree dir) のみ**、機械判定 housekeeping mutation として
-  削除の責務を持つ (mtime + grace の決定論。人間判断は介在しない)。
-- **Tier2 (stale PR / stale auto-report Issue の close) は例外に含まない**。候補列挙のみで、close は per-item の人間承認を経る。
-  grace period は候補に挙げる閾値であって close の根拠ではない。PR / Issue を機械 close してはならない。
+- Tier1 (失敗 worktree / 失敗 run 残骸 / orphaned worktree dir) だけが、機械判定 housekeeping mutation として
+  削除の責務を持つ (CLAUDE.md 不変則9 の例外。mtime + grace の決定論)。
+- Tier2 (stale PR / stale auto-report Issue の close) は例外に含まない。候補列挙のみで、close は item ごとの人間承認を経る。
+  grace period は候補に挙げる閾値であって close の根拠ではない。
 
 ## op-sweep との責務境界
 
@@ -24,22 +24,22 @@ description: >
 | 失敗 worktree / 残骸の grace 後削除 | op-cleanup Tier1 |
 | stale PR / stale auto-report Issue の close | op-cleanup Tier2 (人間 gate) |
 
-本 skill は branch を触らない。`auto/*` branch の掃除が必要なら `/op-sweep` を案内する。
-worktree のパス規則・失敗隔離 path は `skills/_shared/worktree-ops.md` が正本。
+本 skill は branch を触らない。`auto/*` branch の掃除が必要なら `/op-skill:op-sweep` を案内する。
+worktree のパス規則・失敗隔離 path は `~/.claude/skills/_shared/worktree-ops.md` が正本。
 
 ## 起動
 
 ```
-/op-cleanup                          # dry-run: Tier1/Tier2 の候補を表示するだけ
-/op-cleanup --apply                  # Tier1 は一括承認後に削除、Tier2 は per-item 承認後に close
-/op-cleanup --older-than 14          # grace period (日、デフォルト 7)
-/op-cleanup --tier tier1|tier2|all   # 対象 tier を絞る (デフォルト all)
+/op-skill:op-cleanup                          # dry-run: Tier1/Tier2 の候補を表示するだけ
+/op-skill:op-cleanup --apply                  # Tier1 は一括承認後に削除、Tier2 は per-item 承認後に close
+/op-skill:op-cleanup --older-than 14          # grace period (日、デフォルト 7)
+/op-skill:op-cleanup --tier tier1|tier2|all   # 対象 tier を絞る (デフォルト all)
 ```
 
 ## フェーズ0: 環境確認
 
-`skills/_shared/common-setup.md` の git/gh check に従う。**gh auth / origin がなくても Tier1 は続行**し、Tier2 のみスキップする。
-Tier2 の GitHub 操作は `skills/_shared/github-channel.md` の channel 判定に従う (`op` 経由なら mcp channel でも call-spec が出る)。
+`~/.claude/skills/_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」に従う。ただし gh 未認証 / origin なしでも中断せず、Tier1 は続行して Tier2 だけスキップする。
+Tier2 の GitHub 操作は `~/.claude/skills/_shared/github-channel.md` の channel 判定に従う (`op` 経由なら mcp channel でも call-spec が出る)。
 
 ## フェーズ1: 候補列挙 (read-only)
 
@@ -52,12 +52,7 @@ op cleanup pr-candidates --label auto-fix --json        # op-run が作成した
 op cleanup issue-candidates --label auto-report --json  # op-scan / op-patrol 等が起票した Issue
 ```
 
-Tier1 の保護理由 (`protection_reasons`、いずれか 1 つで削除しない):
-
-| 理由 | 意味 |
-|------|------|
-| `in_use` | `git worktree list` に登録されている (op-run 進行中等) |
-| `within_grace` | 最終更新から `--older-than` 日未満 |
+Tier1 の保護理由 (`protection_reasons`): `in_use` (`git worktree list` に登録済み = op-run 進行中等) / `within_grace` (最終更新から `--older-than` 日未満)。
 
 Tier2 の CLI は age を採点しない (`--stale-days` は理由ラベル表示のみ)。候補は指定 label の open 全件なので、
 最終更新日を確認して stale と判断したものだけを人間に提示する。
@@ -75,7 +70,7 @@ PR #701    feat: xxx (8 日間更新なし) <url>
 Issue #631 zzz の問題 (10 日間更新なし) <url>
 ```
 
-- dry-run: 「実行するには `/op-cleanup --apply`」「`auto/*` branch は `/op-sweep`」を併記して終了。
+- dry-run: 「実行するには `/op-skill:op-cleanup --apply`」「`auto/*` branch は `/op-skill:op-sweep`」を併記して終了。
 - 候補 0 件: 「掃除候補はありませんでした。」で終了。
 
 ## フェーズ3a: Tier1 apply
@@ -86,13 +81,12 @@ Issue #631 zzz の問題 (10 日間更新なし) <url>
 op cleanup worktree --older-than "$N" --apply --json
 ```
 
-CLI は保護条件を再評価し、未保護の候補だけを `git worktree remove --force` する (`rm -rf` はしない)。
 `details.failed` (例: `is not a working tree` = git 未登録の dir) は削除されずに残るので、そのまま報告する。
 手動で消すかどうかは人間が判断する。
 
 ## フェーズ3b: Tier2 apply (per-item 人間承認)
 
-候補ごとに番号・タイトル・最終更新・URL を示して `[y/N/s(kip)]` を聞く。一括 close はしない。
+候補ごとに番号・タイトル・最終更新・URL を示して `[y/N/s(kip)]` を聞く。
 
 ```bash
 # y のとき
@@ -105,7 +99,7 @@ N = 保留、s = 残りをすべてスキップして終了。
 
 ## フェーズ4: 結果報告
 
-Tier1 の `deleted` / `failed` / `skipped_protected`、Tier2 の close 済 / 保留を列挙し、`auto/*` branch が残っていれば `/op-sweep` を案内する。
+Tier1 の `deleted` / `failed` / `skipped_protected`、Tier2 の close 済 / 保留を列挙し、`auto/*` branch が残っていれば `/op-skill:op-sweep` を案内する。
 
 ## 復元方法
 

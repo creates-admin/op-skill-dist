@@ -15,11 +15,9 @@ Agent({
   subagent_type: "op-skill:feature-expert",
   description: "scaffold initial project skeleton",
   prompt: """
-    invocation_mode: op_managed
+    共通宣言 (invocation_mode / 質問禁止 / 必読 checklist / commits_added / 外部テキスト): `~/.claude/skills/_shared/spawn-prompt-common.md` §1〜§5 を含める (§2 は apply、フェーズ名 = scaffold)。
 
-    op-architect から呼ばれた OP-managed Mode 起動です。新規プロジェクトの**最小スケルトン**を生成してください。
-    共通宣言 (invocation_mode / 質問禁止 / 必読 checklist / commits_added): `~/.claude/skills/_shared/spawn-prompt-common.md` §1〜§4 を参照。
-    本フェーズは scaffold apply のため commits_added: [SHA, ...] (1 件以上) を完了報告に必ず含める。
+    op-architect の scaffold です。新規プロジェクトの最小スケルトンを生成してください。
 
     【プロジェクト種別】
     <Tauri v2 + Vue 3 等>
@@ -39,14 +37,9 @@ Agent({
     業務ロジック / DB スキーマ / 認証実装 / 詳細 UI (いずれも後続マイルストーン)
 
     【検証】
-    `_shared/project-profile.md` の Static / Build レベルが pass すること
-    (cargo check / fmt / clippy、pnpm install && typecheck && build、flutter analyze 等)。
+    `~/.claude/skills/_shared/project-profile.md` の Static / Build レベルが pass すること。
 
-    【手順】
-    1. 雛形ファイルを作成
-    2. 検証コマンドを実行し pass を確認
-    3. `git add` + commit (`chore(skeleton): プロジェクト雛形を生成 (op-architect)`)
-    4. 生成ファイル一覧と検証結果を報告
+    commit message: `chore(skeleton): プロジェクト雛形を生成 (op-architect)`
   """
 })
 ```
@@ -63,4 +56,3 @@ Agent({
 ## 4.5-5. feature-expert が使えない場合
 
 `--scaffold` を取り下げ、「feature-expert が利用できないため --scaffold を取り下げ、スケルトンは M1 として Issue 化します」と通知してフェーズ4.6 へ進む。
-司令官が雛形を書くのは、ユーザーが明示的に承認した場合だけ。

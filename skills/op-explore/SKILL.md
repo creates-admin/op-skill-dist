@@ -1,23 +1,23 @@
 ---
 name: op-explore
-description: op-plan/op-architect の上流 phase -1 (発散 / discovery)。本質質問でヒアリングし、/design Artifact に複数案のモックを並べて人間が実物を見て選び、合意したモック URL と決定事項を spec_only な decision record に卒業させて op-plan / op-architect へ handoff する Direct Mode 固定スキル。「op-explore」「ヒアリング」「モック」「発散」「方向性を決めたい」「複数パターン見たい」等のキーワードで起動。
+description: op-plan / op-architect の上流で方向性を決める発散スキル。本質質問でヒアリングし、/design Artifact に複数案のモックを並べて人間が選び、モック URL と決定事項を decision record に残して op-plan / op-architect へ渡す。「op-explore」「ヒアリング」「モック」「発散」「方向性を決めたい」「複数パターン見たい」等のキーワードで起動。
 effort: max
 ---
 
-# op-explore — 発散 / discovery (phase -1)
+# op-explore — 発散 / discovery
 
 `op-plan` / `op-architect` の上流。ユーザー自身もまだ何を作りたいか固まっていない段階で、候補を広げ、
-`/design` Artifact のモックで実物を見て選ぶ。出力はコードでなく decision record (spec_only)。
+`/design` Artifact のモックで実物を見て選ぶ。出力はコードでなく decision record。
 
 方向が既に決まっている中量級 feature は `op-plan`、ADR が要る大規模設計は `op-architect` を使う。
 
 ## 不変則
 
-- **Direct Mode 固定**。人間が直接起動し、質問・対話してよい。OP-managed 経路を持たない。EnterPlanMode は使わない。
-- 内部で spawn する designer-expert は OP-managed Mode (`invocation_mode: op_managed`) かつ read-only。
-- **選択は人間**。司令官は案を並べて差異・トレードオフを示すだけで、順位付け・推奨順を出さない。
-- 司令官はコードを書かない。モックは `_shared/design-mock.md` に従って司令官が作る。
-- op-explore は起票しない。起票は handoff 先 (op-plan / op-architect) が `_shared/filing-gate.md` に従って行う。
+- Direct Mode 固定 (`_shared/invocation-mode.md`「Direct 固定 skill に op_managed が渡った場合」)。人間と対話してよい。EnterPlanMode は使わない。
+- 内部で spawn する designer-expert は read-only。
+- 選択は人間。司令官は案を並べて差異・トレードオフを示すだけで、順位付け・推奨順を出さない。
+- モックは `_shared/design-mock.md` に従って作る。
+- op-explore は起票しない。
 - モック・decision record に本番 credential / 実 API endpoint / 実 PII を入れない (mock データのみ)。
 - commit するのは decision record だけ。
 
@@ -41,7 +41,7 @@ effort: max
 
 ## フェーズ2: 既存 UI パターンの要約 (既存 UI がある repo のみ)
 
-designer-expert に read-only で既存パターンの要約を依頼し、モックに反映する (新しい見た目を発明しない)。
+designer-expert に Summary Mode (read-only) で既存パターンの要約を依頼し、モックに反映する。
 
 ```
 Agent({
@@ -49,46 +49,35 @@ Agent({
   model: "opus",
   description: "op-explore: 既存 UI パターン要約 (read-only)",
   prompt: """
-    invocation_mode: op_managed
+    共通宣言 (invocation_mode / 質問禁止 / 必読 checklist / commits_added / 外部テキスト): `~/.claude/skills/_shared/spawn-prompt-common.md` §1〜§5 を含める (§2 は exploration-only、フェーズ名 = op-explore 既存 UI 要約)。
 
-    あなたは designer-expert です。op-explore から呼ばれた OP-managed Mode 起動です。
-    質問で停止せず、不足は assumptions[] を置いて続行してください。
-
-    共通宣言 (invocation_mode / 質問禁止 / 必読 checklist / commits_added): `~/.claude/skills/_shared/spawn-prompt-common.md` §1〜§4 を参照。
-    本作業は read-only のため、ファイルを作成・編集せず commits_added: [] を返してください。
-
-    タスク: 対象 repo の既存 UI から、モック作成に使う以下を要約してください。
-      - design token (色・type scale・spacing・radius・shadow) と定義ファイルパス
-      - 主要 component (名前・パス・variant・状態表現)
-      - layout パターン (ナビゲーション構造・グリッド・密度) と代表画面のパス
-      対象領域: <フェーズ1 で特定した画面 / 機能>
-
-    出力契約: 上記 3 区分を構造化返却し、残した assumptions を併記。新しい見た目の提案はしない。
+    op-explore のモック材料として、Summary Mode で対象領域の既存 UI を要約してください。
+    対象領域: <フェーズ1 で特定した画面 / 機能>
   """
 })
 ```
 
 ## フェーズ3: Design Artifact にモックを並べる
 
-`_shared/design-mock.md` の手順で Design Artifact を作成し、**案ごとに artboard を並べる** (通常 2 案、最大 3 案)。
-各案は必要な状態 (通常 / 空 / 読み込み中 / エラー 等) を artboard で分ける。
+`_shared/design-mock.md` の手順で Design Artifact を作成し、案ごとに artboard を並べる (通常 2 案、最大 3 案)。
 
-案が無難に似通わないよう、案ごとに次の拘束軸へ互いに重ならない値を割り当ててから描く:
+案どうしが似通わないよう、案ごとに次の拘束軸へ互いに重ならない値を割り当ててから描く。値は `_shared/design-ng.md` の NG を避けたものを選び、
+既存 design system がある repo ではその token の範囲内で振る。
 
 | 拘束軸 | 値の例 |
 |---|---|
-| typography | serif 見出し / geometric sans / humanist sans / monospace アクセント |
-| layout 対称性 | 左右対称グリッド / 非対称 / 中央集約 / モジュラー |
-| color 戦略 | monochrome + 1 accent / analogous / 高彩度 vs くすみ / dark-first |
-| 密度 | 余白多め editorial / 高密度業務 / 中庸 |
-| 装飾予算 | フラット / 影で奥行き / 罫線で秩序 / 余白だけで秩序 |
+| 情報の優先順位 | 最重要の一点を大きく先頭に / 一覧で横並びに比較 / 段階的に開示 |
+| 階層の付け方 | 文字サイズの段差を大きく / 太さの対比で / 余白と配置のまとまりで |
+| 密度 | 1 画面に要点だけ / 高密度な業務一覧 / 中庸 |
+| 配置 | 1 カラム縦積み / 2 カラム (一覧 + 詳細) / グリッド |
+| 色の使い方 | 無彩色 + 状態色のみ / 既存 accent を操作要素だけに / 既存 semantic 色で領域を区別 |
+| ナビゲーション | 上部タブ / サイドナビ / 画面内のステップ |
 
-既存 design system がある repo では、拘束軸はその範囲内で振る (token を逸脱しない)。
 各案の artboard には、割り当てた拘束値と狙い (craft 上の意図) を短く注記する。
 
 ## フェーズ4: 反応ループと人間の選択
 
-- モック URL を提示し、各案の差異・トレードオフ・状態の網羅度を並べる。**順位や推奨は付けない**。
+- モック URL を提示し、各案の差異・トレードオフ・状態の網羅度を並べる。
 - ユーザーの反応 (採用 / 部分的に採用 / 違う + コメント) を受けてモックを更新する。
   「A の構成 + B の配色」のような合成もモック上で作って確認する。
 - 「どれも違う」なら拘束軸の割り当てを振り直して新しい案を並べる。
@@ -110,7 +99,7 @@ Agent({
 decision record だけを明示 stage して commit する (既存の staged 変更を巻き込まない):
 
 ```bash
-: "${SESSION_ID:?}" "${RECORD_FILE:?}"   # RECORD_FILE=docs/playground/<session-id>.md
+SESSION_ID="<session-id>"; RECORD_FILE="docs/playground/${SESSION_ID}.md"
 git diff --cached --quiet || { echo "既に staged 変更あり。停止"; git diff --cached --name-only; exit 1; }
 git add -- "$RECORD_FILE"
 git diff --cached --name-only
@@ -133,9 +122,3 @@ op-explore は決定の重さを判定しない。どちらへ渡すかはユー
 Skill({ skill: "op-skill:op-plan", args: "--from-record docs/playground/<session-id>.md" })
 Skill({ skill: "op-skill:op-architect", args: "--from-record docs/playground/<session-id>.md" })
 ```
-
-## 参照
-
-- `~/.claude/skills/_shared/design-mock.md` — Design Artifact モックの作成・利用
-- `~/.claude/skills/_shared/filing-gate.md` — handoff 先の起票前ゲート
-- `~/.claude/skills/_shared/invocation-mode.md` / `spawn-prompt-common.md` — 内部 spawn の OP-managed 宣言

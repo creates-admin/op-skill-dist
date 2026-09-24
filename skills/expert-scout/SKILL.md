@@ -1,6 +1,6 @@
 ---
 name: expert-scout
-description: scout agent の方法論教科書。単一 finding の実在確認 gate・起票前ゲート・起票手順・返却スキーマを集約する。直接 invoke は想定せず、agent.md の skills フィールド経由で自動プリロードされる前提で動作する知識ベース。
+description: scout に preload される方法論。実在確認 gate・起票手順・返却スキーマ。
 ---
 
 # expert-scout: scout agent の知識ベース
@@ -22,24 +22,21 @@ severity は起票可否に使わない (ラベルと本文の記述にのみ使
 
 ## 2. 起票手順 (`confirmed` のときのみ)
 
-起票前ゲートの正本は `~/.claude/skills/_shared/filing-gate.md` (op-report の起票前レビュー = scout の実在確認)。
+起票前ゲートの正本は `~/.claude/skills/_shared/filing-gate.md` (op-report の起票前レビュー = scout の実在確認)。1 件ずつ次の順で行う。
 
-1. **fingerprint 生成** (手書き禁止):
-   `op core fingerprint --plain --domain <domain> --title "<title>" --file <files[0]> [--symbol <symbol>]`
-2. **重複チェック**: finding を JSON に書き、`op scan dedup --finding-json draft.json --json` を実行する。
+1. fingerprint 生成: `op core fingerprint --plain --domain <domain> --title "<title>" --file <files[0]> [--symbol <symbol>]`
+2. 重複チェック: finding を JSON に書き、`op scan dedup --finding-json draft.json --json` を実行する。
    - 重複 → `duplicate` で返す。類似 (warn) → 起票せず `needs_human_decision` で返す (既存 Issue の URL を options に含める)
-   - `OP_GITHUB_CHANNEL=mcp` では gh が使えないため、既存 Issue を `mcp__github__search_issues` で取得して保存し
-     `--input-json <file>` で渡す (`~/.claude/skills/_shared/github-channel.md` §6。MCP tool の schema は ToolSearch で load)
-3. **本文組立**: `~/.claude/skills/_shared/pr-templates.md`「Issue 本文 (指示書フル版)」に従う。
-   hidden marker は `op-fingerprint` / `op-run-expert` / `op-post-check-expert` のうち該当するものだけ。
-   `op-run-expert` / `op-post-check-expert` は `~/.claude/skills/_shared/clustering.md`「Step 6: expert アサイン」の
-   category → expert 表で決め、`active-expert-registry.md` に無い expert は書かない。
-   UI を含む場合も見た目の仕様は文章で書かない (デザインモックの URL があれば `デザインモック: <URL>` の 1 行のみ)
-4. **lint → 起票** (1 件、直列、失敗を握りつぶさない):
+   - `OP_GITHUB_CHANNEL=mcp` では既存 Issue を `mcp__github__search_issues` で取得して保存し `--input-json <file>` で渡す
+     (`~/.claude/skills/_shared/github-channel.md` §6)
+3. 本文組立: `~/.claude/skills/_shared/pr-templates.md`「Issue 本文 (指示書フル版)」。marker は同ファイル「Issue 本文 hidden marker」、
+   `op-run-expert` / `op-post-check-expert` の値とラベルは「domain → marker / ラベル表」で決める。
+   severity ラベル (`severity:<critical|high>`) は severity が Critical / High のときだけ付ける。
+4. lint → 起票:
 
    ```bash
    op core marker-lint --body-file body.md --source-hint issue-body --strict
-   op issue create --title "<title>" --body-file body.md --label "auto-report,pro-<op-run-expert>" --ensure-labels
+   op issue create --title "<title>" --body-file body.md --label "auto-report,pro-<op-run-expert>[,severity:<critical|high>]" --ensure-labels
    ```
 
    mcp channel では `op issue create` が call-spec を emit する。scout 自身が `github-channel.md` §3〜§4
@@ -59,8 +56,7 @@ controller への要約テキストは 1 行。詳細は JSON に入れる。
   "evidence": "静的根拠 (ファイル:行 + 観測内容)、または根拠が得られなかった旨",
   "evidence_grade": "direct | inferred | requires_runtime",
   "existing_issue": "https://github.com/owner/repo/issues/N",
-  "needs_human_decision": { "required": true, "decision_type": "behavior | scope", "question": "...",
-    "options": ["..."], "recommended_option": "...", "safest_default": "...", "blocking": true },
+  "needs_human_decision": { "required": true, "...": "schema は invocation-mode.md" },
   "assumptions": ["確認できなかった項目の推定"]
 }
 ```

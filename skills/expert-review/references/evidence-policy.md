@@ -32,7 +32,6 @@ Step 8.  推論と diff のズレ・不足・副作用を探す (「意図通り
 Step 9.  7 lens で監査 (lens-catalog.md)
 Step 10. review_result を確定 (result-decision.md)
 Step 11. 構造化結果を返す (finding-schema.md)。OP-managed では投稿しない
-Step 12. Step 5 で mktemp を作った場合は rm -rf で片付ける (git worktree は作らない・消さない)
 ```
 
 Step 5 の status 別の読み方 (`--name-only` は A / D / R を区別できないので使わない):
@@ -77,8 +76,7 @@ finding の根拠は base + diff + 仕様で組み立てる。current tree の R
 
 ## 4. 評価できない finding
 
-- OP-managed: needs-specialist-review とし、`recommended_fix_expert` に specialist、`requires_post_check` に必要な post-check expert を入れる。質問しない。
-- Direct: 専門 expert (security / ux-ui-audit / debug / test) への確認を推奨として伝え、finding に出すなら needs-specialist-review と明記する。
+needs-specialist-review とし、`recommended_fix_expert` に specialist、`requires_post_check` に必要な post-check expert を入れる。
 
 ## 5. self-review バイアス防止
 
@@ -114,10 +112,3 @@ build / test / lint / typecheck は実行してよいが、source 編集・lockf
 - 副作用を finding にする (lockfile 更新 → Compatibility / 一括整形 → Refactor / generated file 更新 → Release)。
 - tracked diff が残った状態では approve しない。needs-fix または needs-specialist-review にし、副作用源と再発防止策を書く。
 - review worktree は controller が破棄する。修正は元の apply worktree か専用 fix worktree で行われる。
-
-## 8. 完了条件
-
-- active lens すべてを観測した (review_mode を反映)
-- `review_result` を 4 種のいずれかに確定し、`reviewed_head_sha` を記録した
-- needs-fix / needs-specialist-review / blocked では finding を field で構造化した
-- 構造化結果を caller に返した (OP-managed は投稿しない。Direct はユーザー許可後のみ投稿)

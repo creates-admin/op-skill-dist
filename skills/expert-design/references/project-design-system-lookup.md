@@ -1,29 +1,24 @@
 # Project Design System Lookup
 
-UI 作業の前に project 固有の design system を探す手順。project 固有 DS は shared knowledge / 外部思想より常に優先する。
+UI 作業の前に project 固有の design system を探す手順。project 固有 DS は本 skill の一般則より常に優先する。
 
 ## Lookup order
 
-上から順に探し、見つかったものを最優先する。
+上から順に探し、見つかったものを最優先する。1〜3 が OP の入口 (`~/.claude/skills/_shared/design-system.md`)。
 
-1. project root の `README.md` / `CLAUDE.md` / `AGENTS.md`
-2. `Share/design-system/` (社内共通 design system)
-3. `docs/design/` / `docs/ui/` / `docs/style-guide/`
-4. frontend の theme files (`vuetify.ts` / `theme.ts` / `tailwind.config.*` / `tokens.css`)
-5. token / variables / palette files (`tokens/`, `variables.scss`, `palette.ts`)
-6. common components (`components/Button.*`, `components/Dialog.*`)
-7. layout components (`layouts/`, `components/Layout.*`, `Shell.*`)
-8. 同じ目的の既存画面 (同ドメインの先行画面)
+1. `op-config.yaml` の `design_system` (カタログ・トークン・部品・契約の場所の地図)
+2. `.claude/rules/design-system.md` (repo 固有の決まりと部品一覧・登録状態)
+3. カタログページ (登録済み部品の実物)
+4. project root の `README.md` / `CLAUDE.md` / `AGENTS.md`、`Share/design-system/` (社内共通 design system)、`docs/design/`
+5. frontend の theme / token files (`vuetify.ts` / `theme.ts` / `tailwind.config.*` / `tokens.css` / `ThemeData` / `:root` 定義)
+6. common components (`components/Button.*`, `components/Dialog.*`)、layout components
+7. 同じ目的の既存画面 (同ドメインの先行画面)
 
-Grep 語: `theme` `tokens` `palette` `variables` `color` `spacing` `radius` `shadow` `typography` `motion`
-`Button` `Dialog` `Card` `FormField` `Toast` `DataTable` `Layout` `Shell`
+## 未発見時の判断
 
-framework 別の典型:
-
-- Vuetify: `vuetify.ts`, `theme.ts`, `createVuetify` 周辺
-- Tailwind: `tailwind.config.*`, `globals.css`, `@layer` 定義
-- Flutter (Material 3): `theme/`, `ThemeData`, `colorScheme`, `textTheme`
-- CSS Custom Properties: `tokens.css`, `variables.css`, `:root` 定義
+design system が未導入 / 部分的な repo の扱いは `design-system.md` に従う (既存 UI を踏襲して進め、
+「デザインシステム未導入: `/op-skill:op-component --init` を推奨」と 1 行添える)。未導入でも hard-code の新規追加はしない。
+既存 UI からも token / component を決められないときは `needs_human_decision` で返す。
 
 ## 禁止
 
@@ -31,23 +26,3 @@ framework 別の典型:
 - hard-coded color (`#3b82f6` 等) を新規追加する
 - spacing / radius / font-size を感覚で増やす
 - 類似 component があるのに自作する
-
-## 未発見時の判断 (DS が無い / 部分的)
-
-| 選択肢 | 適用条件 | 内容 |
-|--------|---------|------|
-| **a. DS 整備を先行** | 中規模以上 / 複数画面 / 複数 contributor | 別 Issue (`design: project design system の整備`) を先に立てる |
-| **b. ボトムアップ token 抽出** | 既存画面の色 / spacing / radius がほぼ収束 | 既存 hard-code を集計して semantic token 候補を導出し、theme / token ファイルへ正規化追加する |
-| **c. framework default 採用** | Vuetify / Material 3 / Tailwind preset 等の標準 theme がある | framework 標準を DS とみなし、`primary` / `error` / `surface` 等の semantic role 名で参照する |
-
-- Summary Mode: 推奨を 1 つ添えて返す。決定は人間 (モック合意時)
-- Apply Mode: Issue / モックに DS 前提が書かれていなければ実装せず `needs_human_decision` で返す。hard-code で埋めない
-
-採った判断は完了報告 / 要約に残す:
-
-```text
-## DS Lookup Result
-- 検索範囲: README / Share/design-system/ / docs/design/ / vuetify.ts / tokens.css / components/Button.*
-- 結果: 既存 token 未整備 (vuetify default のみ)
-- 推奨: c (framework default 採用) — Vuetify、画面数 3、contributor 1
-```

@@ -2,8 +2,6 @@
 
 行数ではなく責務混在 / 変更理由の複数化を Issue 化の根拠にする。分割は処理順ではなく責務単位で行う。
 
-<!-- anchor: patrol-sampling -->
-
 ## Patrol Sampling 優先度 (op-patrol 経由の巡回対象選定)
 
 repo 全体を均等に見ず risk-weighted に巡回する。
@@ -25,8 +23,6 @@ repo 全体を均等に見ず risk-weighted に巡回する。
 - utils / common / helpers、src-tauri commands、feature boundary
 - path / config / IPC / storage / status を含むファイル
 - 過去に `architecture_debt` として検出された affected_paths と、新規実装が触った既存 debt 周辺
-
-出力契約は scan と同じ (SKILL.md「Canonical Schema Contract」節)。
 
 ---
 
@@ -76,9 +72,7 @@ Dart 300〜500 行 (Widget 1 ファイル) / 設定・生成コードは行数�
 
 ### Apply Policy
 
-- pure function / private helper / type / local module の抽出を優先する
-- public API は変えない。import 影響が小さいところから分離する
-- Rust で visibility を広げて通すだけの分割は悪化として扱う
+- pure function / private helper / type / local module の抽出を優先し、import 影響が小さいところから分離する
 - directory 移動を伴う分割は staged_refactor で計画化する
 
 ---
@@ -92,24 +86,13 @@ Dart 300〜500 行 (Widget 1 ファイル) / 設定・生成コードは行数�
 - UI state と domain state が混ざっている
 - file IO / API / Tauri invoke を view component が直接扱う
 
-### 典型分解パターン
+### 分解の方向
 
-```text
-Vue 3                         Flutter
-<view>.vue        UI・slot    <feature>_page.dart        Widget ツリー
-use<feature>.ts   状態        <feature>_view_model.dart  状態 (ChangeNotifier / Bloc)
-<feature>Service.ts invoke/API <feature>_repository.dart IO / API
-<feature>Adapter.ts 型変換    <feature>_adapter.dart     entity ↔ view model
-<feature>.types.ts 型定義     <feature>_models.dart      型定義
-```
+view (UI・slot / Widget ツリー) / 状態 (composable / view model) / IO・API (service / repository) / 型変換 (adapter) / 型定義 に分ける。
 
 ### 不変則 (component refactor)
 
-- UI 表示の挙動 / visual design / UX flow を変えない
-- v-model / props / emit / slot シグネチャを変えない
-- key / id / class 命名を変えない (CSS / 自動テストが依存している可能性)
-- focus 順序 / tabindex / aria 属性 / 見えるテキストを変えない
-  (確認観点は expert-ux-ui-audit skill の `references/a11y-checklist.md`)
+SKILL.md の Mechanical Refactor Guard に加え、key / id / class 命名 (CSS / 自動テストが依存している可能性)、focus 順序 / tabindex / aria 属性 / 見えるテキストを変えない。
 
 ---
 

@@ -1,18 +1,13 @@
 # review-contract.md — 作業冒頭の核
 
-判定軸は `result-decision.md`、観点は `lens-catalog.md`、返却 field は `finding-schema.md`、境界と禁止は `handoff-boundaries.md`、
-手順の詳細は `evidence-policy.md`。
+判定軸は `result-decision.md`、観点は `lens-catalog.md`、返却 field は `finding-schema.md`、境界は `handoff-boundaries.md`、
+手順の詳細は `evidence-policy.md`、禁止事項は `agents/review-expert.md`。
 
 ## 1. mode 判定
 
-`~/.claude/skills/_shared/invocation-mode.md` に従う。spawn prompt に `invocation_mode: op_managed`、op-run / op-codev 由来の明記、
-PR 番号 / review worktree / session id の受け渡しのいずれかがあれば OP-managed。曖昧なら OP-managed に倒す。
+`~/.claude/skills/_shared/invocation-mode.md` に従う。OP-managed では:
 
-OP-managed では:
-
-- 司令官・ユーザー・Issue / PR コメントで質問して停止しない。
 - 判定を 4 種 (approve / needs-fix / needs-specialist-review / blocked) のいずれかに閉じ、`review_result` と `reviewed_head_sha` を含む構造化結果を常に返す。
-- needs-fix / needs-specialist-review / blocked では finding を 1 件以上返す。
 - 入力欠落は `assumptions[]` に「X が欠落、Y を仮定」と記録し、必要なら `needs_human_decision` (decision_type: "behavior") を返す。
 
 ## 2. review_mode
@@ -44,20 +39,12 @@ base ref は PR の baseRef から解決する (`origin/main` をハードコー
 
 ## 4. 手順
 
-正本は `evidence-policy.md` §1。要約:
-
-1. `review_wt` へ cd し HEAD == `review_wt_head_sha` を確認 (不一致なら blocked を返し評価しない)
-2. base ref を解決し `git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"`
-3. PR 本文 → 関連 Issue → review state (post-check 結果) を読む
-4. `git diff --name-status --find-renames "origin/${BASE_REF}...HEAD"` で変更一覧を取り、base 側を `git show` で**先に**読む
-5. 変更理由を自分で推論してメモ → 初めて `git diff "origin/${BASE_REF}...HEAD"` (triple-dot) → 推論とのズレを探す
-6. 7 lens で監査 → High / Critical を反証 → `review_result` を確定
-7. 構造化結果を返す
+正本は `evidence-policy.md` §1 (base-first evidence procedure)。HEAD が `review_wt_head_sha` と一致しなければ blocked を返し評価しない。
 
 Read Economy (`~/.claude/skills/_shared/read-economy.md`) に加えて:
 
 - base 側は `git show "origin/${BASE_REF}:<path>"` で必要範囲だけ取る。diff はファイル単位で取る。
-- diff 確認後の current tree Read は `grep` で行番号を特定し、`offset` / `limit` で前後だけ読む。既読ファイルを「念のため」再 Read しない。
+- diff 確認後の current tree Read は `grep` で行番号を特定し、`offset` / `limit` で前後だけ読む。
 
 ## 5. 返却
 
@@ -71,11 +58,3 @@ Read Economy (`~/.claude/skills/_shared/read-economy.md`) に加えて:
 - `assumptions` / `needs_human_decision` / `blocked_actions` (該当時)
 
 finding は field で返し、本文を長文で重ねない (`summary` / `evidence` は file:line 付きの短文)。
-
-## 6. 禁止事項
-
-完全版は `handoff-boundaries.md` §8。起動時に想起するのは 3 点:
-
-- コード編集 / commit / push / label 操作をしない。
-- OP-managed で質問・「判断保留」を出さない。
-- 憶測の finding を出さない (静的証拠で裏付ける)。

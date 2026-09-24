@@ -1,6 +1,6 @@
 ---
 name: expert-spec
-description: spec-expert agent の方法論教科書。正本 ⟷ code ⟷ human の 3 者照合・provenance タグ規約・present/align/decide フロー・返却契約スキーマ・lazy 構築手順を集約する。直接 invoke は想定せず、agent.md の skills フィールド経由で自動プリロードされる前提で動作する知識ベース。
+description: spec-expert に preload される方法論。3 者照合・provenance タグ・返却スキーマ・lazy 構築。
 ---
 
 # expert-spec: spec-expert agent の知識ベース
@@ -43,7 +43,7 @@ staleness は `git log` で正本ファイルと対象 code の更新時系列�
 | `[human]` | 人間が authoritative に確定した事実 | yes | 出典 (会話日付 / 根拠) 必須。read-back 確認を経たときのみ |
 | `[?]` | unverified。`TODO: needs-human` 併記 | no | code に無い why / domain / intent はすべてこれ |
 
-**捏造禁止**: 自動抽出は code から証明できることだけ。domain / intent / why は書かず `[?] TODO: needs-human` とし、
+捏造禁止: 自動抽出は code から証明できることだけ。domain / intent / why は書かず `[?] TODO: needs-human` とし、
 人間が埋めるまで binding にしない。
 
 - entity / API シグネチャ / 既定値 / 分岐ロジック → Read 確認の上 `[code]`
@@ -53,16 +53,9 @@ staleness は `git log` で正本ファイルと対象 code の更新時系列�
 
 ## 3. present → align → decide フロー
 
-| 段階 | 担当 | 内容 |
-|---|---|---|
-| gather | **spec-expert** | 正本 + code を読み、差分を根拠付きで report する |
-| present | controller | human に discrepancy + premise check を根拠付きで提示 |
-| align | human (controller が司会) | domain 知識で食い違いを解消 |
-| decide | controller + human | verdict と正本 update を確定 |
-
-- discrepancy は human が判断できる粒度で、根拠 (ファイル + シンボル) 付きで返す
-- どちらが正かを決めない。判断不能な `code_deviation` は `needs_human_decision` に積む
-- domain 知識で埋まる空欄は `domain_gaps[]` に `[?]` で残す
+spec-expert の担当は gather (正本 + code を読み、差分を根拠付きで返す) まで。present / align / decide は controller と human が行う。
+discrepancy は human が判断できる粒度で返し、どちらが正かは決めない (判断不能な `code_deviation` は `needs_human_decision`、
+domain 知識で埋まる空欄は `domain_gaps[]` に `[?]` で残す)。
 
 ## 4. 返却契約スキーマ (JSON)
 
@@ -84,39 +77,34 @@ controller への要約テキストは短く、詳細は JSON に入れる。
   "domain_gaps": [ { "question": "code に無い why / 業務ルール", "provenance": "?", "todo": "needs-human" } ],
   "premise_check": { "issue_ref": "#NN", "premise": "issue が前提とする挙動",
     "result": "premise_ok | premise_violated | unverifiable", "evidence": "ファイル + シンボルでの観測" },
-  "aligned_state": "not_aligned",
   "proposed_spec_update": { "section": "決定 | 不変則 | 用語 | 落とし穴 | ドメイン",
     "draft": "align 前の候補テキスト", "provenance_of_draft": "code | ?" },
   "cross_feature_link_candidates": [
     { "from_feature": "<feature>", "to_feature": "<依存先 feature>", "evidence": "file + symbol", "provenance": "code | ?" }
   ],
-  "needs_human_decision": { "required": true, "decision_type": "spec | behavior", "reason": "...",
-    "options": [ { "id": "A", "label": "正本を code に合わせる", "consequence": "..." },
-                 { "id": "B", "label": "code を正本に合わせる (derived issue 発行)", "consequence": "..." } ],
-    "recommended_option": "A | B | none", "safest_default": "...", "blocked_actions": ["..."],
-    "can_continue_without_decision": true, "next_safe_action": "..." },
+  "needs_human_decision": { "required": true, "decision_type": "spec | behavior", "...": "schema は invocation-mode.md" },
   "assumptions": ["確認できなかった項目の推定"]
 }
 ```
 
 | フィールド | 必須条件 | 備考 |
 |---|---|---|
-| `spec_state` / `aligned_state` | 常時 | `aligned_state` は常に `not_aligned` (align は human の領分) |
+| `spec_state` | 常時 | |
 | `code_facts[]` | 推奨 | `[code]` + ファイル + シンボル名 |
 | `diff_summary[]` | 差分がある時 | |
 | `domain_gaps[]` | code に無い why がある時 | align の素材 |
 | `premise_check` | 対象 issue がある時 | |
 | `proposed_spec_update` | 更新候補がある時 | 候補にすぎない。確定は controller + human |
 | `cross_feature_link_candidates[]` | 他 feature への依存に気づいた時 (任意) | 候補提示まで。`[[]]` を張るかは controller + human |
-| `needs_human_decision` | 判断不能時 | 正規スキーマは `~/.claude/skills/_shared/invocation-mode.md` |
+| `needs_human_decision` | 判断不能時 | 正規スキーマは `~/.claude/skills/_shared/invocation-mode.md`。options は「正本を code に合わせる」/「code を正本に合わせる (derived issue 発行)」が基本 |
 | `assumptions[]` | 推定がある時 | |
 
 ## 5. lazy 構築 (正本 missing 時)
 
-1. **議題範囲だけ**: controller が指定した issue / feature が触れる code 範囲だけを抽出する (feature 全体を網羅しない)
-2. **code 由来は `[code]`**: entity / API シグネチャ / 既定値 / 分岐ロジックを Read 確認の上で抽出する
-3. **domain / why は `[?] TODO: needs-human`**: 埋まらない節を捏造で埋めない
-4. **派生要約を作らない**: source は正本 1 ファイルのみ
+1. 議題範囲だけ: controller が指定した issue / feature が触れる code 範囲だけを抽出する (feature 全体を網羅しない)
+2. code 由来は `[code]`: entity / API シグネチャ / 既定値 / 分岐ロジックを Read 確認の上で抽出する
+3. domain / why は `[?] TODO: needs-human`: 埋まらない節を捏造で埋めない
+4. 派生要約を作らない: source は正本 1 ファイルのみ
 
 結果は `proposed_spec_update` に `.claude/rules/_schema.md` の skeleton に沿った候補として返す
 (`## 不変則 (MUST)` / `## 決定 (Decisions)` / `## 用語 (Glossary)` は `[code]` で、`## ドメイン (なぜ/背景)` は多くが `[?]`)。

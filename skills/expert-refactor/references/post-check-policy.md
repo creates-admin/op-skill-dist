@@ -1,17 +1,6 @@
 # Post-check Policy
 
-## 許容値
-
-refactor finding の `post_check_expert` は以下 3 値のみ (op-run の post-check dispatcher が処理するのはこの 3 値):
-
-```text
-ux-ui-audit-expert
-security-expert
-null
-```
-
-`env-expert` / `compatibility-expert` / `release-expert` / `designer-expert` / `test-expert` / `review-expert` / `spec-expert` は指定しない。
-必要な follow-up 検証は「post-check に乗せられない検証要件の逃がし先」へ。
+refactor finding の `post_check_expert` は `ux-ui-audit-expert` / `security-expert` / `null` の 3 値のみ。それ以外の検証要件は下記「逃がし先」へ。
 
 ## 標準値: null
 
@@ -49,24 +38,9 @@ I/O surface が変わらない構造整理は `null`。gotchas に「path_values
 ## post-check に乗せられない検証要件の逃がし先
 
 1. `gotchas` に書く (例: `"Compatibility lens 重点確認: serialized format に近接、migration 整合確認"`)
-2. apply report の `recommended_followup_experts` に書く (`post_check_expert` とは別フィールド):
-   ```json
-   "recommended_followup_experts": [
-     { "expert": "test-expert", "reason": "god function を 5 関数に分解したが既存テストが 1 本のみ", "scope": "follow-up Issue" }
-   ]
-   ```
+2. apply report の `recommended_followup_experts` (`{expert, reason, scope}`。`post_check_expert` とは別フィールド)
 3. Issue / PR 本文の Refactor Execution Control 節の `forbidden_stage_actions` / `gotchas`
-4. global review (review-expert の 7 lens) に任せる
-
-## ラベル対応
-
-| post_check_expert | ラベル |
-|---|---|
-| `null` | `pro-refactor-expert` |
-| `security-expert` | `pro-refactor-expert` + `pro-security-expert` |
-| `ux-ui-audit-expert` | `pro-refactor-expert` + `pro-ux-ui-audit-expert` |
-
-ラベル付与は op-scan / op-patrol が行う。`pro-compatibility-expert` / `pro-release-expert` / `pro-test-expert` / `pro-designer-expert` は付けない。
+4. global review (review-expert) に任せる
 
 ## 複数 post-check が必要に見えるケース → Issue 分割
 

@@ -25,7 +25,8 @@ status: unverified
 ## 落とし穴 (Gotchas)
 
 ## 部品一覧
-<!-- op-component が登録・変更のたびに更新する。正本は各部品冒頭の status。 -->
+
+op-component が登録・変更のたびに更新する。正本は各部品冒頭の status。
 
 | 部品 | 契約 | status | variant × 状態 |
 |---|---|---|---|

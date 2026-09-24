@@ -1,27 +1,28 @@
 ---
 name: op-code-review
-description: 実装完了後の自己検証用 correctness code review skill。対象 diff を Angle A〜E の single-pass 検査 → 3 値 verify (CONFIRMED/PLAUSIBLE/REFUTED) → severity 付き JSON findings で返却する。built-in /code-review と異なり model (subagent 含む) から Skill invoke 可能。引数で diff 範囲・追加 focus・effort (low/medium/high/xhigh/max) を注入できる。「op-code-review」「自己検証」「correctness review」「セルフレビュー」等のキーワードで起動。
+description: 実装完了後の自己検証用 correctness code review skill。対象 diff を Angle A〜E で single-pass 検査 → 3 値 verify (CONFIRMED/PLAUSIBLE/REFUTED) → 固定 schema の JSON findings で返す。read-only (修正・commit しない)、単一 context、外部依存なし。引数で diff 範囲・focus・effort (low〜max) を指定できる。「op-code-review」「自己検証」「correctness review」「セルフレビュー」等のキーワードで起動。
 ---
 
 <!--
-- portable: 外部の registry / marker / CLI に依存しない。ディレクトリごと他 repo へコピーしてそのまま動く。
-- correctness 専任: 再利用漏れ・簡素化・効率・抽象度・規約は scope 外。
-- disable-model-invocation を付けない (model / subagent から invoke できることが本 skill の存在意義)。
+- disable-model-invocation を付けない (apply agent / subagent から invoke する)。
 -->
 
 # op-code-review: correctness 自己検証レビュー (single-pass)
 
-`単一 context single-pass → Angle A〜E → 自己 verify (3 値) → severity 付き JSON findings (上限は effort 依存、既定 ≤10)`
+変更 diff に対する correctness 専任のレビューを行う。目的は「現実的な入力・状態・タイミングで実際に誤動作する箇所」を挙げること。
 
-変更 diff に対する correctness 専任のレビューを行う。目的は「現実的な入力・状態・タイミングで実際に誤動作する箇所」を漏れなく挙げること。
-real bug の検出は false positive の回避より優先する — 迷ったら surface する。
+この skill が built-in のレビューではなく OP の自己検証に使われる理由 (変えないこと):
 
-すべての angle と verify を **この同じ context 内で自分自身で順番に** 実行する (subagent は使わない。例外は Phase 2 の環境適応のみ)。
-質問で停止しない — 判断不能・情報不足の候補は捨てず、PLAUSIBLE として `failure_scenario` に前提 (何が不確実で、何が分かれば確定するか) を書く。
+- 固定の JSON 契約: 下記 Output contract の配列をそのまま呼び出し元 (op-run apply / op-codev) が完了報告に載せる。
+- read-only: 検出と報告のみ。コードの修正・commit はしない。
+- single-context: angle と verify をすべてこの同じ context 内で順番に実行し、subagent を spawn しない。
+- portable: 外部の registry / marker / CLI に依存せず、ディレクトリごと他 repo へコピーして動く。
+
+質問で停止しない。判断不能・情報不足の候補は捨てず、PLAUSIBLE として `failure_scenario` に前提 (何が不確実で、何が分かれば確定するか) を書く。
 
 ## scope 宣言 (correctness 専任)
 
-flag するのは **runtime correctness bug のみ**: 条件の反転・取り違え、off-by-one、null/undefined/None 参照、guard の削除・欠落、
+flag するのは runtime correctness bug のみ: 条件の反転・取り違え、off-by-one、null/undefined/None 参照、guard の削除・欠落、
 falsy な 0/空文字の誤判定、`await` 漏れ、copy-paste の変数取り違え、握りつぶされた例外、正規表現のメタ文字未エスケープ、境界値の除外漏れ、など。
 
 scope 外 (検出しても finding にしない): style / naming / フォーマット、再利用漏れ・重複実装、簡素化・効率の改善余地、抽象度の指摘、
@@ -31,9 +32,9 @@ scope 外 (検出しても finding にしない): style / naming / フォーマ�
 
 `args` は自由形式のテキストで、以下を任意に含められる:
 
-- **対象指定**: PR 番号 / branch 名 / ref range (`abc123...def456`) / ファイルパス。指定があれば Phase 0 の既定 diff 取得より優先する。
-- **追加 focus**: 「error handling を重点的に」「`src/foo/` のみ」等。Angle A〜E の重み付けに使う (angle 自体は省略しない)。
-- **effort**: `low | medium | high | xhigh | max`。未指定 / `auto` は `high`。
+- 対象指定: PR 番号 / branch 名 / ref range (`abc123...def456`) / ファイルパス。指定があれば Phase 0 の既定 diff 取得より優先する。
+- 追加 focus: 「error handling を重点的に」「`src/foo/` のみ」等。Angle A〜E の重み付けに使う (angle 自体は省略しない)。
+- effort: `low | medium | high | xhigh | max`。未指定 / `auto` は `high`。
 
 例: `Skill(op-code-review, args: "diff: HEAD~3...HEAD effort: high focus: 並行処理まわり")`
 
@@ -46,7 +47,7 @@ scope 外 (検出しても finding にしない): style / naming / フォーマ�
 | `high` (既定) | A〜E | あり | なし | 10 | recall — 見逃しより過剰検出を許容 |
 | `xhigh` / `max` | A〜E | あり | あり | 15 | 最大 recall — a missed bug ships |
 
-effort は実行量だけを変える。scope と output contract は全 effort 共通。姿勢列は冒頭の recall 既定より優先する。
+effort は実行量と姿勢だけを変える。scope と output contract は全 effort 共通。
 
 ## Phase 0 — 対象 diff の確定
 
@@ -96,11 +97,11 @@ registry / session / global 経由で自分自身に再入していないか、�
 
 まず dedup する: 同じ行・同じ機構を指す候補は failure_scenario が最も具体的なもの 1 つを残す。残りを diff と該当ファイルに再照合して 3 値で判定する:
 
-- **CONFIRMED** — トリガーとなる入力/状態と、誤った出力/クラッシュを具体的に言える。根拠の行を引用する。
-- **PLAUSIBLE** — 機構は実在するが、トリガー成立が不確実 (タイミング / 環境 / 設定依存)。何が確認できれば確定するかを書く。
-- **REFUTED** — 事実誤認、または別の場所で guard 済み。それを証明する行を引用する。
+- CONFIRMED — トリガーとなる入力/状態と、誤った出力/クラッシュを具体的に言える。根拠の行を引用する。
+- PLAUSIBLE — 機構は実在するが、トリガー成立が不確実 (タイミング / 環境 / 設定依存)。何が確認できれば確定するかを書く。
+- REFUTED — 事実誤認、または別の場所で guard 済み。それを証明する行を引用する。
 
-**既定は PLAUSIBLE** — 「speculative だから」「runtime 状態次第だから」で REFUTED にしない。以下は現実的な状態として PLAUSIBLE に残す:
+既定は PLAUSIBLE — 「speculative だから」「runtime 状態次第だから」で REFUTED にしない。以下は現実的な状態として PLAUSIBLE に残す:
 並行実行の競合、稀だが到達可能な経路 (error handler / cold cache / optional field 欠落) での nil/undefined、falsy な 0 の欠損扱い、
 コードが除外していない境界での off-by-one、retry の連鎖・部分失敗、アンカーを失った正規表現/allowlist。
 
@@ -109,23 +110,20 @@ REFUTED にできるのはコードから構成的に示せる場合のみ: 事�
 
 CONFIRMED / PLAUSIBLE を keep し、REFUTED を drop する。
 
-**環境適応 (optional)**: Agent tool が使える context に限り、verify を候補ごとの独立 verifier subagent (汎用 agent、1-vote) に
-fan-out してよい — diff・該当ファイル・候補を渡し、3 値のいずれかだけを返させる。判定基準 (PLAUSIBLE-by-default) は同じ。
-
 ## Phase 3 — ギャップ掃き出し (sweep、effort が xhigh/max の場合のみ)
 
-verify 済みリストを手に、diff と取り囲む関数をもう一巡だけ再読し、**リストにまだ無い欠陥だけ**を探す。
+verify 済みリストを手に、diff と取り囲む関数をもう一巡だけ再読し、リストにまだ無い欠陥だけを探す。
 狙い目: 移動・抽出されたコードで落ちた guard やアンカー、一度しか評価されない default 値、hash の非決定性、lock scope の縮小、
 副作用を持つ述語メソッド、テストの setup/teardown 非対称、反転した設定 default。新規がなければ空で終える — 水増ししない。
 
 ## Output contract (返却形式)
 
-> **適用範囲 (先に読むこと)**: 本節が規定するのは本 skill の返却値の形であって、呼び出し元エージェントの最終報告の形ではない。
-> 実装タスクの下請けとして同一 context から invoke された場合、最終メッセージは **呼び出し元が指定した完了報告フォーマット** のままであり、
+> 適用範囲: 本節が規定するのは本 skill の返却値の形であって、呼び出し元エージェントの最終報告の形ではない。
+> 実装タスクの下請けとして同一 context から invoke された場合、最終メッセージは呼び出し元が指定した完了報告フォーマットのままであり、
 > findings 配列はその中の 1 フィールドに収める素材である。findings 配列だけを最終報告として返して完了報告を置き換えてはならない。
 > 人間が本 skill を単独起動した場合のみ、下記がそのまま最終出力になる。
 
-返却ブロックの冒頭に「single-pass の自己検証レビューであり multi-agent fan-out ではない」旨を一行書き、findings を **JSON 配列のみ** で返す。
+findings は下記の JSON 配列だけで返す (前置きの文を付けない)。
 上限は effort ladder の findings 上限 (既定 10 件)、最重症順。超えた分は重症なものに絞る。何も残らなければ `[]`。
 
 ```json
@@ -154,5 +152,4 @@ Skill の解決に失敗した場合は、本ファイルを Read して Phase 0
 
 ## 呼び出し側への注記
 
-- invoke 名: 直配置なら `Skill(op-code-review)`、plugin 経由なら `Skill(op-skill:op-code-review)`。
-- 本 skill は検出と報告のみを行い、コードの修正・commit はしない。
+invoke 名: 直配置なら `Skill(op-code-review)`、plugin 経由なら `Skill(op-skill:op-code-review)`。

@@ -41,18 +41,8 @@ frontend の invoke → A / CLI・env → F / network → G。
 ## 2. source / sink / attack_path
 
 - `source`: kind / file / symbol / input_name。kind は §1 の表。
-- `sink`: kind / file / symbol / operation。kind の典型 API:
-
-| sink.kind | 典型 API |
-|---|---|
-| `file_read` / `file_write` / `file_delete` / `rename` / `copy` | `std::fs::*` / `tokio::fs::*` / `create_dir_all` / `remove_dir_all` |
-| `execute` | `std::process::Command` / tauri-plugin-shell / COM 起動 |
-| `request` | reqwest / ureq / fetch |
-| `disclose` | log / error / dialog / Toast / 生成 artifact への出力 |
-| `parse` | serde deserialize / archive extraction / image・PDF parse |
-| `update` | tauri updater の check / apply |
-
-`sink.operation` は kind の補足。`disclose` は `file_write` や `request` でも起きるので別に持つ。
+- `sink`: kind / file / symbol / operation。kind の enum は CLI。`disclose` (log / error / dialog / Toast / 生成 artifact への出力) は
+  `file_write` や `request` でも起きるので、それらとは別の kind として扱う。
 
 ## 3. attack_path
 
@@ -111,33 +101,8 @@ actor・preconditions・asset_at_risk が埋まらない finding は High / Crit
 - evidence_grade: `direct` のみ Critical 可。`inferred` / `requires_runtime` は High 上限 (`requires_runtime` は reproduction_hint 必須)。
 - 共通基準は `~/.claude/skills/_shared/severity-rubric.md`。
 
-判定例 (compromised_frontend → file_write、Critical):
-
-```yaml
-security:
-  attack_surface: ipc
-  trust_boundary: frontend_to_backend
-  source: { kind: frontend_invoke, file: "src-tauri/src/commands/io.rs", symbol: "write_user_data", input_name: "path" }
-  sink:   { kind: file_write, file: "src-tauri/src/commands/io.rs", symbol: "write_user_data", operation: write }
-  attack_path:
-    reachable: true
-    steps:
-      - "frontend が invoke('write_user_data', { path: '../foo', content }) を呼ぶ"
-      - "write_user_data は path: String を PathBuf::from で受ける"
-      - "canonicalize / scope check なしに std::fs::write(path, content) を実行"
-      - "workspace 外の任意 path に書き込める"
-  exploitability: practical
-  impact: { confidentiality: none, integrity: high, availability: low }
-  data_sensitivity: [user_file, production_path]
-threat_model:
-  actor: compromised_frontend
-  preconditions:
-    - "WebView の frontend が攻撃者制御下にある (XSS / 脆弱な依存)"
-    - "write_user_data が登録済みで capability に含まれる"
-  required_user_action: []
-  asset_at_risk: [user_file, production_path]
-```
-
+判定例: frontend が `invoke('write_user_data', { path: '../foo' })` を呼び、`PathBuf::from` → canonicalize / scope なしで
+`std::fs::write` に届く → actor `compromised_frontend`、`required_user_action: []`、exploitability `practical`、integrity high → Critical。
 同じ形で、imported .idml の zip-slip はユーザーの import 操作が要るので `reachable` / High。
 log に絶対 path が出て log が 644 の場合は `reachable` (theoretical ではない) で impact medium → High。
 

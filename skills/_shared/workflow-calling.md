@@ -1,7 +1,9 @@
 # Dynamic Workflow 呼び出し規約 (正本)
 
 各 SKILL.md は本ファイルへの pointer + skill 固有の args / 戻り値フィールドのみを書く。
-各 workflow の args / 戻り値 schema の正本は `workflows/op-*.js` 冒頭コメント + `workflows/README.md`。
+各 workflow の args / 戻り値 schema の正本は `workflows/op-*.js` + `workflows/README.md`。
+
+workflow は plugin の `workflows/` にあり、`op-skill:` prefix 付きの名前で呼ぶ (例: `op-skill:op-scan-audit`)。素の名前では解決しない。
 
 ## §1 capability preflight (hard-fail)
 
@@ -11,10 +13,9 @@ workflow を呼ぶ OP skill は、フェーズ0 で Workflow tool が利用可�
 
 利用不可時の復旧案内:
 
-> この skill は `<workflow 名>` Dynamic Workflow に依存します。現在のセッションで Dynamic Workflows が
-> 利用できません。`claude plugin list` で `op-skill` plugin が `✔ loaded` か確認し、loaded なら
-> 新規セッションを開いて SessionStart hook による `~/.claude/workflows/` 再 staging を待ってください
-> (ADR-0023)。loaded でなければ plugin の再インストールが必要です。
+> この skill は `op-skill:<workflow 名>` Dynamic Workflow に依存します。現在のセッションで Dynamic Workflows が
+> 利用できません。`claude plugin list` で `op-skill` plugin が `✔ loaded` か確認し、loaded なら新規セッションを開いてください。
+> loaded でなければ plugin の再インストールが必要です。
 
 ## §2 戻り値 unwrap: chat-controller は `.result.*` を掘る
 
@@ -23,7 +24,7 @@ controller が Workflow tool を呼ぶと background task として起動し、�
 直アクセスは undefined になる。in-script (named workflow 内) の同期戻り値はラップされない。
 
 ```
-const out = await Workflow({ name: "op-scan-audit", args: { /* ... */ } });
+const out = await Workflow({ name: "op-skill:op-scan-audit", args: { /* ... */ } });
 const r = out.result ?? out;   // 以降 r.findings 等を読む
 ```
 
@@ -34,13 +35,12 @@ const r = out.result ?? out;   // 以降 r.findings 等を読む
 
 - `op core registry-verify --lens registry-agent` で除外された planned / 未登録 expert は
   workflow args の expert list に含めない。
-- 除外した expert は `SKIPPED_PLANNED` に保持し、最終報告サマリに必ず併記する。
+- 除外した expert は `SKIPPED_PLANNED` に保持し、最終報告サマリに併記する。
 - fallback (司令官 fallback scan 等) に切り替えた場合も、その事実をサマリと最終報告の両方に明示する。
 
 ## §4 args 渡し規約
 
-- bare object で渡す (`args: { ... }`)。`JSON.stringify` した文字列を渡さない
-  (script 側 `normalizeArgs()` は両対応だが bare object が正)。
+- bare object で渡す (`args: { ... }`)。`JSON.stringify` した文字列を渡さない。
 - 必須フィールド欠落は `normalizeArgs()` が throw する。controller は呼び出し前に必須 args を揃える。
 - per-run の動的値は controller が確定して注入する: `today` は `date -u +%F`、model は
   `model-selection.md` で確定。workflow / agent 側で `date` 実行・推測をしない。

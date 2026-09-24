@@ -25,18 +25,18 @@
 | failure | Critical (復帰手段なし) |
 | empty | High (一覧画面) |
 | disabled | High |
-| focus | Critical (a11y 違反) |
+| focus | a11y 違反として `a11y-checklist.md`「Severity 対応」の条件で判定 (A 違反の Critical は条件付き) |
 
 ## 状態ごとの基準
 
 | 状態 | 必須 | NG |
 |------|------|-----|
-| loading | skeleton / spinner / progress で処理中がわかる。200ms 以上の処理は必ず表示。bulk は progress bar。loading 中は二重送信防止 | 画面が固まる / 押したまま反応なし / loading 中に二重送信できる |
+| loading | skeleton / spinner / progress で処理中がわかる。200ms 以上の処理は表示する。bulk は progress bar。loading 中は二重送信防止 | 画面が固まる / 押したまま反応なし / loading 中に二重送信できる |
 | success | toast / inline / 遷移で成功がわかる。重要操作 (申請 / 削除 / 保存) は 2 秒以上残る。リロードなしで反映 | 何も出ない / toast が 1 秒で消える / リロードしないと反映されない |
 | failure | 原因と次の行動 (retry / 戻る / 別の方法) を示し、復帰手段が UI 上にある | リロード以外に戻れない / 「エラーが発生しました」だけ / network error に retry なし / 入力エラーが toast 1 行でどのフィールドかわからない (いずれも Critical 候補) |
 | empty | 何が無いか + 次に何をすればよいか (「+ 新規作成」/ 条件を変える)。検索 0 件と未作成を区別 | 真っ白 / 「データなし」だけ / 0 件と未作成が同じ表現 |
 | disabled | 操作不可が視覚的にわかる。理由と解除条件を tooltip / 隣接テキストで示す | enabled と同じ見た目 / 理由なし / disabled なのに反応する |
-| focus | `:focus-visible` の indicator、contrast 3:1 以上、Tab 順序が論理的 | `outline: none` / 薄くて見えない / `<div @click>` で到達不可 (Critical 候補) |
+| focus | `:focus-visible` の indicator、Tab 順序が論理的 (`a11y-checklist.md`) | `outline: none` / 薄くて見えない / `<div @click>` で到達不可 |
 
 ## 危険操作の保護
 
@@ -46,11 +46,8 @@
 
 Critical 候補: ワンクリックで確定 (確認も Undo もなし) / 「OK」が default focus で Enter 確定 / destructive が primary と同色・同位置。
 
-## 復帰可能性チェック
+## 復帰可能性
 
-- [ ] 全画面に「戻る」「キャンセル」「閉じる」のいずれかがある
-- [ ] modal / drawer は Esc で閉じる
-- [ ] 入力中の form を閉じると確認が出る (dirty check)
-- [ ] error 画面から home / 一覧に戻れる
-- [ ] timeout / 認証切れで再ログインへ誘導され、途中入力を失わない
-- [ ] bulk 操作の途中失敗で、成功分と失敗分が区別できる
+- 入力中の form を閉じると確認が出る (dirty check)
+- timeout / 認証切れで再ログインへ誘導され、途中入力を失わない
+- bulk 操作の途中失敗で、成功分と失敗分が区別できる

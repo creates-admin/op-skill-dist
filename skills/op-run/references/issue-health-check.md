@@ -12,47 +12,28 @@ jq -n --argjson n "$N" --arg title "$TITLE" --arg body "$BODY" --argjson labels 
 # payload: health (complete|partial|insufficient) / missing_sections / next_action / rationale
 ```
 
-| health | 基準 (要約) | 対応 |
-|------|---------|------|
-| `complete` | 見出し「概要 / 触ってよいファイル / 成功条件」が揃い、症状記述がある | そのまま 1-2 へ |
-| `partial` | 見出しの一部欠落、または症状記述なし | op-scan `--from-issue` に委譲 (1.5-2) |
-| `insufficient` | 本文 100 文字未満 (fail-closed)、または見出しも症状記述も無い | 投げ返し (1.5-3) |
-
-本文 30 語未満は 1 段階下がる。
+| health | 対応 |
+|------|------|
+| `complete` | そのまま 1-2 へ |
+| `partial` | op-scan `--from-issue` に委譲 (1.5-2) |
+| `insufficient` | 投げ返し (1.5-3) |
 
 ### 1.5-1-b. 未トリアージ Issue の soft nudge
 
-1.5-1 で読んだ本文に `op-spec-ref` marker が無い Issue を未トリアージとして数え、**2 件以上** のときだけ
+1.5-1 で読んだ本文に `op-spec-ref` marker が無い Issue を未トリアージとして数え、2 件以上のときだけ
 plan の「健全性チェック結果」節に次の 1 行を出す (文言の正本はここ):
 
-> ℹ️ 未トリアージ Issue が <N> 件あります (op-spec verdict 未付与)。方向性を先に固めるなら /op-spec を推奨します (このまま実行も可・続行が既定)。
+> ℹ️ 未トリアージ Issue が <N> 件あります (op-spec verdict 未付与)。方向性を先に固めるなら /op-skill:op-spec を推奨します (このまま実行も可・続行が既定)。
 
 - 情報出力のみ。block しない・キューから外さない・manual_review_bucket にも入れない。
 - `--auto` では出さない。
 
 ## 1.5-2. partial Issue の op-scan 委譲
 
-| モード | 動作 |
-|-------|------|
-| 対話 (default) | partial 一覧を提示 → 承認後に委譲 → 完了を待って派生 Issue を取り込む |
-| `--auto` | 委譲せず `requires-normalization` ラベルを付けて除外 |
-| `--auto --normalize` | 委譲・待機・取り込みまで自動 |
-| `--no-wait-normalize` | 委譲だけして今回は除外 (次回 op-run で派生 Issue を拾う) |
+モード別の挙動は SKILL.md「実行モード」。対話モードでは partial 一覧を「このままクラスタリング / 正規化が必要 (missing 節) / 投げ返し」
+の 3 区分で plan に提示し、`1. すべて委譲 / 2. 番号で個別選択 / 3. 委譲スキップ / 4. キャンセル` で承認を取ってから委譲する。
 
 委譲: partial Issue ごとに `Skill({skill: "op-skill:op-scan", args: "--from-issue <N> [--auto]"})` (`--auto` は `--auto --normalize` 時のみ)。
-
-対話モードの提示例:
-
-```
-## op-run 健全性チェック結果
-### このままクラスタリング (3 件): #87 #88 #89
-### 正規化が必要 (2 件) — op-scan --from-issue に委譲
-- #42 "ログイン画面で時々落ちる" (missing: 触ってよいファイル, 完成定義)
-### 投げ返し (1 件)
-- #99 "なんかおかしい" (本文 100 文字未満)
-
-正規化を実行しますか? 1. すべて委譲  2. 番号で個別選択  3. 委譲スキップ  4. キャンセル
-```
 
 ## 1.5-3. insufficient Issue の投げ返し
 

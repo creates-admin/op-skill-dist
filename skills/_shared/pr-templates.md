@@ -1,25 +1,7 @@
 # PR / Issue 本文テンプレ
 
-op-* スキル群が GitHub に投稿する Issue / PR / コメントの本文テンプレ。
-
----
-
-## Canonical Labels and Markers
-
-label / marker の名前・所有者・semantics の正本は `skills/_shared/markers/labels-and-markers.md`、spawn 可否は
-`skills/_shared/runtime-contract.md`。本ファイルはテンプレのみを持つ。
-
-Issue 本文に書く hidden marker は `op-fingerprint` / `op-fingerprint-bulk` / `op-run-expert` / `op-post-check-expert` /
-`op-depends-on` / `op-spec-ref` のうち該当するものだけ。それ以外の情報は本文の自然文で書く。
-
-### 工程依存 marker 予約行 (op-architect / op-plan milestone Issue)
-
-depends_on を持つ milestone 工程 Issue は、prose `## 依存` と同じ依存を hidden marker でも記録する
-(依存が無ければ行ごと省略)。消費側は op-loop / `op issue dep-graph`。
-
-```
-<!-- op-depends-on: #<先行工程N>, #<先行工程M> -->
-```
+op-* スキル群が GitHub に投稿する Issue / PR / コメントの本文テンプレと、Issue に付ける marker・ラベルの正本。
+label / marker の名前・semantics は `markers/labels-and-markers.md`、spawn 可否は `runtime-contract.md`。
 
 ---
 
@@ -29,22 +11,16 @@ depends_on を持つ milestone 工程 Issue は、prose `## 依存` と同じ依
 - 本文は一時ファイルに書き、`op issue create` / `op pr create` / `op pr comment` に `--body-file` で渡す
 - `\n` リテラル禁止 (GitHub で改行されない)
 - 末尾に自動生成タグ: `🤖 <skill-name> による自動投稿`
-- ラベルは小文字ハイフン区切り (`auto-fix`, `pro-reviewed` 等)
-
----
-
-## marker-bearing comment lifecycle contract
-
-OP skill / expert agent が投稿したコメント (Patrol Ledger / Spec Patrol Ledger のコメントを含む) は **immutable**。
-
-- 禁止: `gh api -X PATCH .../issues/comments/:id` / `--edit-last` / その他 comment body を in-place で書き換える API
-- 修復は delete-and-republish: 削除 → 原因 (変数展開漏れ・引用誤り等) を特定 → 値が確定した状態で **新規** 投稿
+- 投稿済みのコメントを書き換えない。誤りは削除して、値が確定した状態で新規投稿する
+- 見出し `概要` / `触ってよいファイル` / `成功条件` は `op run issue-health` が、`残存リスク / follow-up` は op-scan `--from-merged-pr` が
+  パースする。見出し名を変えない
 
 ---
 
 ## op-scan: Issue 起票テンプレ (指示書化された context handoff)
 
-Issue は検出報告ではなく、apply agent への **指示書** として書く (scan の推論・除外仮説・触ってよい範囲を渡す)。
+Issue は検出報告ではなく、apply agent への指示書として書く (scan の推論・除外仮説・触ってよい範囲を渡す)。
+op-scan / op-patrol / op-plan / op-architect / op-report / op-spec 派生 Issue の共通骨格。
 
 ### Issue タイトル
 
@@ -91,11 +67,9 @@ op issue create --title "[<expert>] <要約>" \
 
 ### 除外した仮説 (scan が検証して否定した)
 - <仮説 X: 否定の根拠>
-- <仮説 Y: 否定の根拠>
 
 ### 触ってよいファイル
 - `path/to/file.ext`
-- `path/to/related.ext`
 
 ### 触ってはいけないファイル / 領域
 <別 Issue で扱う範囲、影響範囲外、リファクタ禁止領域など>
@@ -140,14 +114,6 @@ op issue create --title "[<expert>] <要約>" \
 - human_decision_points:
   - <判断が必要な決定点 1>
 
-### 実行ルール (apply agent / refactor-expert)
-
-- **`immediate_refactor` かつ `direct_apply_safe=true`**: `scope_in` 範囲で recommendation 全体を direct apply してよい
-- **`immediate_refactor` かつ `direct_apply_safe=false`**: 着手しない (`needs:triage` で人間判断)
-- **`staged_refactor` / `architecture_debt`**: `safe_first_step` のみ実行する (1 stage = 1 PR)
-- **`needs_spec_decision`** または **`needs_human_decision.required=true`**: コードを編集しない。
-  `needs_human_decision` block と `human_decision_points` を完了報告に構造化返却する
-
 ---
 
 ## 関連
@@ -160,23 +126,43 @@ op issue create --title "[<expert>] <要約>" \
 省略規則:
 
 - `デザインモック:` 行は UI を含み、かつモック (`_shared/design-mock.md`) がある Issue のみ。無ければ行ごと省略する。
-- refactor の debt 系 finding (`finding_type` ∈ architecture_debt / staged_refactor / needs_spec_decision) は
-  `op-fingerprint` に加えて debt 追跡キー `<!-- op-fingerprint-bulk: refactor:<bulk_group>:<primary_dir> -->` も埋める
-  (`op core fingerprint-bulk`)。
-- `op-post-check-expert`: runtime spawn されるのは `ux-ui-audit-expert` / `security-expert` のみ。`env-expert` は planned
-  (記録しても post-check は skip / needs_human_decision)。不要でも省略せず `null` を書く。
-- `🧱 Refactor Execution Control` 節 (実行ルール含む) は domain=refactor の Issue でのみ書く。
+- `🧱 Refactor Execution Control` 節は domain=refactor の Issue でのみ書く。実行ルールは expert-refactor skill の「実行ルール」。
+- 依存がある工程 Issue (op-plan / op-architect) は `<!-- op-depends-on: #N, #M -->` と prose `## 依存` を書く。依存が無ければ行ごと省略する。
 
-ラベル: `auto-report` + `pro-<expert>-expert` (`pro-review-expert` は付与禁止) + `severity:<level>`。
-domain 別の `pro-*-expert` ラベル付与パターン:
+### Issue 本文 hidden marker
 
-- `domain = ux-ui`: `pro-designer-expert` (apply) + `pro-ux-ui-audit-expert` (post-check)
-- `domain = design` (UI files に触る): `pro-designer-expert` (apply) + `pro-ux-ui-audit-expert` (post-check)
-- `domain = design` (UI files に触らない): `pro-designer-expert` 1 つ
-- `domain = security`: 基本は `pro-security-expert` (apply 兼 post-check) 1 つ。op-run の判定優先順位で apply を
-  debug-expert に回す場合は `pro-debug-expert` (apply) + `pro-security-expert` (post-check)
-- `domain = feature` (UI 影響あり): `pro-feature-expert` (apply) + `pro-ux-ui-audit-expert` (post-check)
-- 上記以外 (debug / refactor / optimize / test / UI 影響なし feature): `pro-<expert>-expert` 1 つ
+Issue 本文に書く marker は次だけ。それ以外の情報 (検出 expert・元 Issue・巡回 area 等) は本文の自然文で書く。
+
+- `op-fingerprint` (通常 Issue) / `op-fingerprint-bulk` (バッチ Issue、`<domain>:<bulk_group>:<primary_dir>`)。
+  生成は `op core fingerprint` / `op core fingerprint-bulk` (手書き禁止)。domain は fingerprint の第 1 segment で表す。
+- refactor の debt 系 finding (`finding_type` ∈ architecture_debt / staged_refactor / needs_spec_decision) は `op-fingerprint` に加えて
+  debt 追跡キー `op-fingerprint-bulk` (`op core fingerprint-bulk --domain refactor --bulk-group <g> --primary-dir <affected_paths の LCA>`) も埋める。
+- `op-run-expert` / `op-post-check-expert`: canonical schema の `recommended_runner` / `post_check_expert` を転写する。欠けていれば下表で補完する。
+  `op-post-check-expert` は不要でも省略せず `null` を書く。runtime spawn される post-check は `ux-ui-audit-expert` / `security-expert` のみ
+  (`env-expert` は planned で metadata only)。
+- `op-depends-on` / `op-spec-ref`: 該当する場合のみ (`markers/labels-and-markers.md`)。
+
+### domain → marker / ラベル表
+
+op-scan / op-patrol / op-plan / op-architect / op-report / op-spec 派生 Issue 共通の正本。
+
+| domain | op-run-expert | op-post-check-expert | pro-*-expert ラベル |
+|---|---|---|---|
+| `debug` | debug-expert | `null` | `pro-debug-expert` |
+| `refactor` | refactor-expert | `null` / security-expert / ux-ui-audit-expert (file IO・path・capability・shell・secret 系は security、UI state・flow・a11y・visual 系は ux-ui。`expert-refactor/references/post-check-policy.md`) | `pro-refactor-expert` |
+| `optimize` | optimize-expert | `null` | `pro-optimize-expert` |
+| `security` | security-expert | security-expert | `pro-security-expert` (op-run が apply を debug-expert に回す場合は `pro-debug-expert` + `pro-security-expert`) |
+| `ux-ui` | designer-expert | ux-ui-audit-expert | `pro-designer-expert` + `pro-ux-ui-audit-expert` |
+| `design` (UI files に触る) | designer-expert | ux-ui-audit-expert | `pro-designer-expert` + `pro-ux-ui-audit-expert` |
+| `design` (token・config のみ) | designer-expert | `null` | `pro-designer-expert` |
+| `test` | test-expert | `null` | `pro-test-expert` |
+| `feature` (UI 影響なし) | feature-expert | `null` | `pro-feature-expert` |
+| `feature` (UI 影響あり) | feature-expert | ux-ui-audit-expert | `pro-feature-expert` + `pro-ux-ui-audit-expert` |
+| `env` (planned) | env-expert | env-expert | `pro-env-expert` (routing metadata only) |
+
+finding Issue のラベルは上表の `pro-*-expert` (完全形。`pro-review-expert` は付与禁止) + `auto-report` + `severity:<critical|high>`。バッチ Issue は `batch` を足す。op-plan / op-architect の計画 Issue は `severity:*` と `auto-report` を付けない。op-report 等 severity で絞らない経路 (`filing-gate.md` §1) は Critical / High のときだけ `severity:*` を付ける。
+`op issue create --label "auto-report,severity:high,..."` とカンマ区切りで渡す。refactor 固有の追加ラベルは op-scan の
+「domain=refactor 固有のラベル付与ルール」。
 
 ---
 
@@ -184,7 +170,7 @@ domain 別の `pro-*-expert` ラベル付与パターン:
 
 同質な検出が大量に出る場合は、カテゴリ単位で 1 Issue 1 PR にまとめる。適用条件 (すべて満たす):
 
-- 同一 expert + 同一カテゴリの検出が 5 件以上
+- `op scan bulk-group` が batch 適格と判定した (同一 expert + 同一カテゴリ)
 - 各検出の修正方針が均質 (削除のみ / 命名置換のみ等)
 - ファイル間に強い依存がない (順序実行不要)
 
@@ -227,7 +213,6 @@ op issue create --title "[<expert>] <カテゴリ> 一括対応 (<N> 件)" \
 | # | ファイル:行 | 個別の指摘 | 修正方針 |
 |---|------------|-----------|---------|
 | 1 | `path/a.ext:12` | <個別指摘> | 削除 / 置換 / 修正 |
-| 2 | `path/b.ext:45` | ... | ... |
 
 ---
 
@@ -257,9 +242,8 @@ op issue create --title "[<expert>] <カテゴリ> 一括対応 (<N> 件)" \
 <削除候補の中に実は価値あるものが混じる可能性、その判定基準>
 
 ### バッチ処理の進め方
-1. 対象一覧を 5〜10 件ずつのバッチに分割
-2. 各バッチ処理後に検証 (テスト実行)
-3. 失敗したバッチは隔離 (別 Issue 化検討)、残りは続行
+1. 対象一覧を 5〜10 件ずつのバッチに分け、バッチごとに commit と検証 (テスト実行) を行う
+2. 失敗したバッチは隔離 (別 Issue 化検討)、残りは続行
 
 ---
 
@@ -270,14 +254,12 @@ op issue create --title "[<expert>] <カテゴリ> 一括対応 (<N> 件)" \
 🤖 op-scan による自動起票 (batch)
 ```
 
-apply 側は 1 PR で全件処理し、コミットは 5〜10 件単位で分ける。
-
 ---
 
 ## op-run: PR open テンプレ
 
-PR 本文は **二層構造** で書く。上半分は非エンジニア (現場・運用・QA) 向けの業務視点、下半分はエンジニア向けの技術詳細。
-**「自動検証」(`cargo test` 等の機械的確認) と「回帰テスト」(業務シナリオが壊れていないか) を分ける**。
+PR 本文は二層構造で書く。上半分は非エンジニア (現場・運用・QA) 向けの業務視点、下半分はエンジニア向けの技術詳細。
+「自動検証」(`cargo test` 等の機械的確認) と「回帰テスト」(業務シナリオが壊れていないか) を分ける。
 
 ### PR タイトル
 
@@ -295,7 +277,7 @@ PR 本文は **二層構造** で書く。上半分は非エンジニア (現場
 
 ### PR 本文
 
-`op pr create --draft --base <base> --head <branch> --title "<タイトル>" --body-file body.md` (ラベル `auto-fix` は
+`op pr create --base <base> --head <branch> --title "<タイトル>" --body-file body.md` (draft にしない。ラベル `auto-fix` は
 `op pr edit-labels` で付ける)。
 
 `body.md`:
@@ -390,7 +372,7 @@ Fixes #43
 - <環境依存で未確認の点>
 
 ---
-🤖 op-run による自動 PR (draft)。
+🤖 op-run による自動 PR
 ```
 
 - 自動検証の分類は `_shared/project-profile.md` に従う。環境依存 (InDesign COM / Tauri full build / 実機 等) は
@@ -409,7 +391,7 @@ Fixes #43
 
 ### body 末尾の op-review-state block (位置規約)
 
-footer (`🤖 op-run による自動 PR (draft)。`) の **後** に `<!-- op-review-state -->` marker + JSON fence の state block が置かれる。
+footer (`🤖 op-run による自動 PR`) の後に `<!-- op-review-state -->` marker + JSON fence の state block が置かれる。
 review / post-check の結果の唯一の機械記録であり、機械管理領域:
 
 - 人間 / agent とも手編集しない。書き換えは `op pr edit-body` / `op review state push` 経由のみ。
@@ -419,32 +401,22 @@ review / post-check の結果の唯一の機械記録であり、機械管理領
 
 ### PR 本文の品質要件 (apply agent / reviewer 共通)
 
-**必須**:
-- 冒頭に「ひとことで言うと」を置く (非エンジニアにも伝わる 1〜2 文)
-- 「なぜ変更したか」「何が変わったか」「変わらないこと」を業務視点で書く
-- 利用者から見える変更と、裏側の実装変更を分ける
-- 回帰テストで確認すべき業務シナリオをチェックリスト化する
-- 自動検証と回帰テストを別セクションとして分けて記載する
-- apply 完了報告に follow-up 項目 (上表) がある場合は「残存リスク / follow-up」節に転記する
+判断基準: 「コードを読まない現場担当者が何を確認すればよいか自力で分かるか?」。上記テンプレの節を埋めたうえで、次を禁止する:
 
-**禁止**:
 - 「バリデーションを修正」「state を更新」「型を整理」だけで終わる説明
 - 変更ファイル一覧だけで業務視点の説明がない PR 本文
 - 自動検証コマンドだけで、業務上の確認観点 (回帰テスト) がない PR 本文
 - ファイル名・関数名・クラス名のみで何が起きるかを説明する
 - 専門用語を業務上の意味に言い換えずそのまま使う
-
-判断基準: 「コードを読まない現場担当者が何を確認すればよいか自力で分かるか?」。
+- apply 完了報告に follow-up 項目 (上表) があるのに「残存リスク / follow-up」節に転記しない
 
 ---
 
 ## op-run: review 結果コメント (review-expert)
 
-人間向けの記録。機械記録は PR body の `<!-- op-review-state -->` (`op review state push/pull`)。
-
-- **approve**: `op review publish-approval` を使う (state push + `pro-reviewed` 付与を atomic に実行)。
-- **needs-fix / needs-specialist-review / blocked**: 下記を `op pr comment <pr> --body-file` で投稿する。OP-managed Mode では
-  投稿者は ClusterOrchestrator (review-expert は構造化返却のみ)。label 操作は op-run の責務。
+Direct Mode で review-expert がユーザー許可後に投稿する場合の骨組み。OP-managed (op-run / op-codev) では review-expert は投稿せず、
+controller が記録する (`op review publish-approval` / `op review state push`、書式は op-run skill の `references/global-review-spawn.md` 4-2-b)。
+Direct Mode の投稿は op-review-state に書かない。
 
 ```markdown
 ## <🔧 修正必要 (needs-fix) | 🧐 専門判断が必要 (needs-specialist-review) | ⛔ blocked (自動継続不能)>
@@ -463,78 +435,16 @@ review round: <N> / reviewed head: <sha>
 <問題説明と推奨方針>
 
 ---
-🤖 review-expert による独立 global review (op-run)
-```
-
----
-
-## op-run: specialist 判断結果コメント (specialist expert)
-
-人間向けの記録。機械記録は state 文書の `specialist_reviews[]` であり、ClusterOrchestrator は投稿に加えて
-`op review state push` (`specialist_review` payload) を行う。
-
-- 1 コメント = 1 finding。判断・根拠・推奨 apply expert を自然文で書く。specialist expert 自身が出す (review-expert / op-run が代理出力しない)。
-- 推奨 apply expert に `review-expert` / `ux-ui-audit-expert` を指定しない。
-- specialist がその場で修正まで行うケースでも、判断根拠として残す。
-
----
-
-## op-run: UX/UI Post-check Result (ux-ui-audit-expert 出力)
-
-apply 後の draft PR diff を ux-ui-audit-expert が独立に audit した結果。人間向けの記録であり、機械記録は state 文書の
-`post_checks["ux-ui-audit-expert"]` (ClusterOrchestrator は投稿に加えて `op review state push` の `post_check` payload を行う)。
-Issue にデザインモックがあれば `Artifact({action:"read", url})` で参照して照合する。
-
-司令官 (op-run) の分岐:
-- PASS: review-expert global review (フェーズ4) へ進む
-- PASS_WITH_NOTES: Notes を残して global review へ進む
-- BLOCK: global review を呼ばず、該当クラスタの op-run-expert (apply 担当。designer-expert または UI 影響あり
-  feature の feature-expert) に戻して Required Changes を実装させる (op-run/SKILL.md フェーズ 3.5)
-
-```markdown
-## UX/UI Post-check Result
-
-### 判定
-PASS | PASS_WITH_NOTES | BLOCK (post-check head: <sha> / round: <N>)
-
-### 評価サマリ
-<2〜4 文で全体評価>
-
-### 観点別チェック
-| # | 観点 | 結果 | コメント |
-|---|------|------|---------|
-| 1 | デザインモックと実装が一致 (モックがある場合) | OK / NG / N/A | <NG なら逸脱箇所> |
-| 2 | 必要な状態 (loading / empty / error 等、UI 種別ごとに該当するもの) の実装 | OK / NG | <NG なら欠落 state + 該当ファイル> |
-| 3 | error / loading の実装 (該当する場合) | OK / NG | <NG なら不足箇所 + 該当ファイル> |
-| 4 | keyboard / focus の保持 | OK / NG | <NG なら回帰内容> |
-| 5 | 操作のわかりやすさ (クリック数 / 戻る導線) | OK / NG | <NG なら劣化点> |
-| 6 | Issue 範囲外 redesign の混入 | OK / NG | <NG なら scope_out 違反箇所> |
-| 7 | style 変更による UX / a11y 退化 | OK / NG | <NG なら退化箇所 (focus / contrast / keyboard / state visibility 破壊。hard-coded style / token bypass そのものは designer-expert の post-check 領域)> |
-
-### Notes (PASS_WITH_NOTES 時)
-- レビュアー (review-expert) に伝えたい軽微な観点を箇条書き
-
-### Required Changes (BLOCK 時)
-- 実装で追加すべきコード / 修正すべき差分を具体的に記述
-- 例: `features/job-board/JobList.vue` に EmptyState コンポーネントを追加
+🤖 review-expert による独立 global review
 ```
 
 ---
 
 ## op-run: Security Post-check Result (security-expert 出力)
 
-apply 後の draft PR diff を security-expert が独立に issue 固有再監査した結果。人間向けの記録であり、機械記録は state 文書の
-`post_checks["security-expert"]` (aux post-check は同じ map に `ux-ui-audit-expert@aux` キーで同居)。
-8 観点の semantics は expert-security skill の `post-check-policy.md`。
-
-- 本 post-check は元 finding の解消と新たな露出面の有無の深掘り。フェーズ4 global review (7 lens 横断) とは別工程で、
-  PASS / PASS_WITH_NOTES の PR ではフェーズ4 の Security/Abuse Lens を「PR 全体の新たな露出面のみ軽く」に切り替える。
-
-司令官 (op-run) の分岐:
-- PASS: フェーズ4 に軽量モードで進む
-- PASS_WITH_NOTES: フェーズ4 にそのまま進む
-- BLOCK: フェーズ4 を呼ばず `pro-security-needs-fix` を付与し、apply 担当 expert (security-expert または debug-expert) を
-  再 spawn して Required Changes を実装させる (op-run/SKILL.md フェーズ 3.5-B)
+apply 後の PR diff を security-expert が独立に issue 固有再監査した結果の人間向けコメント。機械記録は state 文書の
+`post_checks["security-expert"]`、8 観点の semantics は expert-security skill の `post-check-policy.md`、判定後の分岐は
+op-run skill の `references/post-check-dispatcher.md` 3.5-B-2。
 
 ```markdown
 ## Security Post-check Result
@@ -568,10 +478,3 @@ PASS | PASS_WITH_NOTES | BLOCK | NEEDS_HUMAN_DECISION (post-check head: <sha> / 
 - security risk と usable workflow のトレードオフが高く自動判断不能な場合
 - needs_human_decision YAML block を本文に埋め込む (`_shared/invocation-mode.md` の正規 schema)
 ```
-
----
-
-## Needs Human Decision (構造化された人間判断要求)
-
-OP-managed Mode の expert は質問テキストではなく `needs_human_decision` YAML block で返す。
-schema・フィールド説明・禁止フレーズ・出力例の正本は `_shared/invocation-mode.md`。

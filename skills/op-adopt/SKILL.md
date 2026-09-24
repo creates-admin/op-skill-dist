@@ -5,12 +5,12 @@ description: OP 未適用の既存プロジェクトを OP の運用へ移行す
 
 # op-adopt: 既存プロジェクトの OP 移行
 
-Direct Mode 固定。既存のコードと見た目は変えない (導入するのは運用の土台だけ)。各段階は人間の承認後に行い、
+Direct Mode 固定 (`_shared/invocation-mode.md`「Direct 固定 skill に op_managed が渡った場合」)。既存のコードと見た目は変えない (導入するのは運用の土台だけ)。各段階は人間の承認後に行い、
 何度実行しても安全 (導入済みの項目は診断で「済」と出て飛ばす)。
 
-## 不変則 9 例外宣言
+## 不変則9 例外宣言
 
-op-adopt は人間が承認した feature 地図から、正本の **骨組み** (frontmatter と空の 6 節。status は `unverified`) だけを
+op-adopt は人間が承認した feature 地図から、正本の骨組み (frontmatter と空の 6 節。status は `unverified`) だけを
 書く。事実・決定・用語は書かない (中身は op-spec が human align 後に書く)。それ以外の書き込みはテンプレートの配置と設定ファイルだけ。
 
 ## フェーズ0: 診断 (read-only)
@@ -19,7 +19,7 @@ op-adopt は人間が承認した feature 地図から、正本の **骨組み**
 
 | 領域 | 確認 | 済の条件 |
 |---|---|---|
-| 基盤 | `op repo init --dry-run` / `op-config.yaml` の有無 | 未作成ラベル 0 / ファイルあり |
+| 基盤 | `op-config.yaml` の有無 (ラベルは判定しない。フェーズ1 の `op repo init` は冪等) | ファイルあり |
 | 正本の土台 | `.claude/rules/_schema.md` と `00-constitution.md` | 両方あり |
 | 正本の中身 | `op spec-patrol list-specs`、主要ディレクトリ構成 | 主要 feature に正本がある (status 問わず) |
 | デザインシステム | UI の有無 (`package.json` / `pubspec.yaml` 等)、`op-config.yaml` の `design_system` | UI 無し、または設定あり |
@@ -30,7 +30,8 @@ op-adopt は人間が承認した feature 地図から、正本の **骨組み**
 
 ## フェーズ1: 基盤
 
-- ラベル: `op repo init --dry-run` の結果を見せ、承認後に `op repo init`。
+- ラベル: 診断の「済」にかかわらず、canonical ラベルの作成を確認して承認後に `op repo init` を実行する (既存ラベルは skip される。
+  `--dry-run` は作成済みかを判定せず全件を列挙するだけなので判定に使わない)。
 - `op-config.yaml`: 無ければ空に近い最小ファイルを作る (値は推測で埋めない。キーの意味は `_shared/op-config-schema.md`)。
 
 ## フェーズ2: 正本の土台
@@ -49,19 +50,18 @@ op-adopt は人間が承認した feature 地図から、正本の **骨組み**
 3. 承認された feature ごとに `_schema.md` の skeleton で `.claude/rules/<feature>.md` を作る
    (`status: unverified`、各節は空。概要は scope 行だけに書く)。
 4. `op spec-patrol list-specs` で paths の重複が無いことを確認し、`op spec-patrol rebuild-index --apply --yes` で索引を作る。
-   索引の 概要 列の placeholder を承認された 1 行概要に置き換える (概要 列は再生成でも保持される)。
+   索引の 概要 列の placeholder を承認された 1 行概要に置き換える。
 5. デザインシステム (UI 部品・トークン・カタログ) は feature 地図に含めない (フェーズ4 の `design-system` 正本が持つ)。
 6. 優先度の高い feature から `/op-skill:op-spec` (feature-driven) で 1 つずつ育てる、と案内する (本 skill では育てない)。
 
 ## フェーズ4: デザインシステム
 
-UI を持つ repo で `design_system` が未設定なら、`/op-skill:op-component --init` を案内する (本 skill では実施しない。
-見た目に関わる判断が多いため別セッションで行う)。
+UI を持つ repo で `design_system` が未設定なら、`/op-skill:op-component --init` を別セッションで行うよう案内する (本 skill では実施しない)。
 
 ## フェーズ5: commit と PR
 
 - branch は `auto/adopt-<YYYYMMDD-HHMMSS>` (`_shared/worktree-ops.md`)。フェーズ1〜3 の変更を 1 PR にまとめる。
-- `op pr create`。本文に診断表 (前後)、作った正本の一覧と優先度、次にやること (`/op-spec` の順番、`--init`、`/op-doctor`) を書く。
+- `op pr create`。本文に診断表 (前後)、作った正本の一覧と優先度、次にやること (`/op-skill:op-spec` の順番、`--init`、`/op-skill:op-doctor`) を書く。
 - マージは `/op-skill:op-merge` または人間が GitHub で行う。
 
 ## 完了報告

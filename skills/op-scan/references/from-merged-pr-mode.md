@@ -4,11 +4,11 @@ merged PR の完了報告・review 結果・post-check Notes から follow-up �
 Cloud (mcp channel) 非対応 — ローカル (gh channel) で実行する (fence は fail-closed で停止する)。
 
 ```
-/op-scan --from-merged-pr <PR>
-/op-scan --from-merged-pr <PR1> <PR2> ...
-/op-scan --from-merged-pr --since <ISO8601>
-/op-scan --from-merged-pr <PR> --dry-run       # 起票せずコマンド表示
-/op-scan --from-merged-pr <PR> --no-trace      # 親 PR への trace コメントを省略
+/op-skill:op-scan --from-merged-pr <PR>
+/op-skill:op-scan --from-merged-pr <PR1> <PR2> ...
+/op-skill:op-scan --from-merged-pr --since <ISO8601>
+/op-skill:op-scan --from-merged-pr <PR> --dry-run       # 起票せずコマンド表示
+/op-skill:op-scan --from-merged-pr <PR> --no-trace      # 親 PR への trace コメントを省略
 ```
 
 ## Phase -1: プランモード遷移
@@ -80,7 +80,7 @@ op scan dedup --findings-json drafts.json --json
 
 承認された draft を 1 件ずつ直列に起票する (`filing-gate.md` §3: marker-lint → `op issue create --title <t> --label <csv> --body-file <tmp>`)。
 
-- marker: `op-fingerprint` / `op-run-expert` / `op-post-check-expert` (SKILL.md フェーズ4 と同じ)。本文に「親 PR: #<N>」を自然文で書く。
+- marker: `pr-templates.md`「Issue 本文 hidden marker」。本文に「親 PR: #<N>」を自然文で書く。severity の例外は `filing-gate.md` §1。
 - ラベル: `auto-report`、`derived-from-pr`、`severity:<critical|high|medium|low>`、apply 担当の `pro-<expert>-expert`。
 
 ## Phase 7: 完了報告 + 親 PR trace コメント
@@ -94,7 +94,7 @@ op scan dedup --findings-json drafts.json --json
 - 起票: #<M> "<タイトル>" (medium, <fingerprint>) ...
 - スキップ (重複): <fingerprint> → 既存 #<K>
 
-次は `/op-run` で起票した Issue を実装できます。
+次は `/op-skill:op-run` で起票した Issue を実装できます。
 ```
 
 `--no-trace` でなければ、起票した Issue 一覧とスキップ件数を一時ファイルに書き `op pr comment "$PR_NUM" --body-file <tmp>` で親 PR に投稿する。

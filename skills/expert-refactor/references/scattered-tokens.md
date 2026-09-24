@@ -1,13 +1,7 @@
 # Scattered Semantic Tokens
 
 散乱 token = システム内で意味を持つ値が複数箇所に直書きされ、変更時に同期修正漏れを生む状態。
-単なる文字列重複ではなく、同じ意味の contract が散っている状態を指す。
-
-## Target
-
-path / route / API endpoint / Tauri command name / IPC command name / event name / storage key / config key / feature flag /
-file extension / MIME type / status string / error code / permission name / design token (spacing / color / z-index / breakpoint) /
-directory name / asset path / glob pattern / env var
+単なる文字列重複ではなく、同じ意味の contract が散っている状態を指す。対象の種類は `refactor-taxonomy.md` の subtype。
 
 ## Detection Conditions
 
@@ -20,6 +14,8 @@ directory name / asset path / glob pattern / env var
 3. 既存の constants / enum / token / helper を迂回している (contract bypass)、または既存 contract が無く複数箇所が同じ意味値を個別に保持している (contract absent)
 4. 変更時に同期修正が必要になる
 5. path / IO / IPC / config / storage / route / design system / file type に関わる
+
+同じ literal でも意味が違うもの (`"open"` が status / mode / event で別意味など) は分けて数える。
 
 ### apply 中の局所共通化下限 (op-run — 2 箇所基準)
 
@@ -51,49 +47,10 @@ scope_in 内に同じ意味の literal が 2 箇所以上あり意味同一性�
 
 ## Apply Policy
 
-やってよいこと:
-
 - literal を意味単位に分類してから抽出する。external contract か internal token かを判定する
 - 値ではなく意味で命名する (`"reports/html"` → `REPORT_OUTPUT_DIR_RELATIVE`)
 - 置き場を責務境界に合わせ、既存の token / enum / helper があれば合流させる
+- UI token / domain token / IO path token を混ぜない
+- path token で OS / bundler / runtime 差 (Windows path / WSL / Tauri resource path) を無視しない
 
-やってはいけないこと:
-
-- 完全一致だけで機械的に置換する / 同名 literal をすべて同じ意味とみなす (`"open"` が status / mode / event で別意味の可能性)
-- public API / DB schema / serialized data / config format / IPC contract の値、Tauri command / event / permission name を変更する
-- UI token / domain token / IO path token を混ぜる
-- path token で OS / bundler / runtime 差 (Windows path / WSL / Tauri resource path) を無視する
-
-## 検出フロー (scan)
-
-1. subtype に応じた grep で候補抽出 (例: paths → `rg '"[a-zA-Z0-9_./-]+/[a-zA-Z0-9_./-]+"' --type-add 'vue:*.vue' -t rust -t ts -t vue`、
-   ipc_commands → `rg "invoke\(['\"]([a-zA-Z_][a-zA-Z0-9_]*)" --type ts`)
-2. 同じ literal でも意味が違うものを分ける
-3. 2 つ以上の layer / module / feature を跨ぐか確認
-4. 既存 contract を迂回しているか確認
-5. 変更時に同期修正が必要か評価
-6. `bulk_group: refactor-scattered-tokens` + subtype を付け、Critical / High のみ返す
-
-## subtype 別の検出ヒント
-
-| subtype | 見る場所 |
-|---|---|
-| paths | output / temp dir、relative と absolute の混在、frontend と backend で別々に組み立てる path |
-| routes | Vue Router / Tauri capability の route literal、route と画面遷移の対応が複数箇所 |
-| ipc_commands / tauri_command_names | `invoke('xxx')` (TS) と `#[tauri::command] fn xxx` (Rust) の両側直書き |
-| event_names | `emit('xxx')` / `listen('xxx')` |
-| storage_keys | `localStorage.getItem/setItem('xxx')`、Tauri Store / SQLite key |
-| config_keys | 設定ファイル key 名の直書き |
-| status_values | `"draft"` / `"published"` 等の enum 化されていない status |
-| design_values | spacing / color / z-index / breakpoint の hard-code |
-| error_codes | error string / variant が match arms 間で不一致 |
-| permission_names | Tauri capability permission 名 |
-| file_types / mime_types | extension / MIME 直書き |
-| env_vars | `process.env.XXX` / `std::env::var("XXX")` |
-| glob_patterns | build / lint / test 設定での重複 |
-
-## apply 後の必須宣言
-
-`contract_preservation` の全 boolean を埋める。scattered token では特に `path_values_changed` / `key_values_changed` /
-`status_values_changed` / `error_codes_changed` / `env_vars_changed` が false であることが確認点。
-true になるなら仕様変更であり refactor の範囲外 (feature-expert / debug-expert へ)。
+実値を変える必要が出たら仕様変更であり refactor の範囲外 (feature-expert / debug-expert へ)。

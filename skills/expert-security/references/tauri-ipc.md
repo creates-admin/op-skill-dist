@@ -1,27 +1,14 @@
 # tauri-ipc.md — Tauri IPC / WebView 境界 / capability
 
-## 1. `#[tauri::command]` の入力検証
+## 1. `#[tauri::command]` の入力と error
 
-引数はすべて untrusted (境界 A)。
+- 引数はすべて untrusted (境界 A)。path は `path-file-io.md`、URL は scheme / host allowlist、構造体・binary・文字列は size / depth 上限。
+- user input 経路の `unwrap` / `expect` / `panic!` / index / 未検査の算術は DoS。`Result` + 構造化 error で返す。
+- frontend への error は汎用 code / message。絶対 path・token・文書内容は log のみ (`secrets-and-logs.md`)。
 
-1. **型** — String より enum で表せないか。`Vec<u8>` には size 上限。
-2. **文字列** — 長さ上限 (例 4096 bytes)、null byte reject、encoding、用途 (path / URL / identifier / content) ごとの専用 validation。
-3. **path** — `..` / UNC / device / reserved / ADS を reject → canonicalize → scope (境界 B 以外は強制) → 拡張子 (`path-file-io.md`)。
-4. **URL** — `url::Url::parse` → scheme allowlist (https) → host allowlist。
-5. **数値** — 範囲チェック、`checked_*` で overflow、index は usize。
-6. **構造体** — `#[serde(deny_unknown_fields)]`、deserialize 後の業務 validation、巨大 string・配列・深い nesting の reject。
-7. **binary** — size 上限、magic number / format 検証。
+## 2. event / WebView
 
-## 2. エラーパス
-
-- `Result` を返す。user input 経路で `unwrap` / `expect` / `panic!` / `unreachable!` / `unimplemented!` / `[idx]` / `as` cast /
-  未検査の算術 (overflow・0 除算) を使わない。代わりに `get` / `try_into` / `checked_*`。user input で panic するなら DoS。
-- error は構造化する (thiserror + Serialize)。frontend には汎用の code / message、詳細は log のみ。絶対 path・token・文書内容を入れない。
-- `State<Mutex<T>>` の lock 内で長時間処理や IO をしない。async で複数 lock を取るなら順序を統一し、RwLock の reader 保持中に writer を取らない。
-
-## 3. event / WebView
-
-- `emit_to` / `emit_all` の payload に secret・絶対 path を入れない。特定 window 向けは `emit_to`。`listen` で受ける payload も検証する。
+event payload に secret・絶対 path を入れない。`listen` で受ける payload も検証する。
 
 | 設定 | 推奨 |
 |---|---|
@@ -32,10 +19,9 @@
 | `dangerousUseHttpScheme` / `dangerousDisableAssetCspModification` | false |
 | `dangerousRemoteDomainIpcAccess` | 空、または明示 host のみ (sub-domain wildcard 禁止) |
 
-CSP: `default-src 'self'`、script / style は nonce で許可、`'unsafe-eval'` / `'unsafe-inline'` を入れない (必要なら理由を明記)、
-connect-src は production domain のみ、`object-src 'none'` / `frame-src 'none'`。
+CSP に `'unsafe-eval'` / `'unsafe-inline'` を入れない。connect-src は production domain のみ。
 
-## 4. capability / permission の最小化
+## 3. capability / permission の最小化
 
 過剰許可のサイン:
 - scope に `**` / `*` (例 `$APPDATA/**`、`https://*`)。具体的な path pattern / host に書き直す
@@ -55,7 +41,7 @@ grep -rh -A1 '#\[tauri::command\]' src-tauri/src/ | grep -E '^\s*(pub )?(async )
 jq -r '.permissions[] | if type=="string" then . else .identifier end' src-tauri/capabilities/*.json | sort -u
 ```
 
-## 5. 典型 finding
+## 4. 典型 finding
 
 | パターン | severity 目安 | mitigation |
 |---|---|---|

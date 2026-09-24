@@ -14,57 +14,19 @@
 - 件数を確認してから `head` で切る。20 件超なら head だけで判断せず、ドメインキーワードで二次絞り込みし、命名揺れ (`case` / `Case` / `cases`) も試す。
 - 手本候補は 2〜3 個 Read して比較する。命名規則は 3 つ以上の同種機能から抽出する。
 
-## 共通: ドメイン横断
-
-```bash
-find . \( -name 'Cargo.toml' -o -name 'package.json' -o -name 'pubspec.yaml' \) -not -path '*/target/*' -not -path '*/node_modules/*'
-find . -type d \( -name utils -o -name helpers -o -name shared -o -name common \) -not -path '*/node_modules/*' -not -path '*/target/*'
-find src/ src-tauri/src/ lib/ -type f -iname '*<keyword>*' 2>/dev/null
-grep -rn "^pub fn\|^pub async fn\|^export function\|^export const" src-tauri/src/commands/ src/api/ 2>/dev/null
-```
-
 wrapper 直叩き検出の型 (全スタック共通): `<wrapper が包む生 API の呼び出し> | grep -v '<wrapper 配置ディレクトリ>'`。
 埋める 2 語だけがスタックで変わる (Rust: `std::fs::` vs `src-tauri/src/io/`、Vue: `invoke` 直 import vs `src/api/`、Flutter: `http.` vs `lib/core/network/`)。
 
-## Rust / Tauri v2
+## スタック別に把握する既存資産
 
-```bash
-grep -rn "^pub mod\|^mod " src-tauri/src/ --include='*.rs'                        # module 階層 (lib.rs / Cargo.toml [workspace] も Read)
-grep -rn "^pub enum.*Error\|^pub struct.*Error\|^pub type.*Result" src-tauri/src/ # AppError / AppResult
-grep -rn "#\[tauri::command\]" src-tauri/src/ -A 3                                # 既存 command
-```
+- Rust / Tauri v2: AppError / AppResult の場所・variant・採用ライブラリ、同種 command 2〜3 個、capability 追加の要否、State 管理 (tauri::State / Mutex / RwLock)、
+  file IO / path wrapper、tokio spawn の既存パターン、Tauri Result の serialize 形式、logging / tracing
+- Vue 3 + TypeScript: shared components (Skeleton / ErrorBanner / EmptyState 等)、composables、Pinia store、`src/api/` の wrapper、`src/types/` の AppResult / type alias、
+  defineProps / defineEmits と route 定義
+- Flutter / Dart: state management (Riverpod / Provider / Bloc)、同種 page 2〜3 個、ApiClient / Repository wrapper、Failure type、navigation / form validation / dispose
 
-```
-□ AppError / AppResult<T> の場所・variant・採用ライブラリ (thiserror / anyhow / 独自) を把握した
-□ 同種 command を 2〜3 個 Read した
-□ capability 設定の追加要否を確認した
-□ state 管理 (tauri::State / Mutex / RwLock) の既存採用を確認した
-□ file IO / path 操作の wrapper の有無を確認した
-□ tokio runtime / spawn の既存パターンを確認した
-□ Tauri Result serialize の既存形式 (Result<T, AppError>) を確認した
-□ logging / tracing の既存パターンを確認した
-```
-
-## Vue 3 + TypeScript
-
-```bash
-find src/components/ -iname '*skeleton*' -o -iname '*spinner*' -o -iname '*error*' -o -iname '*empty*' -o -iname '*toast*'
-find src/composables/ -name 'use*.ts'
-grep -rn "defineStore" src/stores/ -A 3
-```
-
-手本ページの選び方: loading / error / empty / success の 4 状態が同一ファイルに揃っているページ。
+手本ページの選び方: loading / error / empty / success の 4 状態が同一ファイルに揃っているページ (widget)。
 `grep -lr 'v-if="loading"' src/pages/` を状態ごとに走らせ、全条件に同じファイルが現れるかで判定する (1 状態だけのページを手本にすると欠けた状態ごと模倣する)。
-
-```
-□ shared components (Skeleton / ErrorBanner / EmptyState 等) を把握した
-□ composables (useFetch / useForm 等) を把握した
-□ Pinia store の構造と利用パターンを把握した
-□ src/api/ の wrapper を網羅した
-□ src/types/ の AppResult / 主要 type alias を把握した
-□ 4 状態を実装している手本を 1 つ特定した
-□ defineProps / defineEmits と route 定義の既存パターンを確認した
-```
 
 ## Tauri v2 境界 (Rust ↔ Vue)
 
@@ -74,48 +36,12 @@ grep -rn "defineStore" src/stores/ -A 3
 diff <(grep -rn "#\[tauri::command\]" -A 2 src-tauri/src/ | sed -nE 's/.*fn ([a-z_0-9]+).*/\1/p' | sort -u) \
      <(grep -rn "invoke[<(]" src/api/ | sed -nE "s/.*invoke[^(]*\(['\"]([a-z_0-9]+).*/\1/p" | sort -u)
 # Rust のみ: implementation gap / wrapper のみ: dead wrapper / 両方: 引数・戻り値型の一致を確認
-grep -rn "fn.*-> AppResult\|fn.*-> Result<" src-tauri/src/commands/; grep -rn "invoke<" src/api/
-grep -rn "tauri::generate_handler" src-tauri/src/main.rs src-tauri/src/lib.rs; cat src-tauri/capabilities/default.json 2>/dev/null
 ```
 
-## Flutter / Dart
+## 探索結果の記録
 
-```bash
-ls -la lib/core/widgets/ lib/shared/widgets/ lib/common/widgets/ 2>/dev/null
-grep -rn "ConsumerWidget\|StatefulWidget\|BlocBuilder\|Provider" lib/        # state 管理 (sealed class / @freezed も見る)
-grep -rn "class.*Failure\|sealed class.*Result\|Either<" lib/
-```
-
-```
-□ state management (Riverpod / Provider / Bloc) の採用を確認した
-□ 同種 page を 2〜3 個 Read した
-□ ApiClient / Repository wrapper の存在と利用方法を確認した
-□ error / Failure type の既存定義を確認した
-□ 4 状態の手本 widget を 1 つ特定した
-□ navigation / form validation / dispose の既存パターンを確認した
-```
-
-## 探索結果の記録テンプレ
-
-```markdown
-## 既存資産探索結果
-
-### 手本ファイル
-- `path/to/template.ext:LINE` — 抽出パターン: <構成 / 命名 / error 処理 / 状態管理>
-
-### 再利用する既存資産
-| 種別 | 場所 | 用途 |
-|------|------|------|
-| composable | `src/composables/useFetch.ts` | loading / error / data 状態管理 |
-
-### 新規追加が必要なもの
-- <既存資産で代替できない理由> / なければ「新規追加なし」
-
-### 既存パターンから外れる箇所
-- <外れる理由> / なければ「すべて手本に準拠」
-```
-
-`手本ファイル` か `再利用する既存資産` が空なら実装に入らない。
+手本ファイル (`path:LINE` と抽出パターン) / 再利用する既存資産 (種別・場所・用途) / 新規追加が必要なもの (既存資産で代替できない理由) /
+既存パターンから外れる箇所 (理由) の 4 点を記録する。`手本ファイル` か `再利用する既存資産` が空なら実装に入らない。
 
 ## 探索の打ち切り基準
 

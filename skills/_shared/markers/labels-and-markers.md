@@ -3,23 +3,22 @@
 OP が GitHub Issue / PR に埋める hidden marker (`<!-- op-* -->`) と label の正本。
 
 - marker の format / owner / example / lint rule: `op help marker <name>` (`--list` で一覧)
-- label の color / description: `op_core::labels::REQUIRED_LABELS` (`op repo init --dry-run` で一覧)
-- state 文書の JSON schema: `review-markers.md` / `patrol-markers.md` / `claim-markers.md`、および各 `op` parser
+- label の color / description: `op repo init --dry-run` で一覧
+- state 文書の JSON schema: `review-markers.md` / `patrol-markers.md` / `claim-markers.md`
+- Issue 本文にどの marker・ラベルを付けるか (domain 別): `pr-templates.md`「domain → marker / ラベル表」
 
 ---
 
 ## must-read
 
-1. **marker は下表の 11 種だけ書く**。それ以外の `op-*` marker を新規に書かない。人間向けの情報は本文の自然文で書く。
-2. **domain は `op-fingerprint` の第 1 segment**。domain 専用 marker は無い (`op run expert-resolve` も fingerprint から推定する)。
-3. `op-run-expert` / `op-post-check-expert` は **routing metadata であり spawn authorization ではない**。
-   最終 spawn 担当は op-run の解決ロジック (`op run expert-resolve`) が決める。planned expert は直接 spawn しない。
-   `review-expert` / `release-expert` は post-check expert にしない。
-4. **review / post-check 結果の唯一の記録は `op-review-state`** (`op review state push` / `op review publish-approval`)。
+1. marker は下表の 11 種だけ書く。それ以外の `op-*` marker を新規に書かない。人間向けの情報は本文の自然文で書く。
+2. domain は `op-fingerprint` の第 1 segment。domain 専用 marker は無い (`op run expert-resolve` も fingerprint から推定する)。
+3. `op-run-expert` / `op-post-check-expert` は routing metadata (`runtime-contract.md` §9)。`review-expert` / `release-expert` は post-check expert にしない。
+4. review / post-check 結果の唯一の記録は `op-review-state` (`op review state push` / `op review publish-approval`)。
    レビュー結果コメントは自然文のみ。
-5. state 文書 (`op-claim` / `op-review-state` / `op-patrol-ledger-state` / `op-spec-patrol-*`) は **op CLI だけが書く**。手編集しない。
-6. 起票・投稿前に `op core marker-lint --body - --source-hint <kind> --strict` を通す。表にない marker は lint で素通りする
-   (旧 Issue / PR に残る廃止 marker は無害。読みも書きもしない)。
+5. state 文書 (`op-claim` / `op-review-state` / `op-patrol-ledger-state` / `op-spec-patrol-*`) は op CLI だけが書く。手編集しない。
+6. 起票・投稿前に `op core marker-lint --body - --source-hint <kind> --strict` を通す (`expert-spawn.md`「Marker Publish Validate」)。
+   表にない marker は lint で素通りする。
 
 ---
 
@@ -102,15 +101,15 @@ Spec Patrol Ledger Issue (label `op-spec-patrol` + `op-state` + `do-not-close`) 
 
 ## Labels
 
-color / description は `op_core::labels::REQUIRED_LABELS` が正本。ここは意味と付与主体だけを書く。
+color / description は `op repo init --dry-run` で確認する。ここは意味と付与主体だけを書く。
 routing label は完全形 `pro-<expert>-expert` を使う。
 
 | 分類 | label | 付与主体 | 意味 |
 |---|---|---|---|
 | PR review | `pro-reviewed` | op-run / op-codev (`op review publish-approval`) | current head に対する global review approve。人間がマージ判断する際の参考シグナル |
 | PR review | `pro-review-needs-fix` | op-run | review で修正必要 (Review Fix Loop 対象) |
-| PR review | `pro-review-fix-in-progress` | op-run | Review Fix の apply 中 |
-| PR review | `pro-review-stale` | op-run | review 後に head が進んだ (再 review 待ち) |
+| PR review | `pro-review-fix-in-progress` | op-run (`op pr label-transition`) | Review Fix の apply 中 |
+| PR review | `pro-review-stale` | op-run (`op pr label-transition`) | review 後に head が進んだ (再 review 待ち) |
 | PR review | `pro-review-blocked` | op-run | 自動継続不能 (loop 上限 / scope 外 / 人間判断) |
 | routing | `pro-{debug,refactor,feature,optimize,test,designer,ux-ui-audit,security}-expert` | 起票 skill / op-run | apply / post-check 担当 expert (routing only) |
 | routing | `pro-env-expert` | 起票 skill | env-expert (planned) 向け。apply は active expert に fallback |
@@ -118,7 +117,7 @@ routing label は完全形 `pro-<expert>-expert` を使う。
 | 起票元 | `auto-report` | op-scan / op-patrol / op-plan / op-architect / op-report | OP が起票した Issue |
 | 起票元 | `auto-fix` | op-run | OP が作成した PR |
 | 起票元 | `op-architect` / `milestone:initial` | op-architect | op-architect 由来の Issue / 初期マイルストーン |
-| 起票元 | `op-patrol` / `patrol` | op-patrol | op-patrol 起票 (auto-report と併用) |
+| 起票元 | `patrol` | op-patrol | op-patrol が起票した finding Issue (auto-report と併用) |
 | 起票元 | `batch` | op-scan / op-patrol | bulk_group を 1 Issue 化したバッチ Issue |
 | 起票元 | `derived-from-issue` / `superseded-by-scan` | op-scan `--from-issue` | 派生 Issue / 置き換えられた元 Issue |
 | 起票元 | `derived-from-pr` | op-scan `--from-merged-pr` | merged PR の残存リスクから派生した Issue |
@@ -126,9 +125,9 @@ routing label は完全形 `pro-<expert>-expert` を使う。
 | refactor | `op:architecture-debt` / `op:staged-refactor` | refactor-expert / op-scan | debt 追跡対象 / 1 PR 1 stage の段階 refactor |
 | refactor | `op:blocking-finding` | refactor-expert (`blocking: true`) | 既存 debt を悪化させた finding。op-run が最優先・単独 cluster で実行 |
 | state | `op-state` / `do-not-close` | op-patrol / op-spec-patrol / op-run | state を持つ永続 Issue (Ledger 等)。close しない・claim しない |
+| state | `op-patrol` | op-patrol | Patrol Ledger Issue の識別 |
 | state | `op-spec-patrol` | op-spec-patrol | Spec Patrol Ledger Issue の識別 |
 | state | `op:in-progress` | `op claim acquire` | op-run が Issue を占有中 (`op-claim` と同時に付与・削除) |
-| state | `op:foundation-precondition` | designer-expert / op-architect / op-plan | foundation (token / base component) 完成待ちの feature Issue (順序の可視化のみ) |
 | post-check | `pro-ux-ui-audit-needs-fix` / `pro-security-needs-fix` | op-run | post-check BLOCK (apply 担当が再修正) |
 | post-check | `pro-ux-ui-audit-skipped` / `pro-security-post-check-skipped` | op-run | post-check spawn 失敗で未実施 |
 | 人間判断 | `needs:human-decision` | 起票 skill / expert | 人間判断が必要。op-run は apply しない (manual_review_bucket) |
@@ -138,12 +137,12 @@ routing label は完全形 `pro-<expert>-expert` を使う。
 | 人間判断 | `needs-clarification` / `requires-normalization` | op-run | 指示書不足で投げ返し / `--auto` で partial 判定 |
 | review | `needs-specialist-review` | review-expert / op-run | specialist expert の判断待ち PR |
 
-**deprecated (新規付与禁止、既存から削除しない)**: `pro-review-expert` / `pro-ux-audit` / `pro-ui-refactor` /
+deprecated (新規付与禁止、既存から削除しない): `pro-review-expert` / `pro-ux-audit` / `pro-ui-refactor` /
 `pro-ux-ui-audit` / `pro-designer` / `pro-debug` / `pro-feature` / `pro-refactor` / `pro-pull-requester` /
 `pro-reviewer` / `critical` / `high` / `op:potential-collision` / `pro-human-verified` /
-`pro-ux-ui-audit-manual-override` / `pro-security-post-check-manual-override`。clustering では短縮形を完全形に正規化して読む。
+`pro-ux-ui-audit-manual-override` / `pro-security-post-check-manual-override`。`op run expert-resolve` は完全形 `pro-<expert>-expert` だけを読む。
 
-**付与禁止 (planned expert)**: `pro-compatibility-expert` / `pro-release-expert` / `pro-spec-expert`。
+付与禁止 (planned expert): `pro-compatibility-expert` / `pro-release-expert` / `pro-spec-expert`。
 再分類先は `planned-experts.md`。
 
 ---

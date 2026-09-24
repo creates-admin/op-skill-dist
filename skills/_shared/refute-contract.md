@@ -2,23 +2,20 @@
 
 起票前 refute の worker 契約と controller 側の適用規則の正本。verdict JSON schema の機械正本は
 `workflows/op-scan-audit.js` / `op-patrol-audit.js` (`refuteVerdictSchema`) と `op-spec-patrol-audit.js` (`REFUTE_SCHEMA`)。
-本ファイルと食い違った場合は workflow 実装が正。
+verdict schema が本ファイルと食い違った場合は workflow 実装が正。prompt 文面の正本は本ファイル。
 
-## 1. 位置付け — spawn の 4 パターン目
+## 1. 位置付け
 
-- `_shared/expert-spawn.md` の spawn パターン 1: scan / 2: apply / 3: review に続く 4 パターン目。
-- **いつ**: op-scan / op-patrol / op-spec-patrol の audit 後、severity gate / dedup / 起票の前。
-- **何を**: audit が挙げた High / Critical の finding を 1 件ずつ独立に反証し、偽陽性と severity 過大を落とす。
-- **誰が呼ぶ**: workflow の refute フェーズ。severity gate / 起票 / Ledger 更新は controller に残る。
-- **誰が呼ばれる**: audit した expert の別インスタンス (`detected_by` をそのまま `agentType`)。skeptic 性は prompt で確保する。spec drift は `spec-expert` の別インスタンス。
-- **model**: Opus 固定。**invocation mode**: 常に `op_managed`。
+- いつ: op-scan / op-patrol / op-spec-patrol の audit 後、severity gate / dedup / 起票の前。
+- 何を: audit が挙げた High / Critical の finding を 1 件ずつ独立に反証し、偽陽性と severity 過大を落とす。
+- 誰が呼ぶ: workflow の refute フェーズ。severity gate / 起票 / Ledger 更新は controller に残る。
+- 誰が呼ばれる: audit した expert の別インスタンス (`detected_by` をそのまま `agentType`)。skeptic 性は prompt で確保する。spec drift は `spec-expert` の別インスタンス。
+- model: Opus 固定。invocation mode: 常に `op_managed`。
 
 ## 2. worker の立場と禁止事項
 
-- 自 domain expert の別インスタンス (skeptic mode)。
-- read-only (Read / Grep / Glob のみ)。コード・正本・Issue を変更しない。
-- 質問で停止しない。判断不能は `needs_human_decision`。
-- JSON 以外のテキストを付けない。
+自 domain expert の別インスタンス (skeptic mode)。read-only (Read / Grep / Glob のみ) で、コード・正本・Issue を変更しない。
+判断不能は `needs_human_decision`。返却は verdict JSON のみ。
 
 ## 3. 必須手順 (証拠の再取得)
 
@@ -51,9 +48,9 @@ default は「証拠が足りないときにどちらへ倒すか」。経路ご
 
 | 経路 / domain | default | 反対側にするための要件 |
 |---|---|---|
-| op-scan / op-patrol、非 security | **refuted** | `confirmed` には実コード引用による積極的証拠が必要 |
-| op-scan / op-patrol、`domain: security` | **confirmed** | `refuted` には `security_unreachable_proof` 必須 (source → sink 不到達 / trust boundary で遮断 / `required_user_action` 不成立 等を実コードで示す)。示せなければ confirmed |
-| op-spec-patrol (spec domain drift) | **refuted** | `confirmed` には正本と code が実際に食い違う証拠 (`drift_confirmed_by_evidence: true` + `evidence_excerpt` の実引用) が必要 |
+| op-scan / op-patrol、非 security | refuted | `confirmed` には実コード引用による積極的証拠が必要 |
+| op-scan / op-patrol、`domain: security` | confirmed | `refuted` には `security_unreachable_proof` 必須 (source → sink 不到達 / trust boundary で遮断 / `required_user_action` 不成立 等を実コードで示す)。示せなければ confirmed |
+| op-spec-patrol (spec domain drift) | refuted | `confirmed` には正本と code が実際に食い違う証拠 (`drift_confirmed_by_evidence: true` + `evidence_excerpt` の実引用) が必要 |
 
 ## 6. 返却 field
 
@@ -89,10 +86,10 @@ verdict は `finding_ref` で finding に突合する。op-patrol は `finding_r
 
 ### 7.2 trust model
 
-1. **schema 強制 (workflow)**: `evidence_excerpt` (minLength:1) / `reread_performed` / `supports_claim` 必須。
-2. **controller literal 照合 (drop 方向のみ)**: `refuted` / downgrade-drop の `evidence_excerpt` が `evidence_location` のファイル内に literal 存在するか Grep / Read で確認する。不在なら verdict を信頼せず安全側に倒す。
-3. **verdict ⟷ severity 整合**: 非整合 (例 `verdict: confirmed` だが `refuted: true`) は reject し安全側に倒す。安全側 = 非 security は `refuted` (drop)、security は `confirmed` (keep)。
-4. **security 非対称**: `domain: security` の Critical/High の `refuted` で `security_unreachable_proof` が欠落 / 弱い場合、controller が `confirmed` に override する。
+1. schema 強制 (workflow): `evidence_excerpt` (minLength:1) / `reread_performed` / `supports_claim` 必須。
+2. controller literal 照合 (drop 方向のみ): `refuted` / downgrade-drop の `evidence_excerpt` が `evidence_location` のファイル内に literal 存在するか Grep / Read で確認する。不在なら verdict を信頼せず安全側に倒す。
+3. verdict ⟷ severity 整合: 非整合 (例 `verdict: confirmed` だが `refuted: true`) は reject し安全側に倒す。安全側 = 非 security は `refuted` (drop)、security は `confirmed` (keep)。
+4. security 非対称: `domain: security` の Critical/High の `refuted` で `security_unreachable_proof` が欠落 / 弱い場合、controller が `confirmed` に override する。
 
 refute は近似 gate であって証明ではない (excerpt の存在は照合できるが、到達経路 / 被害の成否は LLM 判断)。この限界を完了報告に明示する。
 取りこぼしは次回 scan / patrol で再検出される前提とする。

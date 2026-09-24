@@ -1,18 +1,10 @@
 ## フェーズ4.5: Review Fix / Specialist Decision Loop (op-run 制御)
 
-ClusterOrchestrator (CO) が実行する。review-expert は修正しない。
-
-| review_result | 動作 |
-|---|---|
-| `needs-fix` | finding を apply expert に再委任し、同一 PR 上で修正する |
-| `needs-specialist-review` | specialist reviewer に妥当性 / 影響範囲 / same-pr 可否を判断させる。**即 apply しない** |
-| `blocked` | 自動継続しない (`pro-review-blocked`) |
-| `approve` | 完了。High/Critical は approve と共存しない |
+ClusterOrchestrator (CO) が実行する。review-expert は修正しない。CO は Issue を起票しない。
 
 ### 4.5-1. round 上限管理
 
-`max_review_fix_rounds = 2`、許可 `review_round ≤ 3` (1 = 初回 / 2 = fix 1 回後 / 3 = fix 2 回後の最終)。
-round 算出と gate は `global-review-spawn.md` §4-2-pre。state 文書の最新 attempt で loop 継続可否だけを決める:
+round の算出・上限・gate は `global-review-spawn.md` §4-2-pre。state 文書の最新 attempt で loop 継続可否だけを決める:
 
 | 状況 | 動作 |
 |---|---|
@@ -21,10 +13,8 @@ round 算出と gate は `global-review-spawn.md` §4-2-pre。state 文書の最
 | needs-fix / needs-specialist-review かつ round < 3 | 4.5-1A へ |
 | needs-fix / needs-specialist-review かつ round = 3 | 3 回目の fix はしない。`global-review-spawn.md` §4-2-pre-blocked の terminal 処理 |
 
-3 回目以降の自動 fix は scope creep / 設計問題のサイン。Issue 分割や scope 再定義は人間が判断する。
-
 全体 review_result は集約値 (`blocked > needs-specialist-review > needs-fix > approve`) で、上表は loop を回すかだけを決める。
-apply / handoff の振り分けは **必ず finding 単位の `result` を主語にする** (4.5-1A)。
+apply / handoff の振り分けは finding 単位の `result` を主語にする (4.5-1A)。
 
 ### 4.5-1A. finding.result 主語の状態遷移 (mixed finding 必須フロー)
 
@@ -42,7 +32,7 @@ Step 2. specialist handoff (needs-specialist-review を先に処理)
 Step 3. apply batch 構築
   | bucket     | finding                                                  | 扱い |
   | apply 対象 | result = needs-fix ∪ specialist_result = same-pr-fixable | 4.5-2 の apply path |
-  | new-issue  | specialist_result = new-issue                            | 別 Issue を起票し本 PR では直さない |
+  | new-issue  | specialist_result = new-issue                            | 本 PR では直さない。follow-up に回す (4.5-2A) |
   | blocked    | specialist_result = blocked                              | pro-review-blocked で停止 |
   blocked bucket が 1 件でもあれば apply bucket も止めて Step 1 と同じ扱いにする。
 
@@ -60,7 +50,8 @@ specialist 判断が出揃う前の部分 apply。
 #### 4.5-2-pre. finding 抽出の限定条件 (必須・stale 防止、state 文書ベース)
 
 入力は state 文書の最新有効 attempt 1 件の findings だけ。条件は (1) `review_round` が attempts 中で最大
-(同 round 重複の tie-break は CLI 内蔵) かつ (2) `reviewed_head_sha == 現在の PR head`。古い round / 別 SHA の finding は読まない。
+(同 round 重複は `reviewed_at` が最新のもの。`op review state pull` が最新 attempt を返さないため、CLI の `latest_attempt` と同じ規則を下の jq で適用する)
+かつ (2) `reviewed_head_sha == 現在の PR head`。古い round / 別 SHA の finding は読まない。
 
 ```bash
 : "${PR_NUMBER:?}" "${WORKTREE_PATH:?}"
@@ -150,9 +141,9 @@ jq -n --argjson n "$ISSUE_NUMBER" --arg rec "$RECOMMENDED_FIX_EXPERT" --arg ctx 
 判断が出るまで apply expert を spawn しない。prompt は review-only とする。
 
 ```text
-invocation_mode: op_managed
+【共通宣言】~/.claude/skills/_shared/spawn-prompt-common.md §1〜§4 を含める (§2 は exploration-only variant)。
+作業対象のパスが決まったら、対応する .claude/rules/<feature>.md を Read ツールで開いてから着手すること (cat / grep では正本が読み込まれない)。
 あなたは <expert-name> です。この起動は needs-specialist-review finding に対する specialist reviewer mode です。
-You must not ask interactive questions.
 
 禁止: コード編集 / commit / push / PR 本文編集 / label 操作 / PR コメント投稿
 
@@ -185,15 +176,15 @@ jq -n --arg id "$RVW_ID" --arg sp "$SPECIALIST_EXPERT" --arg r "$SPECIALIST_RESU
 | specialist_result | 動作 |
 |---|---|
 | `same-pr-fixable` | 4.5-2 の apply path へ (4.5-2-guard / 4.5-2-fallback を通す) |
-| `new-issue` | 別 Issue を起票し、本 PR では直さない |
+| `new-issue` | 本 PR では直さない。CO が finding の 1 行要約を follow-up 一覧として保持し、フェーズ7 で `FOLLOWUP_FINDINGS_JSON` に合流させる (起票は人間が判断) |
 | `blocked` | `pro-review-blocked` で人間判断待ち |
 
 ### 4.5-3. same worktree で直す条件 / 直さない条件
 
-**直す**: 元 Issue の scope_in の修正漏れ / PR 変更が原因のバグ・UX 破壊・security・file IO・permission 副作用 /
+直す: 元 Issue の scope_in の修正漏れ / PR 変更が原因のバグ・UX 破壊・security・file IO・permission 副作用 /
 acceptance criteria に必要な不足修正 / 妥当性確認に必要な最小限のテスト追加 / 同一 PR 由来の小規模な整合性問題。
 
-**直さない (別 Issue / blocked)**: scope_out / 既存からある別問題 / 大きな設計変更・migration・compatibility 再設計 /
+直さない (follow-up / blocked): scope_out / 既存からある別問題 / 大きな設計変更・migration・compatibility 再設計 /
 広範囲の security deep scan / release・installer・updater の別検証 / 人間判断が必要 / loop 上限超過。
 
 ### 4.5-4. 再委任 → 再 verification → 再 post-check → 再 review

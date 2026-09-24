@@ -80,6 +80,7 @@ PR 本文に書かれた変更が diff にない / PR タイトルの規則違�
 典型 finding: ネスト上限超過 / 同責務の重複 (3 箇所以上) / 既存規則と異なる命名 / 層が増えただけの抽象化。
 
 CLAUDE.md の規約 (ネスト上限 / コメントポリシー / フォルダ階層 / アンチパターン) は本 lens の絶対基準。
+diff が追加した NG コメント (`~/.claude/skills/_shared/project-profile.md`「コメント作法」) は nit として指摘する (blocking にしない)。
 
 ## severity の目安
 
@@ -110,5 +111,4 @@ CLAUDE.md の規約 (ネスト上限 / コメントポリシー / フォルダ�
 | Spec | spec-expert (Utility Worker) | null | feature-expert |
 | Refactor | refactor-expert | null | debug-expert (バグの種) |
 
-- `review-expert` / `ux-ui-audit-expert` は指定しない。UX/UI の修正は visual 系なら designer-expert、state / flow / a11y 実装なら feature-expert。
-- planned expert・`spec-expert` は op-run が spawn 前に正規化する (`~/.claude/skills/_shared/planned-experts.md` / `active-expert-registry.md`)。
+planned expert・`spec-expert` は op-run が spawn 前に正規化する (`handoff-boundaries.md` §7)。

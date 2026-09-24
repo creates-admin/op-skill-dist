@@ -16,16 +16,8 @@ coverage 上昇だけを目的にしたテストは計画しない。
 
 ## canonical フィールドの埋め方
 
-| フィールド | test-expert での値 |
-|-----------|------------------|
-| `severity` | critical / high のみ返す (基準は SKILL.md「severity / confidence の判定」) |
-| `domain` | `test` |
-| `symbols` | テスト対象の関数 / クラス / コンポーネント名 |
-| `confidence` | high / medium。low は finding にしない |
-| `recommendation.type` | `test` (調査が要るなら `investigation`) |
-| `recommended_runner` | `test-expert` |
-| `post_check_expert` | テスト追加のみなら `null` |
-| `blocking` / `blocking_reason` | 新規変更が既存 debt を悪化させるとき `true` + 理由 |
+`domain: "test"` / `recommended_runner: "test-expert"` / `post_check_expert` はテスト追加のみなら `null` / `recommendation.type` は `test` (調査が要るなら `investigation`) /
+`symbols` はテスト対象の関数・クラス・コンポーネント名。severity の基準は SKILL.md「severity / confidence の判定」。
 
 ## 拡張フィールド
 
@@ -40,65 +32,9 @@ coverage 上昇だけを目的にしたテストは計画しない。
 | `safety_gate` | apply 前に通すべき関門 (`requires_blame` / `requires_coverage_diff` / `requires_ci_pass` / `requires_observation_period`) |
 | `needs_human_decision` | `required: true` なら apply は手を出さない |
 
-## 例
-
-```json
-{
-  "title": "discount() の else 分岐が未テスト",
-  "severity": "high",
-  "severity_reason": "請求ロジックの通常価格パスが未カバーで、バグが入っても自動検出できない",
-  "domain": "test",
-  "files": ["src/pricing.ts:42", "tests/pricing.test.ts"],
-  "symbols": ["discount"],
-  "summary": "premium 以外のユーザーの通常価格パスがテストされていない。",
-  "evidence": "if (user.isPremium) 側のみ test_discount_premium がカバー、else は branch coverage で未到達",
-  "evidence_grade": "direct",
-  "hypothesis": "追加時に premium のテストだけ書かれ else 分岐が漏れた",
-  "excluded_hypotheses": ["else は到達不能: 否定 (通常ユーザーで呼ばれる)"],
-  "scope_in": ["tests/pricing.test.ts"],
-  "scope_out": ["src/pricing.ts (実装変更不要)"],
-  "recommendation": {
-    "type": "test",
-    "steps": [
-      "対象 src/pricing.ts::discount (line 100% / branch 50%)",
-      "test.each で premium / regular の 2 ケース (regular: {isPremium:false}, 100 → 100)",
-      "既存 makeUser fixture を再利用、mock なし",
-      "推定 +6 LoC、branch 50% → 100%"
-    ]
-  },
-  "verification_steps": ["discount の branch coverage が 100%"],
-  "success_criteria": ["premium / regular の両分岐がテストされる"],
-  "gotchas": ["既存命名に合わせ test_discount_regular とする"],
-  "bulk_group": null,
-  "confidence": "high",
-  "requires_dynamic_verification": false,
-  "recommended_runner": "test-expert",
-  "post_check_expert": null,
-  "blocking": false,
-  "blocking_reason": null,
-
-  "issue_type": "coverage_gap",
-  "action": "add_test",
-  "evidence_sources": ["coverage", "source_read"],
-  "risk_if_ignored": "通常価格パスのバグを検出できない",
-  "risk_if_changed": "なし (テスト追加のみ)",
-  "protected_behavior": "premium 以外は total をそのまま返す",
-  "test_intent": {
-    "spec": "isPremium=false のとき total を変更しない",
-    "failure_mode": "通常ユーザーへの誤割引、0 / NaN の返却",
-    "test_type": "unit",
-    "why_this_layer": "純粋関数で unit で十分",
-    "mock_policy": {"mock": [], "do_not_mock": ["discount 本体"], "reason": "純粋関数のため不要"},
-    "failure_suspects": ["条件式の反転", "isPremium の typo"]
-  },
-  "safety_gate": {"requires_blame": false, "requires_coverage_diff": false, "requires_ci_pass": true, "requires_observation_period": false},
-  "needs_human_decision": {"required": false}
-}
-```
-
 ## bulk_group カテゴリ (test-expert 固有)
 
-同じ bulk_group が 5 件以上なら op-scan がバッチ Issue にする。delete_candidate は 3 段階モデルに従う。
+delete_candidate は 3 段階モデルに従う。
 
 | bulk_group | 対象 | 想定 action |
 |-----------|------|------------|

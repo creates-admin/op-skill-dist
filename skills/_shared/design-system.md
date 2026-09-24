@@ -1,6 +1,6 @@
 # デザインシステム (カタログ正本 + 部品の登録制)
 
-UI の見た目の正本は **対象 repo が持つコンポーネントカタログ**。部品は 1 つずつ作り込み、人間が OK したものだけを
+UI の見た目の正本は対象 repo が持つコンポーネントカタログ。部品は 1 つずつ作り込み、人間が OK したものだけを
 カタログに「登録 (確定)」する。アプリ側は登録済みの部品を組むだけで、見た目を独自に作らない。
 
 ## 層
@@ -16,7 +16,7 @@ Claude Design (`/design` Artifact) は作り込み中の作業台であり、正
 
 ## 規則
 
-- アプリ (画面・ページ) は **登録済み (確定) の部品だけ** を組む。生の値 (色・px・フォント) や独自スタイルを書かない。
+- アプリ (画面・ページ) は登録済み (確定) の部品だけを組む。生の値 (色・px・フォント) や独自スタイルを書かない。
 - 登録済みの部品で表現できない見た目が要るときは、画面側で作らず `op-component` で部品を作る / 変える。
   画面の Issue はその部品の Issue に `op-depends-on` でつなぐ。
 - 部品の色は部品単位トークンを経由する。部品単位トークンは semantic → primitive を参照する。
@@ -53,7 +53,7 @@ Claude Design (`/design` Artifact) は作り込み中の作業台であり、正
 op-spec-patrol の指摘から作る) は次の形にする:
 
 - タイトル: `[designer-expert] 部品: <部品名> — <内容>`
-- marker: `op-fingerprint` (domain `design`) / `op-run-expert: designer-expert`
+- marker: `op-fingerprint` (domain `design`) / `op-run-expert: designer-expert` (書式は `pr-templates.md`「Issue 本文 hidden marker」)
 - 本文の 1 行目: `実施: /op-skill:op-component <部品名> --issue <N>` (`<N>` は起票後の番号。起票時は `--issue` を省いてよい)
 - 本文: 必要な variant / 状態、なぜ必要か (どの画面・どの gap から来たか)
 

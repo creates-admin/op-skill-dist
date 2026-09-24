@@ -7,7 +7,7 @@
 | `needs-specialist-review` | 妥当性・修正方針の判断に専門観点が要る。specialist に handoff |
 | `blocked` | 自動修正不能 (人間判断 / Issue 再設計 / scope_out)。op-run は自動継続を止める |
 
-全体 `review_result` は finding 単位 `result` の最重値 (`finding-schema.md`)。
+全体 `review_result` は finding 単位 `result` の最重値 (`op help payload review-finding`)。
 
 ## approve の条件 (すべて満たす)
 
@@ -74,19 +74,7 @@ review_round > 3 : 規定外 spawn → blocked
 round 3 で needs-fix / needs-specialist-review が残っても review-expert は通常判定を返す。上限超過による停止は op-run controller が行う。
 review-expert が round を理由に blocked にしてよいのは `review_round > 3` のときだけ。
 
-## 判定フロー
+## 判定の順序
 
-```text
-review_round > 3 ? ─ Yes → blocked
-scope_out / 人間判断 / Issue 再設計 ? ─ Yes → blocked
-Critical / High finding あり ? ─ Yes → 3 条件 AND ? ─ Yes → needs-fix / No → needs-specialist-review
-PR 本文の品質要件 未充足 ? ─ Yes → needs-fix (Spec / Refactor)
-→ approve
-```
-
-迷ったら needs-specialist-review に倒す。
-
-## label
-
-review-expert は label を付けない・外さない。遷移は op-run が `op pr label-transition` で行う
-(`pro-reviewed` / `pro-review-needs-fix` / `pro-review-blocked`)。
+`review_round > 3` → blocked、scope_out / 人間判断 / Issue 再設計 → blocked、Critical / High あり → 3 条件 AND なら needs-fix・欠ければ
+needs-specialist-review、PR 本文の品質要件未充足 → needs-fix (Spec / Refactor)、いずれも無ければ approve。迷ったら needs-specialist-review に倒す。

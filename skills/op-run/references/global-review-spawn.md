@@ -1,14 +1,13 @@
 # op-run: Global Review (フェーズ4)
 
 ClusterOrchestrator (CO、`cluster-orchestrator-directives.md` フェーズ5-6) が実行する global review の手順。
-review-expert は **別 context・別 worktree の監査専任** (修正・commit・push・PR 本文編集・label 操作をしない)。
+review-expert は別 context・別 worktree の監査専任 (修正・commit・push・PR 本文編集・label 操作をしない)。
 修正が要る場合は CO が specialist / apply expert に再委任する (`review-fix-loop.md`)。
 
 ### 4-1. レビュー用 worktree を別途作成
 
-apply worktree とは別の worktree に **PR head SHA を detach checkout** する。
-push 直後は GitHub の `head_ref_oid` が古い SHA を返すことがあるため、期待値は CO がローカルで push した branch の SHA に置き、
-GitHub がそれに追従するまで poll する。
+apply worktree とは別の worktree に PR head SHA を detach checkout する。
+期待値は CO がローカルで push した branch の SHA。GitHub の `head_ref_oid` が追従するまで poll し、追従しなければローカルの SHA を採用する。
 
 ```bash
 : "${PR_NUMBER:?}" "${TASK_ID:?}" "${BRANCH:?}" "${WORKTREE_PATH:?}" "${OP_RUN_REPO:?}"
@@ -26,7 +25,6 @@ if [ -n "$EXPECTED_HEAD_SHA" ]; then
     sleep 3; POLL_N=$((POLL_N + 1))
     PR_HEAD_SHA=$(op pr view "$PR_NUMBER" --include meta | jq -r '.head_ref_oid')
   done
-  # 追従しなければローカル push SHA を真として採用する
   [ "$PR_HEAD_SHA" = "$EXPECTED_HEAD_SHA" ] || PR_HEAD_SHA="$EXPECTED_HEAD_SHA"
 fi
 test -n "$BASE_REF" -a -n "$PR_HEAD_REF" -a -n "$PR_HEAD_SHA" || { echo "❌ PR #${PR_NUMBER} の base/head が解決できません" >&2; exit 1; }
@@ -49,15 +47,12 @@ test "$(git -C "$REVIEW_WT" rev-parse HEAD)" = "$PR_HEAD_SHA" || {
 export PR_HEAD_SHA PR_HEAD_REF
 ```
 
-branch 名ではなく SHA で固定することで、review 対象と `reviewed_head_sha` が常に一致する。
-
 ### 4-1-b. review_model 決定 (narrow opt-down judgment)
 
 `REVIEW_MODEL` (`opus` / `sonnet` のみ。global review は read-only のため cluster の Fable 昇格は波及しない) と
 `REVIEW_MODEL_REASON`、後段の lens 判定入力 `REVIEW_LOC_COUNT` / `REVIEW_SENSITIVE_TOUCHED` /
-`SENSITIVE_INVESTIGATE_SONNET` を確定する。5 条件 AND・LOC 正規化・sensitive glob の仕様正本は
-`_shared/model-selection.md` §7.1 / §7.1.3。`SENSITIVE_PATTERNS` は §7.1.3 の glob を全カテゴリ網羅すること
-(glob を変えたら本 regex も同時に更新する)。
+`SENSITIVE_INVESTIGATE_SONNET` を確定する。条件・LOC 正規化・sensitive glob の正本は
+`_shared/model-selection.md` §7.1 / §7.1.3 (`SENSITIVE_PATTERNS` は §7.1.3 の glob と一致させる)。
 
 ```bash
 : "${OP_RUN_BASE_REF:?}" "${REVIEW_WT:?}" "${PR_NUMBER:?}"
@@ -87,14 +82,12 @@ else
   printf '%s' "$REVIEW_SENSITIVE_TOUCHED" | grep -Eq '^[0-9]+$' || export REVIEW_SENSITIVE_TOUCHED=0
 
   if [ "$REVIEW_LOC_COUNT" -le 100 ] && [ "$REVIEW_SENSITIVE_TOUCHED" -eq 0 ] \
-     && [ "${OP_QUALITY:-balanced}" != "high" ] && [ "${OP_REVIEW_OPT_DOWN_DISABLE:-0}" != "1" ] \
-     && [ "${MODEL_DEGRADED:-0}" != "1" ]; then
+     && [ "${OP_REVIEW_OPT_DOWN_DISABLE:-0}" != "1" ] && [ "${MODEL_DEGRADED:-0}" != "1" ]; then
     export REVIEW_MODEL="sonnet" REVIEW_MODEL_REASON="narrow-opt-down"
   else
     export REVIEW_MODEL="opus"
     if   [ "$REVIEW_LOC_COUNT" -gt 100 ];                 then export REVIEW_MODEL_REASON="large-pr-loc"
     elif [ "$REVIEW_SENSITIVE_TOUCHED" -ne 0 ];            then export REVIEW_MODEL_REASON="sensitive-path"
-    elif [ "${OP_QUALITY:-balanced}" = "high" ];           then export REVIEW_MODEL_REASON="quality-high"
     elif [ "${OP_REVIEW_OPT_DOWN_DISABLE:-0}" = "1" ];     then export REVIEW_MODEL_REASON="kill-switch"
     elif [ "${MODEL_DEGRADED:-0}" = "1" ];                 then export REVIEW_MODEL_REASON="model-degraded"
     else export REVIEW_MODEL_REASON="default-opus"; fi
@@ -105,7 +98,7 @@ else
     | grep -Ev '(\.md$|(^|/)docs/)' | wc -l | tr -d ' ')
   printf '%s' "$CUMULATIVE_NONDOC" | grep -Eq '^[0-9]+$' || CUMULATIVE_NONDOC=1
   if [ "$REVIEW_SENSITIVE_TOUCHED" -ne 0 ] && [ "$REVIEW_LOC_COUNT" -le "${OP_REVIEW_SMALL_MAX_LOC:-100}" ] \
-     && [ "$CUMULATIVE_NONDOC" -eq 0 ] && [ "${OP_QUALITY:-balanced}" != "high" ] \
+     && [ "$CUMULATIVE_NONDOC" -eq 0 ] \
      && [ "${OP_REVIEW_OPT_DOWN_DISABLE:-0}" != "1" ] && [ "${MODEL_DEGRADED:-0}" != "1" ]; then
     export SENSITIVE_INVESTIGATE_SONNET=1
   fi
@@ -113,22 +106,20 @@ fi
 export SENSITIVE_INVESTIGATE_SONNET="${SENSITIVE_INVESTIGATE_SONNET:-0}"
 ```
 
-`op-config.yaml` の `model_overrides.review-expert: opus` で narrow opt-down を完全停止できる (`model-selection.md` §6 step 3)。
-
 ### 4-2. review-expert を別 context で spawn (post_check 結果に応じてモード分岐)
 
 | review_mode | 適用条件 | Security/Abuse Lens |
 |---|---|---|
 | `full` | 下記以外 (post_check なし / ux-ui のみ / security SKIPPED) | 通常どおり |
 | `light-after-security-postcheck` | state 文書 `post_checks["security-expert"]` が PASS / PASS_WITH_NOTES (aux 要求時は `post_checks["ux-ui-audit-expert@aux"]` も PASS / PASS_WITH_NOTES) | 「PR 全体として新たな露出面が増えていないか」のみ軽く |
-| `fix_diff_only` | Round 2+ (`cluster-orchestrator-directives.md` フェーズ6 手順5) | active lens に従う |
+| `fix_diff_only` | Round 2+ (`cluster-orchestrator-directives.md` フェーズ6 手順4) | active lens に従う |
 
 判定 fence の正本は `cluster-orchestrator-directives.md` フェーズ5.5。post-check が SKIPPED の PR でも、review-expert は
 SKIPPED だけを理由に `blocked` を返さない (`expert-review/references/result-decision.md`)。
 
 #### 4-2-pre. review_round の計算 (司令官側、必須、state 文書ベース)
 
-review_round は **PR 全体での review attempt 通算** (head SHA で絞らない。絞ると fix のたびに round が 1 に戻り上限が効かない)。
+review_round は PR 全体での review attempt 通算 (head SHA で絞らない。絞ると fix のたびに round が 1 に戻り上限が効かない)。
 上限は `max_review_fix_rounds = 2` → 許可 `review_round ≤ 3` (1 = 初回 / 2 = fix 1 回後 / 3 = fix 2 回後の最終)。
 この fence が REVIEW_ROUND 算出と REVIEW_TERMINAL gate の唯一の実装で、Review Fix Loop の再 review 前にもそのまま再実行する。
 
@@ -147,7 +138,7 @@ else
 fi
 ```
 
-`REVIEW_TERMINAL=1` は制御フローであり、当該 PR の review-expert spawn を**実行しない**。失敗を `|| true` で握り潰さない。
+`REVIEW_TERMINAL=1` のとき当該 PR の review-expert は spawn しない。失敗を `|| true` で握り潰さない。
 
 #### 4-2-pre-blocked. terminal 処理
 
@@ -168,15 +159,6 @@ jq -n --argjson round "$REVIEW_ROUND" --arg at "$(date -Iseconds)" \
 ```
 
 CO は verdict `needs_human_decision` (blocker_reason: review_round 上限) を返し、自動再 review しない。
-
-#### 4-2-pre-2. OP_RUN_SESSION_ID の払い出し (controller-only, review-expert spawn 前必須)
-
-`OP_RUN_SESSION_ID` は controller が払い出し、CO が入力 `session_id` から受け取る。CO / review-expert / テンプレは生成しない。
-
-```bash
-: "${OP_RUN_SESSION_ID:?OP_RUN_SESSION_ID は controller が払い出す}"
-[ "$OP_RUN_SESSION_ID" != "unknown" ] || { echo "❌ OP_RUN_SESSION_ID=unknown は不可" >&2; exit 1; }
-```
 
 #### 4-2-a. per-phase model 解決 + review-expert spawn (ClusterOrchestrator)
 
@@ -240,7 +222,7 @@ fi
 
 ##### spawn 値の契約
 
-`active_lens_keys` / `lens_bundles` は **JSON 配列値**として渡す (文字列化すると全 7 lens に silent 退行する)。
+`active_lens_keys` / `lens_bundles` は JSON 配列値として渡す (文字列化すると全 7 lens に silent 退行する)。
 
 ```js
 {
@@ -257,7 +239,7 @@ fi
     issues: [/* close する Issue 番号 */],
   }],
   review_round: REVIEW_ROUND,               // §4-2-pre
-  session_id: OP_RUN_SESSION_ID,            // §4-2-pre-2
+  session_id: OP_RUN_SESSION_ID,            // CO フェーズ0 の入力値
   models: {
     investigate: REVIEW_INVESTIGATE_MODEL,
     investigate_fallback: REVIEW_INVESTIGATE_FALLBACK_MODEL,
@@ -277,9 +259,9 @@ fi
 
 CO は返却 `reviews[]` を PR ごとに publish する。記録の正本は state 文書の attempt。
 
-- **approve**: `op review publish-approval` が state push (attempt) + `pro-reviewed` 付与 (他 review label 除去込み) を
+- approve: `op review publish-approval` が state push (attempt) + `pro-reviewed` 付与 (他 review label 除去込み) を
   1 コマンドで行う。別途 state push / label 遷移をしない。
-- **needs-fix / needs-specialist-review / blocked**: 人間向けに自然文のコメント (判定・理由・finding 一覧) を投稿し、
+- needs-fix / needs-specialist-review / blocked: 人間向けに自然文のコメント (判定・理由・finding 一覧) を投稿し、
   attempt を state push し、label を遷移する。state push の失敗は握り潰さない (Review Fix Loop の入力が更新されない)。
 
 ```bash

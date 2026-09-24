@@ -1,15 +1,8 @@
-# handoff-boundaries.md — 他 expert との責務分離 + 禁止事項完全版
+# handoff-boundaries.md — 他 expert との責務分離
 
 ## 1. 立ち位置
 
-```text
-apply expert が実装 → post-check (ux-ui-audit-expert / security-expert、該当 PR のみ)
-  → review-expert が PR 全体を 7 lens で global review  ← 本 expert
-  → needs-fix なら op-run が specialist に再委任 (本 expert は直さない)
-  → 人間がマージ判断
-```
-
-post-check は domain expert、apply は specialist、マージは人間の責務。
+apply は specialist、post-check は domain expert (該当 PR のみ)、PR 全体の global review は本 expert、マージは人間。
 
 ## 2. ux-ui-audit-expert との分離
 
@@ -65,45 +58,13 @@ visual 変更が a11y を直接壊している場合は Workflow / UX lens の f
 | `release-expert` | 配布 / updater / installer / artifact / version / signing | `needs_human_decision`。fallback 先にしない。build / packaging / artifact / config 構造が主題なら誤分類として debug-expert / refactor-expert へ再分類し `reclassified_*` を記録 |
 | `env-expert` | 環境 / dependency / toolchain | debug-expert / refactor-expert (配布方針の判断は `needs_human_decision`) |
 
-planned expert を `recommended_fix_expert` に書くのは可 (op-run が spawn 前に正規化)。規約の正本は `~/.claude/skills/_shared/planned-experts.md`。
+planned expert を `recommended_fix_expert` に書くのは可 (op-run が spawn 前に正規化)。
+`reclassified_from` / `reclassified_to` / `reclassification_reason` は再分類したときだけ 3 つ揃えて記録し、`recommended_fix_expert` には再分類後の値を入れる。
+planned expert の規約の正本は `~/.claude/skills/_shared/planned-experts.md`。
 
-## 8. 禁止事項完全版
+## 8. 禁止事項
 
-Direct Mode でも全項維持する。
-
-### 8-1. 編集系
-
-- コード編集 / commit / push / merge
-- PR 本文の書き換え (typo も。finding に残す)
-- label の付与・剥奪
-- Issue の編集
-- worktree の作成・削除
-- 検証コマンドの副作用を `git restore` 等で戻すこと
-
-### 8-2. 判定系
-
-- 4 種以外の判定 (`needs-fix-applied` 等)、質問テキスト、「判断保留」
-- 「可能性がある」「テストすれば分かる」等の憶測 finding
-- lens の機械的全適用、Critical / High 主体でない過剰指摘
-
-### 8-3. 役割系
-
-- post-check expert としての振る舞い、Issue routing 値に review-expert を書くこと
-- security 深掘り再監査 / UX/UI 専門監査 / visual 専門監査の代替
-- Issue の scan / patrol
-- `recommended_fix_expert` に `review-expert` / `ux-ui-audit-expert` を書くこと
-
-### 8-4. 対話系 (OP-managed Mode)
-
-- 司令官・ユーザーへの質問、Issue / PR コメントでの質問待ち
-- 自由記述の判断要求 (構造化返却で示す)
-- PR コメントの投稿 (投稿は controller)
-
-### 8-5. 範囲系
-
-- scope_out への踏み込み (違反は finding に残す)
-- OP 管理外での branch / PR 作成
-- 依存追加・削除・設定変更などの破壊的変更
+正本は `agents/review-expert.md`。
 
 ## 9. 迷ったとき
 
