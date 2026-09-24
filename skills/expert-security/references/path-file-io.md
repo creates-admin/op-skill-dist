@@ -1,187 +1,89 @@
-# path-file-io.md — std::fs / tokio::fs / path 検証の基本
+# path-file-io.md — file IO / path / Windows path 境界
 
-<!--
-機能概要: Rust の path / file IO API における観点と検査基準。
-作成意図: canonicalize / scope / TOCTOU / temp file / atomic write の作法を統一する。
-注意点: Windows 固有の path 境界は windows-path-boundaries.md。OS file picker 経由 path の扱いは
-       file-picker-and-user-selected-path.md。
--->
+境界ごとの扱いは `source-sink-analysis.md` §1、user-selected path は `usable-security.md` §4。
 
-## 検査観点
+## 1. 基本作法
 
-```text
-1. canonicalize の適用
-2. scope check (boundary 別)
-3. atomic open / TOCTOU 対策
-4. temp file の権限と cleanup
-5. atomic write (rename ベース)
-6. permission (mode / ACL)
-7. error 出力の sanitize
-```
+- **canonicalize** — sink に渡す前に `std::fs::canonicalize`。以降は戻り値を使う。新規作成 path は親を canonicalize して file 名を join する
+  (canonicalize は存在しない path で失敗する)。失敗は error で返す (絶対 path を出さない)。
+- **scope** — `canonical.starts_with(&root_canonical)` で確認。境界 A / D / E / G は強制、B は強制しない、C / F は確認。
+- **TOCTOU** — `if exists { remove }; write` のような check-then-act を避ける。新規作成は `OpenOptions::new().write(true).create_new(true)`、
+  意図的な上書きは `.create(true).truncate(true)`。canonicalize したら即 open し、以降は handle で操作する。
+- **temp** — `tempfile::NamedTempFile` / `tempfile()` を使う (予測不能な名前・drop で削除)。自前なら Unix 0600 / Windows はユーザー専用 ACL。
+  kill 時に残ることを考え、機密データには predictable な名前を使わない。
+- **atomic write** — 重要 file は tempfile に書く → `sync_all` → `persist` (rename) で置換。
+- **permission** — Unix は `PermissionsExt` で mode を明示 (umask に依存しない)。log / temp は 0600、directory は 0700。
+- **error** — `path.display()` を production log / frontend error に出さない (`secrets-and-logs.md`)。
 
----
+## 2. Windows path 境界 (15 種)
 
-## 1. canonicalize の適用
+| # | 境界 | 何が起きるか | 検査 |
+|---|---|---|---|
+| 1 | parent traversal `..` | zip-slip / 参照 path / invoke 引数で root 外へ | `Component::ParentDir` を reject、canonicalize 後に scope |
+| 2 | symlink | 文書フォルダの link 経由で任意 path へ書く | canonicalize で resolve してから判定 |
+| 3 | NTFS junction | 管理者権限なしで作れる directory link (別 volume も可) | 同上 |
+| 4 | reparse point | symlink / junction / mount point / OneDrive placeholder の総称。`is_symlink()` では捕まらない | `FILE_ATTRIBUTE_REPARSE_POINT` (0x400) を見るか canonicalize |
+| 5 | UNC `\\server\share` / `\\?\UNC\` | network 越境、TOCTOU、改竄 payload | local 前提なら reject。正当な用途なら threat_model に明記して検証を足す |
+| 6 | device path `\\?\` / `\\.\` / `\\?\Volume{GUID}` | MAX_PATH 回避、正規化規則の違いで検査を迂回 | reject |
+| 7 | reserved name CON / PRN / AUX / NUL / COM0-9 / LPT0-9 | 拡張子付き (CON.txt) でも予約 | 全 component の stem を大文字化して reject |
+| 8 | ADS `file.txt:stream` | 隠しデータの書込 | drive letter 以外の `:` を reject |
+| 9 | 大文字小文字の同一視 | case-sensitive な比較で allowlist / scope を迂回 | 小文字化 / `eq_ignore_ascii_case` で比較 |
+| 10 | 区切り `/` と `\` の混在 | `\` 前提の denylist を迂回 | canonicalize 後、または統一してから比較 |
+| 11 | 末尾ドット・空白 | `foo.txt.` = `foo.txt` | 末尾ドット・空白の component を reject |
+| 12 | long path (260 超) | truncate で別 path に書く | longPathAware を宣言するか、超過を reject |
+| 13 | temp directory race | 予測可能な名前を先取りされ symlink 経由で書かされる | tempfile / `create_new` |
+| 14 | 上書き・削除・rename の TOCTOU | check と act の間に symlink へ差し替え | atomic open / handle で操作 |
+| 15 | drive-relative / current dir 依存 (`foo.txt` / `C:foo.txt`) | 起動 path 次第で想定外の場所へ | 冒頭で絶対 path に解決、`current_dir()` に依存しない、`C:foo` 形式は reject |
 
-### 適用すべき API
+境界別の適用: A / D / E / F は 1・5・6・7・8 を reject し scope を強制 (F は確認)。B は canonicalize で resolve し、5・6 はアプリの想定外なら reject、
+7・8 は reject、scope は強制しない。C は scope 確認。すべて case-insensitive で比較する。
 
-- 入力 path を sink に渡す前に必ず `std::fs::canonicalize(&path)` (existing path)
-- 新規作成 path は parent を canonicalize し、その下に file_name を join
-- canonicalize の戻り値で以降の処理を行う (元の path 文字列を使わない)
-
-### 失敗時の扱い
-
-- canonicalize 失敗は path が存在しない / 権限不足 / reparse loop 等
-- 失敗を error として返す (絶対 path を error に漏らさない)
-
----
-
-## 2. scope check (boundary 別)
-
-trust_boundary 別の scope 適用 (詳細は trust-boundaries.md):
-
-| boundary | scope 強制 |
-|---------|-----------|
-| A (frontend free text) | 強制 (workspace / user data dir 内のみ) |
-| B (user-selected) | **強制しない** (user-granted capability) |
-| C (app internal) | 確認のみ |
-| D (config / old project) | 強制 (再検証) |
-| E (imported file 内 path) | 強制 (解凍先 / reference 解決) |
-| F (env / cli) | 確認 (起動 path は信頼 base) |
-| G (network) | 強制 (download 先) |
-
-scope check の実装例:
+統合チェックの例:
 
 ```rust
-fn within_scope(canonical: &Path, root_canonical: &Path) -> bool {
-    canonical.starts_with(root_canonical)
-}
-```
+use std::path::{Component, Path, PathBuf};
 
----
-
-## 3. atomic open / TOCTOU 対策
-
-```text
-NG (TOCTOU リスク):
-  if path.exists() {
-      fs::remove_file(path)?;
-  }
-  fs::write(path, content)?;
-
-OK (atomic):
-  // create_new で既存 file の上書きを atomic に reject
-  let mut f = OpenOptions::new()
-      .write(true)
-      .create_new(true)
-      .open(path)?;
-  f.write_all(&content)?;
-
-OK (intentional overwrite):
-  let mut f = OpenOptions::new()
-      .write(true)
-      .truncate(true)
-      .create(true)
-      .open(path)?;
-  f.write_all(&content)?;
-```
-
-### canonicalize → 即 open
-
-- canonicalize の戻り値で即 open し、以降は file descriptor で操作
-- canonicalize と open の間に path が差し替わるリスクを最小化
-
----
-
-## 4. temp file の権限と cleanup
-
-```text
-- tempfile crate を使う (tempfile::NamedTempFile / tempfile::tempfile)
-  - predictable filename を避ける
-  - drop で自動削除
-- 自前で /tmp / $TEMP に書く場合は権限を限定
-  - Linux/macOS: mode 0600
-  - Windows: ユーザー専用 ACL
-- process crash / panic 時の cleanup を考慮 (tempfile は drop で消えるが、kill 時は残る)
-- 非機密の cache は predictable name でも OK だが、機密データには使わない
-```
-
----
-
-## 5. atomic write (rename ベース)
-
-```text
-1. tempfile に書く
-2. fsync で flush
-3. rename で目的 path に置き換え
-4. 失敗時は tempfile を消す
-
-これで「書きかけ状態の file が永続化される」事故を防ぐ。
-```
-
-```rust
-fn atomic_write(path: &Path, content: &[u8]) -> std::io::Result<()> {
-    let parent = path.parent().ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, "path has no parent")
-    })?;
-    let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
-    tmp.write_all(content)?;
-    tmp.as_file().sync_all()?;
-    tmp.persist(path).map_err(|e| e.error)?;
+fn validate_input_path(p: &Path) -> Result<(), &'static str> {
+    let s = p.to_string_lossy();
+    if s.is_empty() { return Err("empty"); }
+    if s.starts_with(r"\\") { return Err("unc_or_device"); }              // \\?\ \\.\ \\server
+    if p.components().any(|c| matches!(c, Component::ParentDir)) { return Err("traversal"); }
+    let rest = if s.len() >= 2 && s.as_bytes()[1] == b':' { &s[2..] } else { &s[..] };
+    if rest.contains(':') { return Err("ads"); }
+    if s.len() >= 2 && s.as_bytes()[1] == b':' && !rest.starts_with(['\\', '/']) { return Err("drive_relative"); }
+    for c in p.components() {
+        let Component::Normal(name) = c else { continue };
+        let name = name.to_string_lossy();
+        let stem = name.split('.').next().unwrap_or("").to_ascii_uppercase();
+        let numbered = (stem.starts_with("COM") || stem.starts_with("LPT"))
+            && stem.len() == 4 && stem.as_bytes()[3].is_ascii_digit();
+        if ["CON", "PRN", "AUX", "NUL"].contains(&stem.as_str()) || numbered { return Err("reserved"); }
+        if name.ends_with('.') || name.ends_with(' ') { return Err("trailing_dot_or_space"); }
+    }
     Ok(())
 }
+
+fn canonicalize_in_scope(p: &Path, root: &Path) -> std::io::Result<PathBuf> {
+    let c = std::fs::canonicalize(p)?;
+    if !c.starts_with(std::fs::canonicalize(root)?) {
+        return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "scope"));
+    }
+    Ok(c)
+}
 ```
 
----
+## 3. 典型 finding
 
-## 6. permission (mode / ACL)
+| パターン | severity 目安 | mitigation |
+|---|---|---|
+| frontend からの path に canonicalize なしで write | Critical | validate + canonicalize + scope |
+| `if exists { remove }` の TOCTOU | High | atomic open |
+| temp file が 0644 / predictable 名 | High | tempfile / 0600 |
+| log に `path.display()` の絶対 path | High | sanitize |
+| 重要 file を atomic write なしで直接上書き | High | rename ベースの atomic write |
+| canonicalize 失敗 error に絶対 path | Medium (報告しない) | sanitize |
 
-```text
-Linux/macOS:
-  std::os::unix::fs::PermissionsExt
-  - file mode 0600 / 0644 / 0700 を意図的に設定
-  - umask に依存しない
+## 4. post-check で見る点 (path 系 mitigation)
 
-Windows:
-  std::os::windows::fs::OpenOptionsExt
-  - ACL を default のまま使うことが多いが、必要なら icacls で制限
-  - tempfile は user-private なので追加設定不要
-```
-
----
-
-## 7. error 出力の sanitize
-
-```text
-NG:
-  log::error!("failed to write {}: {}", path.display(), err);
-  → 絶対 path / user 名漏洩
-
-OK:
-  log::error!(target: "io", "failed to write file: {}", err.kind());
-  // 詳細 path は trace level の log にのみ書き、production log level は info / warn まで
-```
-
----
-
-## 典型 finding
-
-| pattern | severity | mitigation |
-|---------|----------|-----------|
-| frontend → write_user_data の path に canonicalize なし | Critical | canonicalize + scope + reject reserved/ADS/device |
-| `if exists { remove }` パターンの TOCTOU | High | atomic open (create_new / truncate) |
-| temp file mode 0644 で他ユーザー読める | High | mode 0600 / tempfile 利用 |
-| log に Path::display() で絶対 path | High | sanitize / log level 制御 |
-| atomic write なしで重要 file 直接書き換え | High | rename ベース atomic write |
-| canonicalize 失敗の error が絶対 path 含む | Medium | error sanitize |
-
----
-
-## bulk_group 例
-
-- `security:path-traversal-in-export`
-- `security:path-canonicalize-missing`
-- `security:toctou-check-then-act`
-- `security:temp-file-mode-too-permissive`
-- `security:atomic-write-missing`
-- `security:error-leak`
+canonicalize 後の scope check (境界 B 以外) / reserved・ADS・device・UNC の reject / traversal reject (境界 B 以外) /
+canonicalize 失敗時の error に絶対 path が無いこと / check-then-act が atomic になっていること。

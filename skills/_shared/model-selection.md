@@ -1,109 +1,25 @@
-<!--
-schema_version: 5
-last_breaking_change: 2026-07-31
-notes: v5 据置 (2026-09-01) — §5.1 主表の enrichment ux-ui-audit gate 行に「op-plan は `design_gate: human` で spawn せず
-       人間承認が gate」の pointer を additive 追記 (正本は issue-enrichment.md §5)。model 選択規則は不変。
-       v5 (2026-07-31) — §1 に **Fable tier** を追加し、§7.2「Fable escalation gate」を新設。
-       **破壊的変更の所在**: (a) §6 controller 決定フローに step 2b (Fable escalation gate) を挿入し、
-       (b) step 3 explicit override の値域から `fable` を除外した (config / env から Fable を選べない)。
-       いずれも §10「override 優先順位 / §6 controller 決定フローの変更」に該当する。
-       不変則: worker (spawn される expert) の **自動選択の天井は Opus** — §5 mapping / `--quality high` /
-       degrade 復帰のいずれの経路も Fable を返さない (F1/F2)。**read-only spawn は承認があっても Fable 禁止**
-       (F3、audit / investigation / review 全 phase / post-check / enrichment / refute / spec-expert / scout)。
-       Fable の唯一の入口は **write phase (op-run apply / op-codev implement) での人間承認** (F4/F5)。
-       consumer pin を (>=5) に同期すること (op-run / op-codev / op-scan / op-patrol / op-plan /
-       op-architect / op-loop / op-merge / op-explore / expert-spawn.md / global-review-spawn.md)。
-       v4.1 相当 (2026-07-29) — §5.5 の invoke 先を built-in `/code-review` から plugin 同梱の
-       `op-skill:op-code-review` へ差し替え (built-in は disable-model-invocation で model から
-       invoke 不可と実測確定したため。apply-completion-checklist.md v5 と対)。effort 派生 mapping
-       (§5.5.1 以降) と `code_review_effort` field は不変のため schema_version 据置。
-       v4 (2026-06-14, Refs #720) — §7.1.3 に「investigate-phase 例外 (doc-only small)」を追加。
-       **破壊的変更の所在**: 「sensitive glob 該当 = 全 phase Opus 強制」という既存 behavioral invariant を
-       investigate (lens-audit) phase に限り意図的に解除する (§7.1.4 と同型の invariant 解除)。
-       sensitive ∩ doc-only (CUMULATIVE_NONDOC==0) ∩ small (LOC≤OP_REVIEW_SMALL_MAX_LOC) ∩ --quality≠high
-       ∩ kill switch 不在 ∩ degrade 不在 を満たす狭い PR に限り investigate (lens-audit) phase のみ Sonnet へ
-       解除できる例外条項を新設 (§10「model 選択の Opus 保証 invariant を narrow 条件で解除」に相当)。
-       REVIEW_MODEL 自体は Opus 据置 (escape hatch 互換)、verify/gate/backstop は Opus 固定、lens floor も
-       full 7-lens 維持。§7.1.7 per-phase model table に同例外を反映。
-       consumer (global-review-spawn.md) の pin を (>=4) に同期すること。
-       bash 実装は global-review-spawn.md §4-1-b (判定) / §4-2-a-pre (investigate-only 差し替え)。
-       本番化は Issue #720 の Ladder4 recall 実証を merge gate とする。
-       v3 (2026-05-23) — §7.1「review-expert narrow opt-down」新設 (Refs #493)。
-       review-expert は §5.1 主表で全 PR 無条件 Opus 固定、§7 で `--quality low` でも
-       Opus 維持の merge gate 例外保護を受けていた。v3 では base mapping (Opus) は維持しつつ、
-       「LOC≤100 ∩ 非センシティブ glob 不該当 ∩ --quality high 不指定 ∩ kill switch 不在 ∩
-       degrade 不在」の 5 条件 AND を満たす **狭い** PR に限り Sonnet へ opt-down する例外節
-       (§7.1〜§7.1.6) を additive に追加。§6 controller 決定フローに step 2a (narrow opt-down 評価)
-       を挿入。**破壊的変更の所在**: §7.1.4 で `small ∩ non-sensitive ∩ --quality low` を Sonnet
-       にする挙動が、現行 §7 の「`--quality low` でも review-expert は Opus 維持」という
-       既存 invariant を small∩non-sensitive PR に限り意図的に解除する (§10「--quality flag 値の
-       挙動変更」に該当)。consumer (op-run / expert-spawn.md) の pin を (>=3) に同期すること。
-       v2 (2026-05-21) — §5.5「code-review effort-level 自動判定」新設 (Refs #367)。
-       Claude Code v2.1.146 で /simplify が /code-review に rename + optional effort-level 引数追加。
-       本ファイルが既に持つ task_complexity / area_complexity / --quality の 3 軸から effort-level
-       (low / medium / high) を **派生** させる canonical mapping を新規節として追加。
-       既存軸の定義 (§2 / §3 / §4 / §7) は変更しない (新規軸を増やさず組合せで派生)。
-       expert-spawn.md v16 の `code_review_effort` field が本節の派生値を転写する。
-       v1 (2026-05-13) — OP skill 軍の model 選択 (Opus / Sonnet / Haiku、具体 version は §1) の canonical 正本。
-       Phase × Expert × complexity の 3 軸 mapping、task_complexity / 区画 complexity 区分、
-       複雑度シグナル定義、--quality flag 仕様、override 優先順位を集約する。
-       本ファイルは markdown 仕様のみ提供し、CLI 化 (op-core 翻訳) は別 Phase に倒す。
-       Single Canonical Source Rule に従い、model 選択ルールの正本は本ファイルのみ。
-       expert-spawn.md / issue-enrichment.md / active-expert-registry.md からは pointer 参照とする。
--->
-
 # Model Selection: Phase × Expert × Complexity → Model
 
-/**
- * 機能概要: OP skill 軍 (op-plan / op-scan / op-patrol / op-architect / op-run / op-merge) が
- *           各フェーズで spawn する expert subagent に対し、Opus / Sonnet / Haiku のどれを
- *           model として割り当てるかを決める canonical 正本。
- * 作成意図: agent frontmatter の model: sonnet 固定では、判断不可逆性が高い review / post-check や
- *           design 系の生成・統合フェーズで品質が頭打ちになる。一方で全 Opus 化は op-scan の
- *           広域並列 audit で並列爆発する。Phase × Expert × complexity の 3 軸で decision table 化し、
- *           「単発 × 不可逆 × 深い推論」のみ Opus に集中させる分業を定義する。
- * 注意点: 本ファイルは仕様正本。CLI / Rust 翻訳は別 Phase (op-core にて `op model decide` を実装予定)。
- *         model 決定は controller の直列フロー (§6 を参照): mapping lookup → --quality → explicit override → spawn。
- *         agent frontmatter の model: は Direct Mode の default として残し、OP-managed Mode では
- *         controller が決定した値が渡される (frontmatter は無視される)。本 PR は仕様 canonical 化のみで、
- *         SKILL.md の Agent spawn テンプレへの `model:` field 注入は follow-up Phase (§11 参照)。
- */
-
-OP skill 軍が spawn する expert に対し、どの model (Opus / Sonnet / Haiku、具体 version は §1) を割り当てるかの
-canonical 正本。**Phase × Expert × complexity の 3 軸** で割当を決める。
+OP skill が spawn する expert にどの model を割り当てるかの正本。**Phase × Expert × complexity の 3 軸** で決める。OP-managed Mode では controller が §6 のフローで決めた値を `Agent({ model })` に渡す (agent frontmatter の `model:` は Direct Mode の default としてのみ使われる)。
 
 ---
 
 ## §1 model 階層 (Opus / Sonnet / Haiku)
-
-3 model を以下の役割で使い分ける。加えて、**自動選択されない opt-in 専用の escalation tier** として
-Fable を持つ (§7.2 が正本):
 
 | Model | 具体 version (唯一正本) | 強み | 適用フェーズの特徴 |
 |---|---|---|---|
 | **Fable** | Fable 5 | 最難度の write タスク向け escalation 先 (高コスト) | **自動選択しない (opt-in 専用)**。write phase (op-run apply / op-codev implement) で §7.2 の人間承認を得た spawn のみ |
 | **Opus** | Opus 4.8 | cross-cutting 推論、仮説立て、全体調和判断、空間認識的推論 | 単発 / 判断不可逆 / 深い推論 / design 系生成・統合。**worker 自動選択の天井** (§7.2 F1) |
 | **Sonnet** | Sonnet 4.6 | pattern マッチ + 軽い推論、rubric 適用、既存パターン模倣 | 広域並列 audit / routine 実装 / 検出系 |
-| **Haiku** | Haiku 4.5 | 形式照合、決定論的検査 | 慎重利用 — false negative 許容ケース (test rubric 適用等) のみ |
+| **Haiku** | Haiku 4.5 | 形式照合、決定論的検査 | false negative 許容ケース (test rubric 適用等) のみ |
 
-> **Fable は §5 mapping の値域に入らない (v5 の中核不変則)**。§5 のどの cell も Fable に解決してはならず、
-> `--quality high` の昇格 ladder も Opus で止まる。Fable は §7.2 の承認 gate を通った write spawn にのみ
-> 現れる例外値であり、read-only spawn では承認があっても禁止される (§7.2 F3)。
-
-> **Single Canonical Source Rule (model tier の具体 version)**: 本 §1 table の「具体 version」列が
-> model tier の minor version の **唯一の正本**。本ファイルの他節 / 他ファイルは minor version を
-> 書かず、論理名 (`Opus` / `Sonnet` / `Haiku`) のみで参照する。将来の model bump は本 table 1 行の
-> 更新のみで完結させ、参照箇所の churn を構造的にゼロにする (案A、Refs #561)。
-> 論理名がどの version を指すかは常に本 §1 を参照する。
-
-**design 系 (designer / ux-ui-audit) の検出フェーズに Haiku を使うのは false negative リスクで避ける**
-(視覚 / token 違反検出にも空間認識的推論の下支えが必要なため)。
+- 具体 version は本表のみに書く。他の箇所は論理名 (`Opus` / `Sonnet` / `Haiku`) で参照する。
+- Fable は §5 mapping の値域に入らない。`--quality high` の昇格も Opus で止まる。read-only spawn では承認があっても禁止 (§7.2 F3)。
+- design 系 (designer / ux-ui-audit) の検出フェーズに Haiku を使わない (false negative リスク)。
 
 ---
 
 ## §2 task_complexity 区分 (op-run 実装フェーズ向け)
-
-op-run で cluster 化された Issue を実装する際の task 複雑度区分:
 
 | 区分 | 意味 | 例 |
 |---|---|---|
@@ -113,17 +29,12 @@ op-run で cluster 化された Issue を実装する際の task 複雑度区分
 | `integration` | silent fork 統合 / cross-module 横断 | 重複実装の統合点設計、多 module 同期変更、migration 同時実装 |
 | `api-design` | API 契約 / 後方互換 / 拡張点判断 | 公開 API 変更、契約設計、命名規約決定 |
 
-task_complexity は **Issue 単位の属性**であり、cluster 全体で揃うとは限らない。cluster の **dominant
-complexity** (最も重い Issue の complexity) が cluster 全体の model を決める。
-
-推論主体: `issue-enrichment.md` の手順 (Opus 単発) が Issue body / 既存資産 / 影響範囲から推論し、
-spawn schema の `task_complexity:` field に格納する。
+- Issue 単位の属性。cluster の model は dominant complexity (最も重い Issue) で決まる (集約規則: `clustering.md`)。
+- Issue 起票時 (op-plan / op-architect / op-scan / op-patrol) に本文へ書くか、無ければ op-run controller が clustering 時に Issue 本文から判定する。spawn schema の `task_complexity:` に格納する。
 
 ---
 
 ## §3 区画 complexity 区分 (op-scan / op-patrol audit 向け)
-
-監視対象の区画 (file / module / directory) の複雑度区分:
 
 | 区分 | 意味 |
 |---|---|
@@ -132,18 +43,13 @@ spawn schema の `task_complexity:` field に格納する。
 | `complex` | concurrent / state machine / domain logic が重い / 多依存 |
 | `critical` | auth / payment / migration / 中心 API / core service |
 
-判定主体:
-
-- `critical` は **domain_tag** (project 設定 `op-config.yaml`) で明示する。
-- `complex` は **§4 機械シグナル + LLM 軽判断** の組合せ (例: `cyclomatic >= 15 OR dep_centrality >= top10%`)。
-- `single` / `typical` は残余として割当てる。
+- `critical` は `op-config.yaml` の **domain_tag** で明示する。
+- `complex` は §4 機械シグナル + LLM 軽判断の組合せ (例: `cyclomatic >= 15 OR dep_centrality >= top10%`)。
+- `single` / `typical` は残余。
 
 ---
 
-## §4 複雑度シグナル (op-core 計算定義)
-
-区画 complexity を機械的に推定するためのシグナル定義。**現状は markdown 仕様のみ**、op-core での
-実装は別 Phase (`op metric area <path>` で JSON 出力する予定):
+## §4 複雑度シグナル
 
 | シグナル | 計算方法 | 用途 |
 |---|---|---|
@@ -154,61 +60,35 @@ spawn schema の `task_complexity:` field に格納する。
 | `bug_history` | commit message から bug 修正 / hotfix 履歴抽出 | critical 候補抽出 |
 | `domain_tag` | project config で手動指定 (`auth / payment / migration / core`) | critical 確定 |
 
-閾値は project ごとに `op-config.yaml` で指定する。schema 定義・デフォルト値・記述例の正本は
-`_shared/op-config-schema.md (>=1)` §3 `complexity_thresholds` / §4 `domain_tags` を参照。
+- シグナルを機械計算する CLI は未提供。controller は `op-config.yaml` の `domain_tags` と LLM の軽推論で `area_complexity` / `task_complexity` を判定する。
+- 閾値の schema と default は `op-config-schema.md` §3 `complexity_thresholds` / §4 `domain_tags`。
 
 ---
 
 ## §5 Phase × Expert × complexity → model mapping
 
-> 本節以降の `Opus` / `Sonnet` / `Haiku` は論理名 (minor version 省略)。具体 version は §1 table を参照。
-
-> **本節 mapping の値域は Opus / Sonnet / Haiku のみ (§7.2 F1)**。どの Phase × Expert × complexity の
-> 組合せも `Fable` に解決してはならない。controller は mapping lookup の結果として Fable を得ることが
-> 構造的にありえない。Fable が spawn に現れるのは §6 step 2b (承認 gate) を通った write spawn だけである。
+本節の値域は Opus / Sonnet / Haiku のみ (§7.2 F1)。どの組合せも `Fable` に解決しない。
 
 ### §5.1 主表 (Phase 単位)
 
 | Phase | Sub-phase | 並列度 | 判断不可逆性 | model |
 |---|---|---|---|---|
 | op-plan | hearing / ADR 要否 (対話) | 単発 | 高 | **Opus** (司令官-side 推論、effort pin) |
-| op-plan | 計画分解 案出し (judge-panel generate、ADR-0014 Wave B) | N 案並列 | 高 | **Sonnet** (breadth) |
-| op-plan | 計画分解 評価 (judge-panel evaluate、ADR-0014 Wave B) | 単発 | 高 | **Opus** (depth、coverage/coherence/risk 裁定) |
-| op-plan | 計画分解 fallback (単発、judge-panel 無効/ok:false 時) | 単発 | 高 | **Opus** (司令官-side 推論) |
-| op-architect | アーキ案出し (judge-panel generate、ADR-0014 Wave C、whole-architecture) | N 案並列 | 高 | **Sonnet** (breadth、安く広く N アーキ案) |
-| op-architect | アーキ評価 (judge-panel evaluate、ADR-0014 Wave C) | 単発 | 高 | **Opus** (depth、coherence/project 適合/CLAUDE.md 整合 裁定。最も subjective ゆえ JS guardrail 最薄) |
-| op-architect | アーキ案 fallback (単発、judge-panel 無効/ok:false/ADR-worthy 論点<2 時) | 単発 | 高 | **Opus** (司令官-side 推論) |
+| op-plan | 計画分解 | 単発 | 高 | **Opus** (司令官-side 推論) |
+| op-architect | アーキ案 | 単発 | 高 | **Opus** (司令官-side 推論) |
 | op-architect | ADR 起草 / 初期 Issue 生成 | 単発 | 高 | **Opus** |
 | op-scan | audit (expert 並列) | 区画 × N expert | 中 | §5.2 参照 |
-| op-scan | 統合 gate (severity + enrichment) | 単発 | 高 | **Opus** |
+| op-scan | 統合 gate (severity / dedup / 起票判断) | 単発 | 高 | **Opus** |
 | op-patrol | 区画 audit | 区画 × N expert | 中 | §5.2 参照 |
 | op-patrol | 統合 gate | 単発 | 高 | **Opus** |
-| enrichment (issue-enrichment.md) | Design Plan 生成 | 単発 (Issue 毎) | 高 | **Opus** |
-| enrichment | ux-ui-audit gate | 単発 (Issue 毎) | 中 | **Opus** (op-plan は `design_gate: human` で spawn せず人間承認が gate、`issue-enrichment.md` §5) |
-| enrichment | cross-review (検出 expert 以外) | 単発 (Issue 毎) | 中 | **Opus** |
-| op-run | clustering 案出し (judge-panel generate、ADR-0014) | N 案並列 | 高 | **Sonnet** (breadth、安く広く N 案) |
-| op-run | clustering 評価 (judge-panel evaluate、ADR-0014) | 単発 | 高 | **Opus** (depth、tradeoff 裁定) |
-| op-run | clustering fallback (単発グルーピング、judge-panel 無効/ok:false 時) | 単発 | 高 | **Opus** (司令官-side 推論、§5.1 advisory guard) |
+| op-run | clustering | 単発 | 高 | **Opus** (司令官-side 推論、advisory guard) |
 | op-run | apply (実装) | cluster × N | 中 | §5.3 参照 |
 | op-run | post-check (フェーズ 3.5) | 単発 (PR 毎) | 高 | **Opus** |
-| op-run | global review (フェーズ 4) | 単発 (PR 毎) | 最高 (merge gate) | **Opus** (※narrow opt-down 例外あり、§7.1) |
-| op-merge | 対話マージ | 単発 (司令官) | 高 | (司令官 model に従う) |
+| op-run | global review (フェーズ 4) | 単発 (PR 毎) | 最高 | **Opus** (※narrow opt-down 例外あり、§7.1) |
+| op-merge | 監査 / コンフリクト解消 / 解消レビュー | PR 毎 | 高 | **Opus** (監査・順序決定は司令官 model) |
 
-> **※ global review の narrow opt-down (§7.1)**: review-expert の base mapping は本表どおり
-> **Opus** を維持する。ただし §7.1 の 5 条件 AND (LOC≤100 ∩ 非センシティブ ∩ `--quality high`
-> 不指定 ∩ kill switch 不在 ∩ degrade 不在) をすべて満たす **狭い** PR に限り、§6 controller 決定
-> フロー step 2a で Sonnet へ opt-down する。large / sensitive / `--quality high` PR は従来どおり
-> Opus。判定主体は op-run controller (フェーズ 4)。詳細は §7.1。
-
-> **※ op-run clustering の judge-panel と advisory guard (ADR-0014)**: clustering (= どの Issue を
-> 束ねて並列実行するかのグルーピング決定) は単発・不可逆・深い推論で、従来は **司令官自身の推論**
-> ゆえ「Opus で spawn」を直接強制できなかった。**judge-panel (1-2-judge) 有効時**は、グルーピングを
-> N 案 (Sonnet generate) + Opus evaluate に分業し、**depth は opus evaluator (model pin) + 司令官
-> effort pin (`effort: max`、PR #611) が構造的に担保**する (= #561 の clustering opus 単発 pin の
-> 上位互換。pin 不要化を op-run wave で検討)。この場合 advisory guard は **情報提供のみ**。
-> judge-panel が **無効 / `ok:false` でフォールバック**した単発グルーピング時のみ、本表の Opus 前提と
-> advisory guard (司令官 model が最上位 tier でない場合に warning、hard fail しない) の警告意義が残る。
-> 実装は `op-run/SKILL.md` フェーズ1 (1-2-judge / 1-2-0)、本 §5.1 が model 正本。clustering.md は pointer。
+- global review: base は Opus。§7.1 の 5 条件 AND を満たす狭い PR のみ §6 step 2a で Sonnet へ opt-down する。
+- op-run clustering: 司令官 model が最上位 tier でなければ warning を出す (hard fail しない)。
 
 ### §5.2 scan / patrol audit (区画 complexity × expert)
 
@@ -219,17 +99,10 @@ spawn schema の `task_complexity:` field に格納する。
 | `complex` | **Opus** | Sonnet |
 | `critical` | **Opus** | Sonnet |
 
-注:
-
-- test-expert は対象複雑度の影響を受けにくい (test 観点は rubric 中心) ので **Sonnet 維持**。
-- designer / ux-ui-audit の検出に **Haiku を使ってはならない** (false negative リスク)。
-- 区画全体を Opus 化すると並列爆発する。`complex` / `critical` のみ Opus、残りは Sonnet にして並列度を制御。
-- `complex` / `critical` の判定主体は `op-patrol` の区画選定ロジック (リスク重み × 腐敗度) を §3 / §4 で拡張した
-  ものを使う。
-- **feature-expert** は op-scan の `--include-feature` 使用時のみ audit に登場する。本表に列を設けない
-  代わりに、§5.3 (op-run 実装) の expert × task_complexity table に fallback する (audit 対象 Issue の
-  task_complexity が `design` / `integration` / `api-design` なら Opus、`routine` / `extension` なら Sonnet)。
-  enrichment 未通過の場合は §9 暫定値 (`extension` → Sonnet) を適用。
+- test-expert は rubric 中心のため Sonnet 維持。
+- designer / ux-ui-audit の検出に Haiku を使わない。
+- `complex` / `critical` の判定は op-patrol の区画選定ロジックを §3 / §4 で拡張したものを使う。
+- feature-expert (op-scan `--include-feature` 時のみ audit に登場) は §5.3 に fallback する (`design` / `integration` / `api-design` → Opus、`routine` / `extension` → Sonnet、未判定は §9 暫定値 `extension` → Sonnet)。
 
 ### §5.3 op-run 実装 (expert × task_complexity)
 
@@ -244,87 +117,25 @@ spawn schema の `task_complexity:` field に格納する。
 | designer-expert | Sonnet (token 適用のみ) | **Opus** (層構成 / 全体調和) |
 | ux-ui-audit-expert | (実装しない / post-check 専門) | (実装しない / post-check 専門) |
 
-注:
-
-- **feature-expert は「常に Sonnet」ではない**。silent fork 統合 / cross-module 横断 / API 設計判断を
-  含む Issue では深い推論が要り、Opus が必須。
-- cluster の dominant task_complexity が `design` / `integration` / `api-design` であれば、cluster 全体を
-  Opus で回す (cluster 内 Issue ごとに model を切替えるとコスト管理が複雑化するため)。
+- cluster の dominant task_complexity が `design` / `integration` / `api-design` なら cluster 全体を Opus で回す (Issue ごとに切り替えない)。
 
 ### §5.4 design 系の重要な但し書き
 
-designer-expert / ux-ui-audit-expert は **「検出」と「生成・統合」で別軸**:
+designer-expert / ux-ui-audit-expert は「検出」と「生成・統合」で別軸:
 
 | 用途 | task の本質 | model |
 |---|---|---|
 | op-scan / op-patrol で **design system 逸脱検出** | token mismatch / spacing 違反など pattern マッチ | Sonnet |
-| enrichment の **Design Plan 生成** | visual hierarchy / spacing rhythm / 全体調和 | **Opus** |
 | op-architect の **design 初期方針** | design intent の言語化 | **Opus** |
 | op-run の **複雑 component 実装** | layout 設計 / interaction design | **Opus** |
 | op-run の **既存 token 適用だけの実装** | 単純な置換 | Sonnet |
 | post-check (designer / ux-ui-audit) | apply 結果が design intent に沿うか統合判定 | **Opus** |
 
-理由: design 系は rubric 適用に見えて、空間認識的推論 (spacing / alignment / rhythm の全体最適) と
-暗黙の design intent 把握が支配的で、Opus が顕著に強い領域。
-
-#### §5.4.1 enrichment design 多役 pipeline の役別 model (ADR-0012 Wave4)
-
-`op-enrichment.js` の design-plan フェーズは Design Plan 生成を token-curation → component-selection →
-layout-composition → (motion-spec) の役に分解する (ADR-0012 決定2)。上の「Design Plan 生成 = Opus」を
-**役単位で「検出寄り = Sonnet / 生成・統合 = Opus」に細分化**する (検出は cheap broad、生成は Opus 集中で
-コストを下げる。review lens-modular の調査/ゲート分離と同じ思想)。役別 model の正本値は `op-config-schema.md §9 role_models`、
-controller が pre-step で解決し `op-enrichment.js` の args (`role_models`) に注入する (`issue-enrichment.md §7.6`)。
-
-| 役 | task の本質 | 既定 model |
-|---|---|---|
-| `token-curation` (foundation 既存 = 参照のみ) | 既存 canonical token を semantic role に割当 = 検出/選定 | Sonnet |
-| `token-curation` (foundation 不在 = add+normalize) | 不在 token を scale 整合で正規化追加 = 生成 (foundation authority) | **Opus** (controller が `foundation_exists=false` で昇格) |
-| `component-selection` | 既存コンポーネント選定 (silent fork 回避) = 検出/選定 | Sonnet |
-| `layout-composition` | visual hierarchy / spacing rhythm / 統合 Design Plan = 生成・統合 | **Opus** |
-| `motion-spec` | motion 設計 (①② tokenized / ③④ human escalate) = 生成 (空間・時間推論) | **Opus** |
-| gate (`ux-ui-audit-expert`) | 統合 Design Plan の独立検証 = 統合判定 (§5.4 post-check 行と整合) | **Opus** |
-
-- **未注入時の役別 fallback (#676 で全役 opus から保守化)**: controller が `role_models` を注入しない (op-config なし等) 場合、
-  `op-enrichment.js` は `ROLE_MODEL_FALLBACK` (検出役 `token-curation` / `component-selection` = Sonnet、生成役
-  `layout-composition` / `motion-spec` = Opus、未知役は `|| "opus"` 安全網) に倒す (`role_models[role] || ROLE_MODEL_FALLBACK[role] || "opus"`)。
-  controller 注入 (`role_models[role]`) は最優先で勝つため、foundation 不在時の `token-curation` Opus 昇格は注入経路で保持される。
-  検出役を Sonnet 既定にすることで、設定漏れ時の検出役まで高コスト側に倒れていた旧挙動を解消し、品質 (生成役 = Opus 維持) を保ちつつ cost も保守化される。
-- **foundation 不在の昇格**: `token-curation` は `foundation_exists=false` のとき add+normalize 権限を持ち生成寄りになるため、
-  controller が Sonnet → Opus に昇格する (`issue-enrichment.md §7.6` 手順3)。`--quality high` は全役 1 段昇格、`--quality low` でも
-  生成役 (layout / motion) と gate は Opus 維持 (merge 方向性に効く検証は降格しない、§7 と同方針)。
-
-#### §5.4.2 op-explore (playground) の design 系 spawn は全役 Opus 固定 (ADR-0013 決定K)
-
-`op-explore` (発散 / discovery、ADR-0013) の design 生成系 spawn (thin の designer-expert / `op-explore-render.js` の
-N パターン生成 + de-AI craft + decision-matrix judge / Wave5 エンジンの content 生成) は **全役 `opus` を既定**とし、
-上の §5.4.1 の per-role「検出役 (token-curation / component-selection) = Sonnet」割当ては **op-explore の craft 文脈では採らない**。
-
-- **根拠**: craft / taste は **ceiling 課題** (ADR-0013 決定I)。floor 検出と違い最高モデルでないと天井が出ない。
-  §5.4.1 の Sonnet 割当ては enrichment design pipeline の floor 検出向け cost 最適化であり、発散・craft・art-direction の質を
-  最優先する op-explore では quality > cost。"design fast" でも **速さのためにモデルを落とさない** (Fast mode は Opus のまま高速出力)。
-- **cost との整合**: 「**安いモデル**」でなく「**少ない spawn**」で抑える — Wave5 のエンジン/データ分離 (per-session を data 生成に圧縮) と
-  `issue-enrichment.md §11` の spawn hard cap (worst-case 16) が総コストを抑える。
-- **適用範囲 = op-explore 限定**: §5.4.1 の本番 enrichment design pipeline (`op-enrichment.js` の `role_models` 検出役 = Sonnet) は
-  **現状維持** (Opus-first へ揃えない)。日常の起票経路は cost 影響が大きく、craft ceiling を要する op-explore とは要件が異なるため線引きする。
-
 ---
 
 ## §5.5 code-review effort-level 自動派生
 
-Claude Code v2.1.146 (2026-05-21) で `/simplify` が `/code-review` に rename され、
-optional な `effort-level` 引数 (`/code-review low|medium|high|xhigh|max`) が追加された。
-本節は controller (apply spawn を発行する OP skill) が effort-level を **既存軸の組合せから派生**
-させる canonical mapping を定義する。新規軸 (`code_review_complexity` 等) は **増やさない** —
-本節は §2 (`task_complexity`) / §3 (`area_complexity`) / §7 (`--quality`) の組合せからの派生のみを
-定義する (Single Canonical Source Rule、scope creep を避ける)。
-
-派生値は `expert-spawn.md (>=16)` 修正完了報告 schema の `code_review_effort` field に格納され、
-agent は `Skill({skill: "op-skill:op-code-review", args: "effort: <effort>"})` で呼ぶ。`auto` または
-`null` の場合は effort 引数なしで呼ぶ (skill 既定 = high)。
-invoke 先は 2026-07-29 に built-in `/code-review` から plugin 同梱の `op-skill:op-code-review` へ
-差し替えた (built-in は disable-model-invocation で model から invoke 不可のため。invoke 手順の正本は
-`apply-completion-checklist.md (>=5)` §2、skill 本体の正本は `skills/op-code-review/SKILL.md`)。
-effort-level の値集合と本節の派生 mapping は据置 (新 skill が同じ ladder を解釈する)。
+controller は apply spawn の `code_review_effort` を §2 / §3 / §7 の既存軸から派生させる (新規軸は増やさない)。値は `expert-spawn.md` 修正完了報告 schema の `code_review_effort` に入り、agent は `Skill({skill: "op-skill:op-code-review", args: "effort: <effort>"})` で呼ぶ。`auto` / `null` なら effort 引数なしで呼ぶ (skill 既定 = high)。invoke 手順の正本は `apply-completion-checklist.md` §2。
 
 ### §5.5.1 派生表 (canonical mapping)
 
@@ -335,211 +146,127 @@ effort-level の値集合と本節の派生 mapping は据置 (新 skill が同�
 | controller | `task_complexity = routine` かつ `area_complexity ∈ {single, typical}` | `low` |
 | controller | `--quality high` 指定時 | 上記から **1 段昇格** (low→medium / medium→high / high→xhigh) |
 | controller | `--quality low` 指定時 | 上記から **1 段降格** (high→medium / medium→low / low→low 維持) |
-| controller | `--quality low` でも merge-blocking spawn (review-expert / post-check) は降格しない | `high` 維持 |
+| controller | `--quality low` でも review-expert / post-check spawn は降格しない | `high` 維持 |
 | Issue / cluster | 明示 `code_review_effort:` annotation がある場合 | 明示値を採用 (override) |
-| degrade 時 | Opus → Sonnet degrade と同じ流れで `code_review_effort_degraded: true` を marker 化 | 1 段降格 |
+| degrade 時 | Opus → Sonnet degrade 時 | 1 段降格 |
+
+運用値は `low` / `medium` / `high` (+ `--quality high` 昇格時の `xhigh`)。`auto` は effort を確定できなかった場合の sentinel (引数なし invoke)。
 
 ### §5.5.2 評価順序 (上書き順)
 
-`code_review_effort` は以下の step を直列に評価し、後の step が前を上書きする (§6 controller 決定
-フローと同じパターン):
+後の step が前を上書きする:
 
 | step | 操作 | 入力 | 結果 |
 |---|---|---|---|
-| 1. base mapping | §5.5.1 表の最初の 3 行 (task_complexity / area_complexity の組合せ) を引く | task_complexity / area_complexity | base effort |
-| 2. quality flag | §5.5.1 表の `--quality` 行を適用 (high → 昇格 / low → 降格) | flag 値 | flag-adjusted effort |
-| 3. merge-blocking 例外 | review-expert / post-check spawn は §7 同様 `--quality low` でも `high` 維持 | spawn 種別 | flag-protected effort |
+| 1. base mapping | §5.5.1 表の最初の 3 行を引く | task_complexity / area_complexity | base effort |
+| 2. quality flag | `--quality` 行を適用 (high → 昇格 / low → 降格) | flag 値 | flag-adjusted effort |
+| 3. review / post-check 例外 | review-expert / post-check spawn は `--quality low` でも `high` 維持 | spawn 種別 | flag-protected effort |
 | 4. explicit override | Issue / cluster に `code_review_effort:` 明示があれば最終値とする | annotation | overridden effort |
-| 5. degrade 反映 | Opus → Sonnet 等の degrade が発生していれば §5.5.1 末尾行で 1 段降格 | degrade marker | final effort |
+| 5. degrade 反映 | degrade が発生していれば 1 段降格 | degrade 有無 | final effort |
 | 6. spawn | 確定値を `code_review_effort` として apply spawn prompt に渡す | final effort | agent 側 `Skill` 引数 |
 
 ### §5.5.3 unset / 暫定値
 
 | 状況 | 挙動 |
 |---|---|
-| `task_complexity` / `area_complexity` 共に unset (enrichment 未通過 + `op-config.yaml` なし) | `extension` ∩ `typical` 相当の base = `medium` を採用 (§9.1 暫定値節と整合) |
+| `task_complexity` / `area_complexity` 共に unset (未判定 + `op-config.yaml` なし) | `extension` ∩ `typical` 相当の base = `medium` (§9.1 と整合) |
 | controller logic bug 等で effort を出せない | `auto` (= 引数なし) として spawn し warning ログ |
 | agent が controller から effort を受領していない | `code_review_effort: null` を完了報告に書き、引数なしで invoke |
-
-### §5.5.4 値域と将来拡張
-
-本 PR 初版で実運用に用いるのは **`low` / `medium` / `high` の 3 値のみ**。
-`xhigh` / `max` は将来 `--quality ultra` 等の新規 flag を導入した際の予約値とし、現状の派生表では
-`--quality high` 昇格時の `high → xhigh` 枠のみが値域に登場する (運用は段階的に開放)。
-`auto` は controller / agent の双方が effort を確定できなかった場合の sentinel (引数なし invoke)。
-
-### §5.5.5 関連 schema
-
-- `expert-spawn.md (>=16)` 修正完了報告 schema: `code_review_effort` field
-- `apply-completion-checklist.md (>=5)` §2「code-review skill 名と effort-level」節 (invoke 先 = op-skill:op-code-review)
-- `op-tools/op-core` への `op model decide --effort` 拡張は **本 PR scope_out** (Phase 1 follow-up Issue
-  で別途、`op-tools/docs/implementation-order.md` を参照)
 
 ---
 
 ## §6 controller の決定フロー
 
-OP-managed mode で controller (op-* skill) が model を決定する手順。step を直列に実行し、
-**後の step が前の step を上書き** する。最終値を `Agent({ model: ... })` に渡す:
+OP-managed mode で controller が model を決める手順。step を直列に実行し、**後の step が前の step を上書き**する。最終値を `Agent({ model: ... })` に渡す:
 
 | step | 操作 | 入力 | 結果 |
 |---|---|---|---|
 | 1. base lookup | §5 mapping を Phase × Expert × complexity で引く | task_complexity / 区画 complexity | base model (Opus / Sonnet / Haiku のみ) |
 | 2. quality flag | `--quality` flag / `OP_QUALITY` env を適用 (§7) | flag 値 | flag-adjusted model (昇格は Opus 止まり) |
-| 2a. narrow opt-down | **global review (review-expert) のみ**。§7.1 の 5 条件 AND を満たす狭い PR を Sonnet へ opt-down (§7.1) | PR LOC / sensitive glob / `--quality` / kill switch / degrade | opt-down-adjusted model |
+| 2a. narrow opt-down | **global review (review-expert) のみ**。§7.1 の 5 条件 AND を満たす狭い PR を Sonnet へ opt-down | PR LOC / sensitive glob / `--quality` / kill switch / degrade | opt-down-adjusted model |
 | 2b. Fable escalation gate | **write phase (op-run apply / op-codev implement) のみ**。§7.2 の候補条件を満たす spawn を人間に提案し、**承認された場合のみ** Fable へ昇格 (既定は非承認 = Opus 維持) | 難度シグナル / 対話可否 / kill switch / degrade | escalated model (承認時のみ `fable`) |
-| 3. explicit override | Issue / cluster に手動 model 指定があれば最終決定値とする (例: 緊急対応で明示昇格)。**値域は `opus` / `sonnet` / `haiku` のみ — `fable` は無効値** (§7.2 F6) | annotation | final model |
+| 3. explicit override | Issue / cluster に手動 model 指定があれば最終決定値とする。**値域は `opus` / `sonnet` / `haiku` のみ — `fable` は無効値** (§7.2 F6) | annotation | final model |
 | 4. spawn | 確定値を spawn 引数に渡す | final model | `Agent({ model: ... })` |
 
-直列フローのため、「優先順位リスト」ではなく「上書き順序」として読む。例:
-
-- `--quality low` が指定されていても、step 3 で Issue に `model: opus` 明示があれば最終 Opus
-- step 2 の `--quality` flag が無ければ step 1 の base がそのまま step 2a / 3 / 4 へ流れる
-- ただし §7 の merge gate 維持例外 (review-expert / post-check は `--quality low` でも Opus) は
-  step 2 内部で適用される (controller が flag を無視して Opus に固定する)
-- **step 2a は global review (review-expert) spawn にのみ適用される** narrow exception。
-  step 2 で Opus に固定された review-expert を、§7.1 の 5 条件 AND を満たす狭い PR に限って
-  Sonnet に opt-down する。step 3 の explicit override (`model_overrides.review-expert: opus`) が
-  あれば step 2a の opt-down は打ち消される (override が最終決定値)。post-check / enrichment 層 spawn
-  には step 2a を適用しない (review-expert 以外は §7 の merge gate 維持例外がそのまま生きる)
-- **step 2b は write phase spawn (op-run apply / op-codev implement) にのみ適用される** opt-in exception。
-  read-only spawn (audit / investigation / review 全 phase / post-check / enrichment / refute /
-  spec-expert / scout) は step 2b を **評価してはならない** (§7.2 F3 hard 禁止)。step 2b は controller が
-  勝手に昇格する step ではなく、**人間に提案して承認を得る step** である (無応答 / 曖昧 = 非承認)。
-  step 3 の explicit override は step 2b の結果を上書きできるが、override 値に `fable` は書けない (F6)
+- §7 の Opus 維持例外 (review-expert / post-check は `--quality low` でも Opus) は step 2 の内部で適用する。
+- step 2a は review-expert spawn のみに適用する。step 3 の `model_overrides.review-expert: opus` があれば opt-down は打ち消される。
+- step 2b は write phase spawn のみ。read-only spawn では評価しない (§7.2 F3)。無応答 / 曖昧 = 非承認。step 3 は 2b の結果を上書きできるが `fable` は書けない。
 
 ### Direct Mode (人間が直接 expert を呼ぶ場合)
 
-controller を介さないため上記フローは適用されない:
-
-- `agents/<expert>.md` frontmatter の `model:` が default になる (現状: 全 9 active expert が `sonnet`)
-- 「OP-managed mode で常に Opus」と本ファイル §5.1 に記載された expert (review-expert 等) でも、
-  Direct Mode では frontmatter の `sonnet` が使われる。意図して Opus を使うには
-  `Agent({ subagent_type: "...", model: "opus" })` を明示
-- OP-managed mode と Direct Mode の挙動分離は `_shared/invocation-mode.md` を参照
+- 上記フローは適用されず、`agents/<expert>.md` frontmatter の `model:` が default になる (現状: 全 active expert が `sonnet`)。
+- Opus を使うには `Agent({ subagent_type: "...", model: "opus" })` を明示する。
+- mode の判別は `_shared/invocation-mode.md`。
 
 ---
 
 ## §7 `--quality` flag 仕様
 
-OP skill 共通の品質モード切替:
-
 | flag 値 | 挙動 |
 |---|---|
-| `--quality high` | §5 mapping のすべての Sonnet 割当を **Opus に強制昇格**。CI で品質最優先する場合。**昇格 ladder は Opus で止まる — Fable には到達しない** (§7.2 F2) |
+| `--quality high` | §5 mapping のすべての Sonnet 割当を **Opus に強制昇格**。**昇格は Opus で止まり Fable には到達しない** (§7.2 F2) |
 | `--quality balanced` (default) | §5 mapping に従う |
-| `--quality low` | §5 mapping のすべての Opus 割当を **Sonnet に強制降格**。CI 量産で速度・コスト最優先 |
+| `--quality low` | §5 mapping のすべての Opus 割当を **Sonnet に強制降格** |
 
-`--quality low` でも以下は **Opus 維持** (merge gate / 起票 gate の品質を絶対に下げないため):
+`--quality low` でも以下は **Opus 維持**:
 
-- op-run global review (`review-expert`、フェーズ 4) — **ただし §7.1 narrow opt-down 例外あり**。
-  large / sensitive / `--quality high` PR は本 list どおり Opus 維持。`--quality low` であっても
-  §7.1 の 5 条件 AND を満たす狭い PR (small ∩ non-sensitive) に限り Sonnet へ opt-down する
-  (v3 で意図的に追加した破壊的例外、§7.1.4 参照)
-- op-run post-check (`security-expert` / `ux-ui-audit-expert` 等の post-check 担当、フェーズ 3.5)
-- enrichment 層 spawn (`designer-expert` Architect Mode / `ux-ui-audit-expert` gate Mode /
-  cross-review 各 expert、`issue-enrichment.md` §5 spawn 規約参照)
-- op-scan / op-patrol 統合 gate (severity 判定 + enrichment 呼び出し、§5.1 主表参照)
+- op-run global review (`review-expert`、フェーズ 4) — ただし §7.1 narrow opt-down の条件を満たす狭い PR は Sonnet
+- op-run post-check (フェーズ 3.5 の post-check 担当)
+- op-scan / op-patrol 統合 gate
 
-環境変数経由でも上書き可能 (`OP_QUALITY=high` 等)。flag と env の優先順位は flag > env > default。
+環境変数でも指定可 (`OP_QUALITY=high` 等)。優先順位は flag > env > default。
 
 ---
 
 ## §7.1 review-expert narrow opt-down (狭い条件での Sonnet 化)
 
-<!--
-機能概要: review-expert (global review、フェーズ4) を「小規模 ∩ 非センシティブ ∩ 品質最優先でない」
-         狭い PR に限って Sonnet に opt-down する例外条項。base mapping (Opus) は維持する。
-作成意図: 全 PR 無条件 Opus は 1 行 typo PR でも 1000 行 schema PR でも同一コストになる。review
-         surface が小さく非センシティブな PR では Sonnet で 7 lens 監査の実用精度を維持できる。
-注意点: shadow mode は経由せず default 有効 (本番化)。見逃しは sensitive glob / kill switch /
-       30 日手動振り返りの 3 層で抑える。判定主体は op-run controller (フェーズ4、§4-1-b)。
--->
-
-review-expert は §5.1 主表で全 PR 無条件 Opus (merge gate の最後の砦) として設計された "層 A"
-expert であり、§7 で `--quality low` でも Opus 維持の例外保護を受ける。本節は、その base mapping を
-維持しつつ、**狭い条件に限り Sonnet へ opt-down** する例外を canonical に定義する。
-
-判定は op-run controller のフェーズ 4 で実行する (実装は `op-run/references/global-review-spawn.md`
-§4-1-b)。**運用方針 (確定)**: shadow mode は経由せず、5 条件 AND を **default 有効** で本番化する。
-見逃しリスクは (a) sensitive glob による Opus 強制、(b) kill switch (`OP_REVIEW_OPT_DOWN_DISABLE=1`)、
-(c) 30 日後の手動振り返り (§7.1.5) の 3 層で抑える。
+review-expert の base mapping (Opus) を維持しつつ、狭い PR に限り Sonnet へ opt-down する例外。default 有効。判定は op-run controller のフェーズ 4 (実装: `op-run/references/global-review-spawn.md` §4-1-b)。見逃しは sensitive glob / kill switch (`OP_REVIEW_OPT_DOWN_DISABLE=1`) / 30 日振り返り (§7.1.5) で抑える。
 
 ### §7.1.1 narrow opt-down 5 条件 (AND)
 
-すべて true で **Sonnet**、いずれか 1 つでも false で **Opus 維持**:
+すべて true で **Sonnet**、1 つでも false で **Opus 維持**:
 
 1. `LOC ≤ 100` (`+` `-` 合計、除外 glob 適用後、§7.1.2)
 2. `sensitive_files_touched == 0` (§7.1.3 glob 不該当)
 3. `--quality high` が指定されていない
-4. `OP_REVIEW_OPT_DOWN_DISABLE=1` 環境変数 kill switch が立っていない
-5. `model_degraded` marker が残存していない (degrade 進行中の merge gate 強化と整合)
+4. `OP_REVIEW_OPT_DOWN_DISABLE=1` kill switch が立っていない
+5. 当該 run で model degrade が発生していない
 
 ### §7.1.2 LOC 計測の正規化
 
 - `+` `-` 合計 (insertions + deletions)
-- 除外 glob: `**/*.lock`, `**/*.svg|png|jpg|webp`, `**/snapshot/**`, `**/__snapshots__/**`,
-  `**/generated/**`, `vendor/**`, `node_modules/**`, `target/**`, `dist/**`, `build/**`
-- test ファイルは **含める** (test-heavy PR で Sonnet 化が偏ると spec lens の品質低下リスク)
-- 取得手段: `gh pr view --json files` + `git diff --shortstat "origin/${OP_RUN_BASE_REF}...HEAD" -- <files>`
-- 100 files 超過時は safety default で Opus 維持 (gh pr view ページング + ARG_MAX 懸念回避)
-- 除外後ファイルが空 (lock/generated のみの PR) は `LOC=0` とみなす (軽量変更なので Sonnet 化 OK)
-- rename only PR は `--shortstat` 上 `LOC=0` (review 観点でも軽量なので Sonnet 化 OK)
+- 除外 glob: `**/*.lock`, `**/*.svg|png|jpg|webp`, `**/snapshot/**`, `**/__snapshots__/**`, `**/generated/**`, `vendor/**`, `node_modules/**`, `target/**`, `dist/**`, `build/**`
+- test ファイルは含める
+- 取得: `op pr view <N> --include files` + `git diff --shortstat "origin/${OP_RUN_BASE_REF}...HEAD" -- <files>`
+- 100 files 超過時は Opus 維持
+- 除外後ファイルが空 (lock/generated のみ) や rename only は `LOC=0` (Sonnet 化 OK)
 
 ### §7.1.3 センシティブ glob (強制 Opus)
 
-以下の glob にマッチするファイルが 1 つでも含まれる PR は **Opus を強制維持**する。
-Default (内蔵、削除不可、`op-config.yaml` の `review_opt_down_sensitive_paths` で **追加** のみ可):
+以下にマッチするファイルが 1 つでも含まれる PR は Opus を維持する。Default (削除不可、`op-config.yaml` の `review_opt_down_sensitive_paths` で追加のみ可):
 
-- `**/migrations/**`, `**/*.sql`, `**/schema.*`, `**/*.prisma`
-- `**/auth/**`, `**/authentication/**`, `**/authorization/**`
-- `**/security/**`, `**/crypto/**`, `**/iam/**`, `**/permissions/**`, `**/capabilities/**`
-- `src-tauri/capabilities/**`, `src-tauri/tauri.conf.json`
-- `**/release/**`, `**/installer/**`, `**/updater/**`, `**/scripts/release*`, `**/.github/workflows/**`
-- `skills/_shared/**`, `agents/*.md` (canonical 正本そのもの)
-- `op-tools/crates/**` (Rust 実装 / ADR はアーキ判断を含む)
-- `LICENSE*`, `**/COPYRIGHT*`, `**/NOTICE*`
-- `**/.env*`, `**/secrets/**`
-- `**/Cargo.toml`, `**/package.json`, `**/pubspec.yaml`, `**/Cargo.lock`, `VERSION` (version manifest。version-bump PR が
-  small tier に落ちて Release lens が skip されるのを防ぐ recall 強化、#721 / #682 item4)
+- DB: `**/migrations/**`, `**/*.sql`, `**/schema.*`, `**/*.prisma`
+- 認証・権限: `**/auth/**`, `**/authentication/**`, `**/authorization/**`, `**/security/**`, `**/crypto/**`, `**/iam/**`, `**/permissions/**`, `**/capabilities/**`, `src-tauri/capabilities/**`, `src-tauri/tauri.conf.json`
+- release: `**/release/**`, `**/installer/**`, `**/updater/**`, `**/scripts/release*`, `**/.github/workflows/**`
+- 正本・実装: `skills/_shared/**`, `agents/*.md`, `op-tools/crates/**`
+- license / secret: `LICENSE*`, `**/COPYRIGHT*`, `**/NOTICE*`, `**/.env*`, `**/secrets/**`
+- version manifest: `**/Cargo.toml`, `**/package.json`, `**/pubspec.yaml`, `**/Cargo.lock`, `VERSION`
 - `op-config.yaml` の `domain_tags[tag=critical]` で指定された path
 
-「project 単位 escape hatch」として `model_overrides.review-expert: opus` を明示すると
-narrow opt-down を完全停止できる (§6 step 3 explicit override の優先順位を維持)。
+`model_overrides.review-expert: opus` を明示すると narrow opt-down を完全停止できる (§6 step 3)。
 
-#### sensitive glob の investigate-phase 例外 (doc-only small、#720)
+#### sensitive glob の investigate-phase 例外 (doc-only small)
 
-上記「sensitive glob 該当 = 全 phase Opus 強制」の invariant に、**investigate (lens-audit) phase に限った
-behavioral exception** を 1 つ設ける。sensitive glob に該当しても、以下の **AND** を満たす PR は
-investigate phase のみ Sonnet に段階下げできる (verify / gate / 最終 backstop は Opus を維持、lens floor も不変)。
+sensitive glob に該当しても、以下の AND を満たす PR は investigate (lens-audit) phase のみ Sonnet にできる。verify / gate / backstop は Opus、lens floor は full 7-lens のまま。
 
-`CUMULATIVE_NONDOC = doc-only かつ lines_changed ≤ N かつ 変更先が既存機能の補足のみ`:
+1. `sensitive_files_touched != 0`
+2. `CUMULATIVE_NONDOC == 0` — cumulative diff (`origin/${OP_RUN_BASE_REF}...HEAD`) の非 doc ファイル数が 0 (doc = `.md` / `docs/` のみ。`op-tools/crates/**` は非 doc 扱い)
+3. `LOC ≤ OP_REVIEW_SMALL_MAX_LOC` (既定 100、§7.1.2 の正規化を再利用)
+4. §7.1.1 の条件 3〜5 (`--quality high` なし / kill switch なし / degrade なし) を満たす
 
-1. `sensitive_files_touched != 0` (本節 glob 該当 = 通常なら全 phase Opus)
-2. `CUMULATIVE_NONDOC == 0` — cumulative diff (`origin/${OP_RUN_BASE_REF}...HEAD`) の非 doc ファイル数が 0。
-   doc-only = `.md` / `docs/` のみ。`op-tools/crates/**` にマッチした時点で非 doc 扱い (conservative)。
-   これが「変更先が既存機能の補足のみ (= doc / コメント相当の追補) で、振る舞いを変えない」ことの機械判定。
-3. `LOC ≤ OP_REVIEW_SMALL_MAX_LOC` (既定 100、§7.1.2 の LOC 正規化を再利用 = small tier)
-4. `--quality high` が指定されていない
-5. `OP_REVIEW_OPT_DOWN_DISABLE=1` kill switch が立っていない
-6. `model_degraded` marker が残存していない
+満たすとき `SENSITIVE_INVESTIGATE_SONNET=1`。REVIEW_MODEL 自体は Opus のまま (escape hatch 互換)。実装は `global-review-spawn.md` §4-1-b (判定) / §4-2-a-pre (investigate-only 差し替え)。Security lens の見落とし差が実測で出たら、Security lens のみ investigate を Opus に戻す (tunable)。
 
-満たすとき investigate のみ Sonnet (`SENSITIVE_INVESTIGATE_SONNET=1`)。**REVIEW_MODEL 自体は Opus のまま**
-据え置く (`model_overrides.review-expert: opus` escape hatch 互換を壊さない)。詳細は §7.1.7、bash 実装は
-`op-run/references/global-review-spawn.md` §4-1-b (判定) / §4-2-a-pre (investigate-only 差し替え)。
-
-> **設計根拠**: ADR-0011 のコア「調査は安く広く、判定は Opus ゲートに集中」を sensitive doc-only small に適用する。
-> investigate を Sonnet にしても **breadth は full 7-lens を維持** (lens floor は sensitive=full のまま不変)、
-> Opus gate の cumulative-diff backstop が見落とし (false-negative) を回収する。op-skill self-referential repo
-> では全 PR が sensitive glob 該当のため、doc-only small refactor の investigate を毎回 Opus にするコストが
-> review-expert subagent 使用の最大要因だった (要因1 = sensitive 自動 Opus、ADR-0015 Consequences L129)。
->
-> **最大 recall リスクと tunable 撤退経路**: Security lens の Sonnet 見落としは targeted backstop では残留
-> リスク (ADR-0011 L160-162)。doc-only 限定で露出面が薄く許容するが、Ladder4 recall e2e で 7-lens フル
-> (全 Opus) vs investigate-sonnet の見落とし High/Critical 差が出たら **Security lens のみ investigate を Opus 床へ
-> 戻す** (本例外を Security に適用しない tunable)。本例外の本番化は Issue #720 の Ladder4 実証を merge gate とする。
-
-### §7.1.4 `--quality` flag との相互作用 (破壊的変更の所在)
+### §7.1.4 `--quality` flag との相互作用
 
 | 状況 | `high` | balanced (default) | `low` |
 |---|---|---|---|
@@ -547,244 +274,134 @@ investigate phase のみ Sonnet に段階下げできる (verify / gate / 最終
 | small ∩ sensitive | Opus | Opus | Opus |
 | large | Opus | Opus | Opus (§7 既存例外) |
 
-**重要 (意図的破壊変更の明示)**: `small ∩ non-sensitive ∩ --quality low` を Sonnet にする挙動は、
-§7 の「`--quality low` でも review-expert は Opus 維持」という **既存 invariant を
-small∩non-sensitive PR に限り意図的に解除** する破壊的変更である (§10「`--quality` flag 値の挙動変更」
-に該当 → schema_version v3 bump で正当化)。op-run / `expert-spawn.md` の consumer が「small PR の
-`--quality low` は Opus」を前提にしている可能性があるため、両ファイルの pin を `(>=3)` に同期する。
-
-**code_review_effort との独立性 (§5.5.2 との関係明示)**: 本 narrow opt-down は **model 判定**であり、
-§5.5.2 の `code_review_effort` 評価 (effort-level) とは独立した軸である。§5.5.2 step 3 の
-「review-expert は `--quality low` でも effort `high` 維持」という merge-blocking 例外は effort の話で
-あり、引き続き適用される (model が Sonnet になっても effort は high のまま渡る)。両者を混同しないこと。
+- `small ∩ non-sensitive ∩ --quality low` は §7 の「`--quality low` でも review-expert は Opus 維持」を解除して Sonnet になる。
+- narrow opt-down は model 軸であり、§5.5.2 step 3 の effort `high` 維持 (effort 軸) とは独立。model が Sonnet でも effort は high のまま渡る。
 
 ### §7.1.5 計測 / 撤退条件
 
-**観測インフラの現状 (正直に明記)**: op-merge は現状 false-negative を自動集計する機械可読ログを
-持たない。よって以下の指標は **人間が 30 日後に手動で振り返る** 運用とする。op-merge ログの構造化
-自動集計は別 Issue (scope_out) とする。
+人間が手動で振り返る (Sonnet 群 vs Opus 群)。指標: false-negative 比率 (merge → 7 日内に同 module で `op:blocking-finding` Issue 発生) / needs-fix サイクル数の中央値 / review_round ≥ 2 到達率 / post-merge revert・hotfix 7 日内発生率。
 
-手動観測指標 (Sonnet 群 vs Opus 群):
+撤退条件:
 
-- false-negative 比率 (merge → 7 日内に同 module で `op:blocking-finding` Issue 発生)
-- needs-fix → fix → re-review-approve サイクル数の中央値
-- review_round ≥ 2 到達率 (小規模 PR)
-- post-merge revert / hotfix 7 日内発生率
+- Sonnet false-negative 比率が Opus 群の **1.5 倍 + 絶対値 5%** を超える → `op-config.yaml` に `model_overrides.review-expert: opus` を site-wide で書く
+- post-merge hotfix が 30 日内 3 件以上 → 即時 `OP_REVIEW_OPT_DOWN_DISABLE=1`、root cause 分析後に解除
 
-撤退条件 (kill switch を前面に):
+### §7.1.7 lens-modular per-phase model
 
-- Sonnet false-negative 比率が Opus 群の **1.5 倍 + 絶対値 5%** を超えると判断
-  → `model_overrides.review-expert: opus` を `op-config.yaml` に site-wide で書く
-- **post-merge hotfix が 30 日内 3 件以上** → 即時 `OP_REVIEW_OPT_DOWN_DISABLE=1` kill switch、
-  root cause 分析後に解除
-
-### §7.1.6 shadow mode (検討の上不採用)
-
-観測目的の shadow mode (opt-down 判定は Sonnet を選ぶが実 spawn は Opus で行い差分を記録する案) を
-精度懸念への後付けオプションとして検討したが、v3 では §7.1 の 5 条件 AND + kill switch (本節末尾) を
-default 本番化で採用したため **不採用** (経由しない、本節冒頭の「運用方針 (確定)」と同じ結論)。
-
-### §7.1.7 lens-modular per-phase model (ADR-0011)
-
-ADR-0011 (review lens-modular fan-out = ADR-0009 Phase C closeout) で op-run フェーズ4 review が 4 phase
-(prep → 7 lens 並列調査 → adversarial-verify → opus 最終ゲート) へ展開された。model は **phase で分離**する
-(lens identity の固定マップにしない。narrow split は breadth を下げるが reasoning depth は下げないため)。
+op-run フェーズ4 review は 4 phase (prep → 7 lens 並列調査 → adversarial-verify → opus 最終ゲート) で、model は phase で分離する。
 
 | phase | model | 根拠 |
 |-------|-------|------|
-| prep (base-first digest) / lens-audit (7 lens 調査) | **§7.1 narrow opt-down 結果** (`investigate`)。**sensitive ∩ doc-only small は Sonnet** (#720 §7.1.3 investigate 例外) | 広く安く candidate を surface する recall フェーズ。小・非 sensitive PR は Sonnet、§7.1.3 sensitive / large / `--quality high` は Opus。ただし sensitive でも doc-only small は investigate のみ Sonnet (lens floor=full 維持、#720) |
-| adversarial-verify (High/Critical refute) | **Opus 固定** | 偽陽性の深い反証推論 (精度要) |
-| synthesize (最終ゲート: 権威 verdict + backstop gap-check) | **Opus 固定** | merge gate の consequential 判定 + 調査の見落とし (false-negative) を独立に拾う核 |
+| prep (base-first digest) / lens-audit (7 lens 調査) | **§7.1 narrow opt-down 結果** (`investigate`)。sensitive ∩ doc-only small は Sonnet (§7.1.3 investigate 例外) | recall フェーズ。小・非 sensitive PR は Sonnet、sensitive / large / `--quality high` は Opus |
+| adversarial-verify (High/Critical refute) | **Opus 固定** | 偽陽性の深い反証推論 |
+| synthesize (最終ゲート: 権威 verdict + backstop gap-check) | **Opus 固定** | 最終 verdict 判定 + 調査の見落としを独立に拾う |
 
-要点:
-
-- **investigate は §7.1 narrow opt-down にそのまま従う** (5 条件 AND を満たせば Sonnet)。verify / gate は常に Opus。
-- **narrow opt-down が Opus を強制する PR (sensitive glob = `skills/_shared/**` / `agents/*.md` /
-  `op-tools/crates/**` 等、§7.1.3) は investigate も Opus = 全 phase Opus**。本 op-skill repo の canonical
-  変更 PR は self-referential でこれに該当する (節約は下流の非 sensitive PR で効く)。
-  - **例外 (#720)**: その sensitive PR が **doc-only small** (`CUMULATIVE_NONDOC==0` ∩ LOC≤small) なら
-    investigate のみ Sonnet へ段階下げできる (§7.1.3「investigate-phase 例外」)。verify / gate / backstop は
-    Opus 固定のまま、lens floor も full 7-lens を維持する (model 軸の段階下げであり lens 軸は触らない)。
-- **gate-critical lens を cheap 化して refuter で backstop する設計は採らない**: refute は過剰検出 (false-positive)
-  を落とすだけで見落とし (false-negative) を救えない。見落としの backstop は **opus 最終ゲートの独立 gap-check** が
-  担う (ADR-0011 決定5 / 決定C)。
-- controller (op-run) が per-phase model を解決し Workflow `args.models{investigate,verify,gate}` に注入する。
-  実装は `op-run/references/global-review-spawn.md` §4-2-a-pre。boundary (Sonnet 調査の recall が十分か) は
-  Ladder4 e2e で実測校正し、不足なら Security 調査を Opus 床へ戻す (tunable)。
+- sensitive glob 該当 PR (`skills/_shared/**` / `agents/*.md` / `op-tools/crates/**` 等) は、doc-only small 例外を除き全 phase Opus。
+- gate-critical lens を cheap 化して refuter で backstop する設計は採らない (refute は false-positive しか落とせない。false-negative の backstop は最終ゲートの gap-check)。
+- controller (op-run) が per-phase model を解決し Workflow `args.models{investigate,verify,gate}` に注入する (実装: `global-review-spawn.md` §4-2-a-pre)。
 
 ---
 
 ## §7.2 Fable escalation gate (自動 spawn 禁止 / 人間承認 opt-in)
 
-<!--
-機能概要: worker (spawn される expert) の自動選択の天井を Opus に固定し、Fable は
-         「write phase で難度条件を満たした spawn を人間に提案し、承認された場合のみ」使う opt-in tier とする契約。
-作成意図: controller (OP skill) が難度を自己判定して最上位 tier を自動投入すると、コスト上振れが
-         人間の意思決定を経ずに発生する。特に read 系 (audit / investigation / review) は並列度が高く、
-         単価の上振れが総コストへ直撃する。judgement (どこまで払うか) は人間に残す。
-注意点: 本節は §5 mapping と独立した exception 層 (§6 step 2b)。承認は per-spawn-scope であり、
-       config / env に固定化できない (F6)。read-only spawn は承認があっても対象外 (F3、hard)。
--->
-
-`Fable` は §5 mapping の値域外にある **escalation tier** であり、controller が自動で選ぶことはない。
-本節は「いつ提案してよいか / どう承認を取るか / どこでは絶対に使えないか」の canonical 契約を定める。
+`Fable` は §5 mapping の値域外の escalation tier。controller が自動で選ぶことはない。
 
 ### §7.2 F1 — worker 自動選択の天井は Opus (不変則)
 
-- OP skill (controller) が spawn する expert の model は、**自動決定の結果として Opus を超えない**。
-- §5 mapping / §7 `--quality` / §9.2 degrade からの復帰 のいずれの経路でも Fable は出力されない。
-- controller は「難度が高そうだから Fable にする」という判断を **単独で行ってはならない**。
-  難度の見立ては提案の材料であって、決定権ではない (決定は F5 の人間承認)。
+- controller が spawn する expert の model は、自動決定の結果として Opus を超えない。
+- §5 mapping / §7 `--quality` / §9.2 degrade からの復帰のいずれでも Fable は出力されない。
+- controller は難度を理由に単独で Fable を選んではならない。難度の見立ては提案の材料であり、決定は F5 の人間承認。
 
 ### §7.2 F2 — 昇格 ladder は Opus で止まる
 
-`--quality high` / `OP_QUALITY=high` / `quality_defaults.level: high` の昇格は
-`Haiku → Sonnet → Opus` で打ち止め。`Opus → Fable` の段は ladder に **存在しない**。
-§5.5 の `code_review_effort` ladder (`low → medium → high → xhigh`) は effort 軸であり、
-model 軸の本節とは独立 (混同しない)。
+`--quality high` / `OP_QUALITY=high` / `quality_defaults.level: high` の昇格は `Haiku → Sonnet → Opus` で打ち止め。`Opus → Fable` の段は無い。§5.5 の effort ladder (`low → medium → high → xhigh`) は別軸。
 
 ### §7.2 F3 — read-only (非 write) spawn は Fable 禁止 (hard、承認があっても不可)
 
-以下の spawn は **人間が承認しても Fable を使ってはならない**。controller は F4 の候補判定自体を
-行わず、常に §5 mapping の結果 (Opus / Sonnet / Haiku) で spawn する。
-
-ここでの「read-only」は **repo のコードを変更しない spawn** を指す (enrichment の Design Plan 生成のように
-文章を生成するフェーズも、コードを書かない起票前工程なので本節に含む)。Fable を許すのは
-「worktree でコードを書き commit する spawn」だけである:
+「read-only」= repo のコードを変更しない spawn (文章生成も含む)。Fable を許すのは worktree でコードを書き commit する spawn だけ。以下では F4 の候補判定自体を行わず §5 mapping の結果で spawn する:
 
 | 経路 | 該当 spawn |
 |---|---|
 | op-scan / op-patrol | audit (パターン1)、統合 gate |
 | refute | skeptic spawn (`refute-contract.md`) |
 | op-run | investigation (`op-run-discover`)、post-check / aux post-check (フェーズ3.5)、global review 全 phase (prep / lens-audit / adversarial-verify / synthesize) |
-| enrichment | Design Plan 生成 / ux-ui-audit gate / cross-review (`issue-enrichment.md` §5) |
 | Utility Worker | `spec-expert` (op-spec / op-spec-patrol)、`scout` (op-report) |
 | op-codev | Step A (explore)、Step C (verify)、Review 選択 2 (review-expert 7-lens) |
-| op-explore | design 生成系 spawn (§5.4.2 の全役 Opus 固定を維持。craft ceiling は Opus で確保する方針を変えない) |
+| op-explore / デザインモック | designer-expert の既存 design system 要約 (`design-mock.md`) |
 
-根拠:
-
-- read 系は **breadth 型で並列度が高い** (region × expert / 7 lens / N 案)。単価の上振れが総コストに直撃する。
-  コストは「安いモデル」でなく「少ない spawn」で抑えるという §5.4.2 の方針とも整合する。
-- 判定の質は **gate 側が Opus 固定であること** で既に担保されている (§7.1.7 の verify / synthesize、
-  §7 の merge gate 維持例外)。調査層を最上位 tier に上げる必要がない。
-- **機械的裏付け**: global review の payload schema (`op-core::payload::review_finding` の `model_used`) は
-  enum `["opus", "sonnet"]` であり、review 経路で `fable` を申告すると schema validation で落ちる。
-  本節の禁止は prose だけでなく payload 層でも効いている。
+global review の payload schema (`review_finding.model_used`) は `["opus", "sonnet"]` のみで、`fable` は schema validation で落ちる。
 
 ### §7.2 F4 — 提案してよい候補条件 (write phase 限定)
 
-Fable を **提案** できるのは以下 2 経路の write spawn のみ:
+Fable を提案できるのは次の 2 経路の write spawn のみ:
 
 - op-run フェーズ 2 の **apply spawn** (cluster 単位、`op-run/SKILL.md` 1-2-g)
 - op-codev フェーズ 3 の **Step B (implement)** (IU 単位、`op-codev/SKILL.md` 3-B-gate)
 
-提案の必要条件 (**AND**、1 つでも欠ければ提案しない = Opus で続行):
+提案の必要条件 (AND。1 つでも欠ければ提案せず Opus で続行):
 
-1. base model (§6 step 1〜2 の結果) が **Opus** である (= `task_complexity ∈ {design, integration, api-design}`)
-2. **対話経路である** (`--auto` / 非対話 OP-managed 一括経路では提案しない → F7)
-3. kill switch 不在 — `OP_FABLE_DISABLE=1` が立っておらず、`op-config.yaml` の
-   `fable_escalation.enabled` が `false` でない
-4. `model_degraded` marker が残存していない (degrade 進行中に昇格提案しない → F8)
-5. 下記 **難度シグナル D1〜D6 のうち 2 つ以上** が立っている
+1. base model (§6 step 1〜2 の結果) が Opus (= `task_complexity ∈ {design, integration, api-design}`)
+2. 対話経路である (`--auto` / 非対話一括経路では提案しない → F7)
+3. kill switch 不在 — `OP_FABLE_DISABLE=1` が立っておらず、`op-config.yaml` の `fable_escalation.enabled` が `false` でない
+4. 当該 run で model degrade が発生していない (→ F8)
+5. 難度シグナル D1〜D6 のうち 2 つ以上が立っている
 
 | id | 難度シグナル | 判定材料 |
 |---|---|---|
 | D1 | cross-module 横断 — 変更候補が 3 module 以上 または 10 file 以上に跨る | cluster.files / IU の scope_files |
-| D2 | 契約変更 — 公開 API / 後方互換 / migration 同時実装 (`task_complexity: api-design`) | Issue 本文 / enrichment 出力 |
-| D3 | silent fork 統合 — 重複実装の統合点設計 (`task_complexity: integration`) | enrichment 出力 / investigation report |
-| D4 | 並行性 / 状態機械 / トランザクション整合 が本質に絡む | Issue 本文 / enrichment 出力 / (実施済なら) investigation report の risks |
+| D2 | 契約変更 — 公開 API / 後方互換 / migration 同時実装 (`task_complexity: api-design`) | Issue 本文 |
+| D3 | silent fork 統合 — 重複実装の統合点設計 (`task_complexity: integration`) | Issue 本文 / investigation report |
+| D4 | 並行性 / 状態機械 / トランザクション整合 が本質に絡む | Issue 本文 / (実施済なら) investigation report の risks |
 | D5 | §7.1.3 の sensitive glob に該当するファイルを変更する | files 一覧 |
 | D6 | 再挑戦 — 同 cluster / IU で `review_round >= 2` または `requires_redo: true` が発生済 | review state / post-check 返却 |
 
-**例外 (人間起点)**: ユーザーが自分から「この作業は Fable で」と明示指示した場合は、D 条件の充足を問わず
-F5 の承認済みとして扱う (人間の明示指示そのものが承認)。ただし F3 の read-only 禁止は解除されない。
+**例外 (人間起点)**: ユーザーが自分から「この作業は Fable で」と明示した場合は、D 条件を問わず F5 の承認済みとして扱う。F3 の read-only 禁止は解除されない。
 
-**提案は各 skill が定める gate でのみ行う**: op-run = plan gate 直前の 1-2-g / op-codev = Checkpoint A 直後の
-3-B-gate。
+提案は各 skill の gate でのみ行う:
 
-- **op-run (自動フロー)**: 提案は **1 run 1 回**。plan gate を通過して実行が始まった後、新情報
-  (investigation の risks / round 増加) で候補条件を満たしても **追加提案してはならない** — Opus のまま
-  完走し、完了報告に「次 run では Fable 昇格が有効な可能性」を 1 行残す。理由: 走っている自動フローを
-  人間承認待ちで中断させないため (不変則3 の OP-managed = 質問で停止しない、と整合)。
-- **op-codev (対話監督 skill)**: gate は **IU ごと** に通る (Checkpoint B 差し戻しによる Step B 再実行時も
-  同じ gate を再通過してよい)。checkpoint が元から人間の会話ターンである設計なので、これは
-  「実行中の自動フローを中断する追加提案」には当たらない。
+- **op-run**: plan gate 直前の 1-2-g で **1 run 1 回**。実行開始後に候補条件を満たしても追加提案しない。Opus のまま完走し、完了報告に「次 run では Fable 昇格が有効な可能性」を 1 行残す。
+- **op-codev**: Checkpoint A 直後の 3-B-gate で **IU ごと** (Checkpoint B 差し戻しによる Step B 再実行時も再通過してよい)。
 
 ### §7.2 F5 — 承認 protocol
 
-- 提示は必ず **2 択**、**既定は Opus 維持**:
-  `1. Opus のまま続行 (既定) / 2. Fable へ昇格`
-- 提示に含める必須項目:
-  - 対象 spawn の識別子 (op-run = cluster id / op-codev = IU 名) と担当 expert
-  - base model (= Opus) と、昇格後 (= Fable)
-  - 立った難度シグナル (D1〜D6 の id と 1 行根拠)
-  - **コストが上振れる旨の明示** (定性で可)
-  - 承認 scope (下記)
+- 提示は 2 択、既定は Opus 維持: `1. Opus のまま続行 (既定) / 2. Fable へ昇格`
+- 提示の必須項目: 対象 spawn の識別子 (op-run = cluster id / op-codev = IU 名) と担当 expert / base model (Opus) と昇格後 (Fable) / 立った難度シグナル (D id と 1 行根拠) / コストが上振れる旨 (定性で可) / 承認 scope
 - 提示手段: op-run は `AskUserQuestion` (plan gate 前)、op-codev は Checkpoint の会話ターン。
-- **無応答 / 曖昧な返答は非承認**として扱い、Opus で続行する (fail-safe)。
-- **承認 scope**: 承認時に提示した **spawn 単位 (cluster / IU) の write spawn のみ**、**同 session 内**。
-  - 同 cluster / IU の review-fix loop に伴う再 apply は同一 scope として承認を引き継ぐ。
-  - **他の cluster / IU へ横展開しない** (cluster ごとに提案・承認する)。
-  - read-only spawn には F3 により一切適用されない (承認 scope 内であっても)。
-- **記録**: 承認された昇格は `<!-- op-model-escalated: <expert>:fable:<phase>:<scope-id> -->` marker を
-  PR body / apply report に埋め、plan file / 完了サマリにも 1 行明記する
-  (marker の正本は `markers/labels-and-markers.md` の「Spawn Metadata Markers」節)。
+- **無応答 / 曖昧な返答は非承認**として Opus で続行する。
+- **承認 scope**: 提示した spawn 単位 (cluster / IU) の write spawn のみ、同 session 内。同 cluster / IU の review-fix loop に伴う再 apply は引き継ぐ。他の cluster / IU へ横展開しない。read-only spawn には適用されない (F3)。
+- **記録**: plan file / PR 本文 / 完了サマリに「<scope-id>: <expert> を Fable へ昇格 (承認済み)」を自然文で 1 行明記する。
 
 ### §7.2 F6 — config / env から Fable を選ぶことはできない
 
-- `op-config.yaml` の `model_overrides.*: fable` は **無効値**。controller は当該 override を無視し、
-  `fable_config_override_ignored_warning` を spawn metadata に記録して §5 mapping の値で spawn する。
+- `op-config.yaml` の `model_overrides.*: fable` は無効値。controller は無視し、`fable_config_override_ignored_warning` を spawn metadata に記録して §5 mapping の値で spawn する。
 - `quality_defaults` / `OP_QUALITY` からも Fable は選べない (F2)。
-- 理由: 「人間の承認を得てから」という要件は **per-run の確認**である。config に固定化できると
-  controller の自動 spawn と実質的に区別できなくなり、F1 が空文化する。
-- 逆方向 (提案そのものを止める) の設定は許可する — `fable_escalation.enabled: false` および
-  `OP_FABLE_DISABLE=1` (kill switch)。安全側への設定だけが config で表現できる非対称設計。
+- 提案を止める方向の設定のみ可: `fable_escalation.enabled: false` / `OP_FABLE_DISABLE=1`。
 
 ### §7.2 F7 — 非対話 / `--auto` 経路
 
-提案せず Opus で続行する。**停止しない**。plan / 実行 report に次の 1 行を記録する:
+提案せず Opus で続行する (停止しない)。plan / 実行 report に次の 1 行を記録する:
 
 ```text
 [fable-gate] --auto (非対話) のため escalation 提案を skip しました。全 worker は Opus 天井で実行します。
 ```
 
-`--auto` で最難度タスクを回したい場合の推奨経路は「対話モードで実行して承認する」であり、
-`--auto` 側に事前承認の抜け道を作らない (F6 と同じ理由)。
+`--auto` 側に事前承認の抜け道は作らない。最難度タスクは対話モードで実行して承認する。
 
 ### §7.2 F8 — degrade / unavailable との相互作用
 
 | 状況 | 挙動 |
 |---|---|
-| 承認済み Fable spawn が rate limit / unavailable | **Opus へ degrade** し `<!-- op-model-degraded: <expert>:unavailable:apply -->` を記録 (§9.2 apply 行と同じ扱い)。Fable への自動再試行はしない (Opus は worker 既定天井なので再承認も不要) |
-| Opus が degrade 中 (`model_degraded` 残存) | Fable 昇格を **提案してはならない** (F4 条件 4)。degrade 中の昇格提案は「不安定な API 状態でコストだけ上げる」ため |
-| 承認済み scope の再 apply (review-fix loop) | 承認を引き継ぐ (F5 scope)。ただし degrade が発生していれば当該 spawn は Opus |
+| 承認済み Fable spawn が rate limit / unavailable | **Opus へ degrade** し、PR 本文 / 完了サマリに自然文で記録する。Fable への自動再試行はしない (再承認も不要) |
+| Opus が degrade 中 | Fable 昇格を提案しない (F4 条件 4) |
+| 承認済み scope の再 apply (review-fix loop) | 承認を引き継ぐ。ただし degrade 発生時は当該 spawn は Opus |
 
 ---
 
 ## §8 関連 (canonical pointer)
 
-- spawn schema (`model:` / `task_complexity:` field 定義) → `expert-spawn.md`
-- task_complexity 推論手順 (Issue draft → `enriched_issue.task_complexity`) → `issue-enrichment.md`
-  §4「Phase 1: UI 影響判定」内の「Phase 1 と並行: task_complexity 推論」節、および §8 Output contract
-- cluster 単位 task_complexity 集約ルール (Issue 群 → cluster dominant) → `clustering.md`「入力と出力」節
-- 各 expert の複雑度感度・base model → `active-expert-registry.md`「複雑度感度 (model selection summary)」節
-- 区画スコアリング (リスク × 腐敗度) → `op-patrol/SKILL.md`
-  - `op-patrol` は本ファイル §3 / §4 を audit_model 出力に拡張する
-- `op-config.yaml` schema 定義 (complexity_thresholds / domain_tags / model_overrides / quality_defaults /
-  review_opt_down_sensitive_paths) → `op-config-schema.md` (>=1)
-- review-expert narrow opt-down の sensitive glob 追加設定 (`review_opt_down_sensitive_paths`) →
-  `op-config-schema.md` (>=1)
-- narrow opt-down 判定の controller 実装 (5 条件 AND の bash) → `op-run/references/global-review-spawn.md` §4-1-b
-- `model_degraded` hidden marker (degrade 発生記録) → `markers/labels-and-markers.md` の
-  「Spawn Metadata Markers」節
-- **Fable escalation gate の controller 実装** → `op-run/SKILL.md` 1-2-g (cluster 単位、apply spawn) /
-  `op-codev/SKILL.md` フェーズ 3「3-B-gate」(IU 単位、implement spawn)
-- `op-model-escalated` hidden marker (承認済み Fable 昇格の記録) → `markers/labels-and-markers.md` の
-  「Spawn Metadata Markers」節
-- `fable_escalation` 設定 (提案の無効化のみ可能、承認の事前付与は不可) → `op-config-schema.md` (>=1) §5.1
-- 複雑度シグナルの op-core 実装 → `op-tools/` (別 Phase、§11 参照)
-- runtime spawn boundary contract (本ファイルを正本リストに含む) → `runtime-contract.md` §1
+- spawn schema (`model:` / `task_complexity:`) → `expert-spawn.md`。cluster 集約 → `clustering.md`。expert 別感度 → `active-expert-registry.md`「複雑度感度 (model selection summary)」節。
+- `op-config.yaml` schema (thresholds / domain_tags / model_overrides / quality_defaults / fable_escalation / sensitive paths) → `op-config-schema.md`。
+- controller 実装: narrow opt-down → `op-run/references/global-review-spawn.md` §4-1-b。Fable gate → `op-run/SKILL.md` 1-2-g / `op-codev/SKILL.md` 3-B-gate。
 
 ---
 
@@ -794,9 +411,9 @@ F5 の承認済みとして扱う (人間の明示指示そのものが承認)�
 
 | 状況 | 挙動 |
 |---|---|
-| `task_complexity` が unset (enrichment 未通過 Issue) | 暫定で `extension` 扱い、Sonnet で実装。post-check で見直し |
+| `task_complexity` が unset (未判定 Issue) | 暫定で `extension` 扱い、Sonnet で実装。post-check で見直し |
 | `区画 complexity` が unset (`op-config.yaml` なし) | 暫定で `typical` 扱い、全 expert Sonnet。`area_complexity_unset_warning` を spawn metadata に記録 |
-| **両方 unset** (新規プロジェクト + enrichment 未通過) | `extension` ∩ `typical` の組合せ = 全 expert Sonnet。両 warning を spawn metadata に記録 |
+| **両方 unset** (新規プロジェクト + 未判定) | `extension` ∩ `typical` = 全 expert Sonnet。両 warning を spawn metadata に記録 |
 | `model:` field を controller が出せない (logic bug 等) | §5 lookup → default 適用。`model_decision_failed_warning` を出す |
 | Opus が rate limit / 不可用 | Sonnet に degrade、`model_degraded: true` を spawn metadata に記録。redo 判定は §9.2 |
 | `model_overrides` / spawn 引数に `fable` が現れた (F6 違反) | 当該値を **無視** して §5 mapping の値で spawn し、`fable_config_override_ignored_warning` を記録。hard fail はしない |
@@ -805,77 +422,22 @@ F5 の承認済みとして扱う (人間の明示指示そのものが承認)�
 
 ### §9.2 degrade 時の redo 判定
 
-degrade は spawn 種別ごとに **判定主体と動作** が異なる:
-
 | 発生箇所 | 判定主体 | 動作 |
 |---|---|---|
-| **apply spawn の degrade** (op-run フェーズ 2) | post-check expert (フェーズ 3.5) | `model_degraded: true` を確認し、品質懸念があれば `requires_redo: true` を返す。op-run controller は redo 要求を受けて Opus 復旧後に再 spawn する |
-| **post-check / global review の degrade** (op-run フェーズ 3.5 / 4) | op-run controller | merge-blocking state として扱う (`runtime-contract.md` §11 categories と整合)。Opus 復旧まで `pro-reviewed` 付与を待つ。`--quality low` でも本 expert は Opus 維持される §7 例外との整合 |
-| **scan / patrol audit の degrade** (op-scan / op-patrol) | OP skill controller | 起票 gate (Opus 単発) では degrade を許容せず、Opus 復旧まで起票を待つ。個別 audit spawn (Sonnet/Opus) の degrade は warning として記録し、結果は採用する |
+| **apply spawn の degrade** (op-run フェーズ 2) | post-check expert (フェーズ 3.5) | `model_degraded: true` を確認し、品質懸念があれば `requires_redo: true` を返す。controller は Opus 復旧後に再 spawn する |
+| **post-check / global review の degrade** (op-run フェーズ 3.5 / 4) | op-run controller | Opus 復旧まで `pro-reviewed` 付与を待つ |
+| **scan / patrol audit の degrade** (op-scan / op-patrol) | OP skill controller | 起票 gate (Opus 単発) では degrade を許容せず、Opus 復旧まで起票を待つ。個別 audit spawn の degrade は warning として記録し結果は採用する |
 
-controller は degrade を黙って隠さない。`model_degraded` は spawn metadata に記録し、将来的には
-hidden marker (`markers/*.md` への追加、本 PR scope_out、§11 follow-up) へ昇格する。
+controller は degrade を隠さない。`model_degraded` を spawn metadata に記録する。
 
 ---
 
 ## §10 schema 拡張時の運用
 
-本ファイルの schema_version を bump する破壊的変更の例:
+以下は consumer (OP skill / workflow / spawn テンプレ) の同時更新を要する契約変更として扱う:
 
 - 既存 task_complexity 区分の意味変更・削除
 - §5 mapping table の列・行削除
 - `--quality` flag 値の挙動変更
 - override 優先順位 / §6 controller 決定フローの変更
-- **§7.2 の Fable 契約の緩和** (worker 天井 = Opus の解除 / read-only 禁止 (F3) の解除 /
-  config・env での事前承認の許可 (F6 の解除))。いずれも「人間承認なしにコストが上振れる」方向の
-  変更であり、schema_version bump + consumer pin 同期を必須とする
-
-非破壊的変更 (版上げ不要):
-
-- 新規 task_complexity 区分追加
-- §5 mapping table の行追加 (新規 expert 追加に伴う)
-- 例 / 注釈の追加・補強
-- §9 暫定挙動の追加
-
-破壊的変更時は `_shared/version-check.md` の段階移行プロトコルに従う。
-
----
-
-## §11 本 PR の scope と follow-up
-
-本 PR は **markdown 仕様の canonical 化 + spawn テンプレへの `model:` field 注入** までを scope に
-含む。実 spawn 経路に `model:` field が組み込まれたため、本仕様は「死に仕様」ではなく機能する仕様。
-
-### 本 PR 取り込み済み
-
-- `_shared/model-selection.md` (>=1) canonical 正本の新設
-- 各 OP skill SKILL.md の `Agent({...})` spawn テンプレへの `model:` field 注入
-  (op-run apply / post-check / global review、op-scan / op-patrol audit、enrichment 経由 spawn)
-- `_shared/expert-spawn.md` の 3 spawn パターン例 (scan / apply / review) に `model:` field 追加
-- `_shared/clustering.md` cluster schema への `task_complexity` field + dominant 集約ルール
-- `_shared/op-config-schema.md` (>=1) 新設 (`op-config.yaml` schema 正本)
-- `_shared/markers/labels-and-markers.md` への `<!-- op-model-degraded -->` marker 追加
-- `_shared/runtime-contract.md` §1 Canonical Sources への pointer 追記
-- `_shared/active-expert-registry.md` 複雑度感度 summary 節の追加
-
-### 残 follow-up (別 PR、Rust 実装系)
-
-| 項目 | 担当 Phase |
-|---|---|
-| op-tools/op-core での `op metric area` (複雑度シグナル計算) CLI 実装 | op-tools Phase 1 |
-| op-tools/op-core での `op model decide` (decision table 適用) CLI 実装 | op-tools Phase 1 |
-| `op-config.yaml` の Rust parse / validate 実装 | op-tools Phase 1 |
-| clustering.md `task_complexity` field の Rust types 反映 | op-tools Phase 1 |
-| 複雑度シグナルが揃うまでの暫定 fallback (LLM 推論 only / config 任せ) | controller 側既存実装で吸収可 |
-
-### 現状の挙動
-
-各 spawn テンプレに `model: <value>` の埋め込み式が入った状態。実 controller logic
-(`cluster.model` / `region.audit_model` を計算する step) は op-run / op-scan / op-patrol が
-`model-selection.md` §6 controller 決定フローを実装する責務として持つ。本 PR はその参照経路と
-spawn 時の field 渡し方を確定させた。
-
-複雑度シグナル (`loc` / `cyclomatic` / `churn` / `dep_centrality`) を機械計算する `op` CLI が
-未実装な間は、controller が `op-config.yaml` の `domain_tags` と LLM の軽推論を組み合わせて
-`area_complexity` / `task_complexity` を判定する。これは `op-tools Phase 1` の `op metric area`
-が完成した時点で機械シグナルベースに切り替わる。
+- **§7.2 の Fable 契約の緩和** (worker 天井 = Opus の解除 / F3 read-only 禁止の解除 / F6 config・env での事前承認の許可)。人間承認なしにコストが上振れる方向の変更であり、人間の明示判断なしに行わない

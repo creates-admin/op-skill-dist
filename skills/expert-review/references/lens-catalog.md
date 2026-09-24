@@ -1,299 +1,114 @@
 # lens-catalog.md — 7 lens 観点カタログ
 
-<!--
-機能概要: review-expert が PR を横断 review する際の 7 lens 観点表と、各 lens の典型 finding 例。
-作成意図: 観点を覚えやすく整理し、apply 担当の意図に引きずられず網羅的に PR を見る助けにする。
-         各 lens は判断材料であり、機械的に全適用しない。観測事実に基づいて Critical / High と
-         判定できる finding だけを残す。
-注意点: 観点本体はここに集約。判定軸 (approve / needs-fix / needs-specialist-review / blocked) は
-       result-decision.md、出力 schema は finding-schema.md。本ファイルに重複保持しない。
--->
+lens は判断材料であり機械的に全適用しない。観測事実で Critical / High と判定できる finding だけを残す。
 
-## 全体像 (7 lens)
+| # | Lens (payload の `lens` 値) | 主な観点 | 深掘り担当 |
+|---|------|---------|-----------|
+| 1 | Security / Abuse | 入力検証・認可・IO・IPC・shell・path・capability・不正利用 | security-expert |
+| 2 | Workflow / UX | 画面遷移・状態復帰・操作破壊・a11y 波及 | ux-ui-audit-expert |
+| 3 | Test | 回帰検証不足・既存テストへの影響・検証申告の真偽 | test-expert |
+| 4 | Compatibility | 保存データ・設定・migration・rollback・API 互換 | compatibility-expert (planned) |
+| 5 | Release | 配布・updater・installer・artifact・version | release-expert (planned) |
+| 6 | Spec | Issue 要求・acceptance criteria・scope 逸脱・過剰実装・PR 本文整合 | spec-expert (Utility Worker) |
+| 7 | Refactor | 構造劣化・過剰抽象化・命名・配置・バグの種 | refactor-expert |
 
-review-expert は PR 全体を以下 7 lens で横断 review する。
-review_mode (`full` / `light-after-security-postcheck`) に応じて Security/Abuse Lens の重みを切り替える。
+`active_lens_keys` のキーは `security` / `workflow-ux` / `test-regression` / `compatibility` / `release` / `spec` / `refactor-maintainability`。
+post-check と重なる lens (1, 2) は、post-check 通過済みなら Issue 固有の再監査をせず PR 全体への波及だけを見る。
 
-| # | Lens | 主な観点 | 主担当 expert (post-check / specialist) |
-|---|------|---------|---------------------------------------|
-| 1 | Security / Abuse | 入力検証・認可・IO・IPC・shell・path・capability・不正利用の可能性 | security-expert (深掘り再監査) |
-| 2 | Workflow / UX | 画面遷移・状態復帰・操作破壊・a11y 波及 | ux-ui-audit-expert (専門 a11y / 状態網羅) |
-| 3 | Test / Regression | 変更に対する回帰検証不足・既存テストへの影響 | test-expert (カバレッジ全般) |
-| 4 | Compatibility | 保存データ・設定・migration・rollback リスク | compatibility-expert (planned) |
-| 5 | Release | 配布・updater・installer・artifact・version 影響 | release-expert (planned) |
-| 6 | Spec | Issue 要求・acceptance criteria・scope_in / scope_out 逸脱・過剰実装 | spec-expert (Utility Worker) |
-| 7 | Refactor / Maintainability | 構造劣化・過剰抽象化・命名・配置・バグの種 | refactor-expert |
+## 1. Security / Abuse
 
-post-check と responsibility が重なる lens (1, 2) は、**post-check 通過後は重複監査しない**。
-review_mode が `light-after-security-postcheck` のときは Security/Abuse Lens を軽くする。
+観点:
+- 入力検証: path canonicalization / encoding / size limit / null byte / `..` 拒否 / Unicode 正規化
+- 認可 / capability: IPC command の権限境界 / shell 引数の escape / file IO の root 制限 / Tauri capability 追加の妥当性
+- IO / IPC: `std::fs` / `tokio::fs` / Tauri invoke の境界 / WebView ↔ Rust 間 payload 検証
+- エラーパス: TOCTOU / privilege drop 漏れ / error message への path・token・secret 漏洩
+- 脅威アクター視点で「この PR で新たに増えた露出面」
 
----
+典型 finding: 新規 file IO の canonicalization 漏れ / `Command::new("sh")` への未 escape 入力 / capability より広い IPC 権限 /
+error 出力への絶対 path・token 漏洩 / updater の signature 検証スキップ / ユーザー入力経路の `unwrap()` panic / 機密データの平文保存。
 
-## 1. Security / Abuse Lens
+`light-after-security-postcheck` でも次は見る: post-check の対象外だった範囲の新たな露出面、post-check 後に積まれた commit。
 
-### 主な観点
+## 2. Workflow / UX
 
-- **入力検証**: path canonicalization / encoding / size limit / null byte / `..` rejection / Unicode 正規化
-- **認可 / capability**: IPC command の権限境界 / shell 引数の escape / file IO の root 制限 / Tauri capability 追加の妥当性
-- **IO / IPC**: `std::fs` / `tokio::fs` / Tauri invoke の境界 / WebView ↔ Rust 間の payload 検証
-- **エラーパス**: TOCTOU / privilege drop の漏れ / 失敗時の機密情報漏洩 (error message に path / token / secret が出ていないか)
-- **不正利用の可能性**: 脅威アクター視点で「この PR で新たに増えた露出面」を想像する
+観点: 主要導線の破壊・dead-end・ループ / error からリロード以外で復帰できるか・draft 保持 / 既存ナビゲーション・ショートカット・
+フォーム送信の破壊 / focus・contrast・keyboard・screen reader が PR で退化していないか。Issue にデザインモックがあれば見た目の目標と照合する。
 
-### 典型 finding 例
+典型 finding: button が押せない・link が消えた / error 後に復帰不能 / 確認なしの破壊操作 / `outline: none` 等で focus 消失 / 既存 a11y 対応の削除。
 
-- 新規 file IO に path canonicalization 漏れ
-- `Command::new("sh")` 等で escape されていない user input
-- IPC command の権限境界が capability より広い
-- error 出力に絶対 path / 認証 token が漏れる
-- updater payload の signature 検証スキップ
-- `unwrap()` / `expect()` がユーザー入力経路で panic 化
-- migration 経路で機密データが平文保存される
+review state の `post_checks["ux-ui-audit-expert"]` が PASS / PASS_WITH_NOTES なら、Applicable States 網羅・WCAG 詳細は重複監査しない。
 
-### review_mode による重み切り替え
+## 3. Test
 
-| review_mode | Security/Abuse Lens の扱い |
-|-------------|---------------------------|
-| `full` | 通常通り、フル監査 (上記すべての観点) |
-| `light-after-security-postcheck` | **「PR 全体として新たな露出面が増えていないか」のみ軽く**。3.5-B で security-expert が完了済みのため、IPC / file IO / path / capability / shell の Issue 固有再監査は再実行しない |
+観点:
+- 変更に対するテストの追加 / 既存テストの skip・xfail・削除の正当性
+- PR 本文の verification_steps が diff の変更範囲と一致するか
+- Static 検証 (`cargo fmt --check` / `clippy` 等) が実際に pass するか。「Static: pass」の自己申告を鵜呑みにしない
+  (clippy pass と fmt fail は両立する)。コマンドは `~/.claude/skills/_shared/project-profile.md`
+- テストのゴミ化 (snapshot の無意味な更新 / `expect(true).toBe(true)` 等)
 
-`light-after-security-postcheck` でも以下は監査対象に残す:
-- 3.5-B post-check の対象外だった範囲に新たな露出面が増えていないか
-- post-check 後に積まれた commit (stale post-check) がないか
+典型 finding: バグ修正に再現テストがない / 新機能に正常系テストがない / 理由なき skip・xfail 化 / Rust 変更に `cargo test` の証跡なし /
+fmt --check 未実行。
 
-### bulk_group 例 (review-expert が推奨する specialist 向け)
+## 4. Compatibility
 
-| bulk_group | 内容 |
-|-----------|------|
-| `security:path-traversal-in-export` | file IO の path 検証漏れが散在 |
-| `security:unsafe-shell-args` | shell 引数 escape 漏れが散在 |
-| `security:capability-overreach` | capability が必要以上に広い |
-| `security:error-leak` | error 出力に機密情報が漏れる |
+観点: 設定ファイル・DB schema・cache・永続化フォーマットの互換 / forward migration・rollback / 設定の破壊的変更・既定値変更・env var 必須化 /
+公開 API・IPC contract・on-disk format の互換。
 
----
+典型 finding: schema 変更に migration がない / config key rename に migration がない / updater 後に rollback 不能 /
+format version の bump なしの互換破壊 / IPC breaking change に version bump がない。
 
-## 2. Workflow / UX Lens
+## 5. Release
 
-### 主な観点
+観点: installer / package / artifact 構成 / updater の経路・signature・rollback / 配布物の依存・asset・config /
+version 表記の整合 (Cargo.toml / package.json / pubspec.yaml / installer)。
 
-- **画面遷移**: 主要導線が壊れていないか / dead-end / ループに陥らないか
-- **状態復帰**: error / failure からリロード以外の手段で復帰できるか / draft 保持
-- **操作破壊**: 既存ナビゲーション / ショートカット / フォーム送信フローを壊していないか
-- **a11y 波及**: focus / contrast / keyboard / screen reader が **PR で退化していないか** (専門深掘りは ux-ui-audit-expert が 3.5-A で完了済み前提)
+典型 finding: asset の同梱漏れ / updater の URL pattern 未追従 / version bump 漏れ・不整合 / artifact 構成と CI / release pipeline の不整合。
 
-### 典型 finding 例
+## 6. Spec
 
-- 主要導線が PR で塞がれた (button が押せない / link が消えた)
-- error 後に画面が完全停止しリロード以外で復帰不能
-- 確認なしの破壊操作 (削除 / 上書き / 不可逆な状態変更)
-- focus が PR で見えなくなった (`outline: none` 等)
-- 既存 a11y 対応が誤って削除された
+観点: Issue 要求の充足 / acceptance criteria / scope_out への越境・scope_in の漏れ / 要求外の追加実装 / PR 本文と diff の一致。
 
-### 3.5-A 通過 PR での扱い
+典型 finding: acceptance criteria の一部未実装 / scope_out のファイル変更 / 要求外の大規模 refactor 混入 /
+PR 本文に書かれた変更が diff にない / PR タイトルの規則違反 (`feat:` / `fix:` 等の prefix)。
 
-`<!-- op-ux-ui-audit -->` で `audit_result: PASS` または `PASS_WITH_NOTES` が記録されていれば、
-ux-ui-audit-expert が UX/UI 専門観点で audit 済み。本 lens は **PR 全体への波及**のみ確認する。
+## 7. Refactor
 
-「使いやすさ専門観点 (Applicable States 網羅 / 10 不変条件等)」は ux-ui-audit-expert の主領域。
-review-expert は重複監査しない。
+観点: 対象 repo の既定ネスト上限 (repo の CLAUDE.md 定義。なければ 2 階層) 超過 / 関数 100 行超 / 責務混線 /
+過剰抽象化 (1 関数 1 ファイル・不要な interface / generic) / 命名・配置の不統一 / 暗黙の副作用・非対称な dispose。
 
----
+典型 finding: ネスト上限超過 / 同責務の重複 (3 箇所以上) / 既存規則と異なる命名 / 層が増えただけの抽象化。
 
-## 3. Test / Regression Lens
+CLAUDE.md の規約 (ネスト上限 / コメントポリシー / フォルダ階層 / アンチパターン) は本 lens の絶対基準。
 
-### 主な観点
+## severity の目安
 
-- **回帰検証不足**: 変更に対するテストが追加されているか / 既存テスト失敗を黙らせていないか
-- **既存テストへの影響**: skip / xfail / 削除されたテストの正当性
-- **検証コマンド充足**: PR 本文に記録された verification_steps が diff の変更範囲と一致するか
-- **Static 検証の実施**: apply PR では `cargo fmt --check` / `clippy` 等の Static 検証が
-  **実際に pass しているか追検証する**。PR 本文の「Static: pass」自己申告を鵜呑みにしない。
-  `cargo clippy` は line-width / import 整形を見ないため、clippy pass と fmt fail は両立する。
-  実際のコマンドは `skills/_shared/project-profile.md` が正本 (スタック別)。
-- **テストの質**: テストがゴミテスト化していないか (snapshot 自動更新 / `expect(true).toBe(true)` 等)
+| Lens | Critical | High |
+|------|---------|------|
+| Security / Abuse | 露出面拡大 / 認可破壊 / 機密漏洩 | 入力検証漏れ / capability 過剰 / IPC 検証欠如 |
+| Workflow / UX | 主要導線の完全停止 / 復帰不能 | 操作破壊 / a11y 退化 |
+| Test | bug fix のリグレッションテスト欠如 | 検証コマンド漏れ / silenced failure |
+| Compatibility | rollback 不能 / 既存データ破壊 | migration 欠如 / version bump 漏れ |
+| Release | installer の致命的破壊 | version 不整合 / artifact 漏れ |
+| Spec | scope_out の重大越境 / acceptance criteria の重大未達 | 過剰実装 / PR 本文と diff の不一致 |
+| Refactor | バグの種 (副作用 / dispose 漏れ) | ネスト超過 / 命名不統一 |
 
-### 典型 finding 例
+基準は `~/.claude/skills/_shared/severity-rubric.md`。Medium 以下は原則出さない。Spec / Refactor lens で PR の品質要件未充足を伴うものは Medium でも残してよい。
 
-- バグ修正に再現テストがない
-- 新機能に正常系テストがない
-- 既存テストが skip / xfail に書き換えられた (理由なし)
-- diff に Rust 変更があるが `cargo test` の証跡なし
-- snapshot テストが意味なく更新されている
-- `cargo fmt --check` skip (PR 本文に「Static: pass」と記載があるが fmt --check 未実行、CI fail で発覚)
+## recommended_fix_expert の提案
 
-### bulk_group 例
+提案であり、最終決定は op-run の判定優先順位 1-8 (op-run skill の review-fix-loop §4.5-2)。
 
-| bulk_group | 内容 |
-|-----------|------|
-| `test:missing-regression` | リグレッションテスト欠如 |
-| `test:silenced-failures` | テストが skip / xfail で黙らされた |
-| `test:verification-mismatch` | diff の変更範囲と verification 記録の不一致 |
-| `test:static-check-skipped` | fmt --check / clippy 等の Static 検証が未実行 (自己申告 pass と乖離) |
-
----
-
-## 4. Compatibility Lens
-
-### 主な観点
-
-- **保存データ**: 設定ファイル / DB schema / cache / 永続化フォーマットの互換性
-- **migration**: forward migration / backward rollback / 旧バージョンとの相互運用性
-- **設定**: 設定ファイルの破壊的変更 / 既定値の変更 / env var の必須化
-- **API 互換性**: 公開 API / IPC contract / file format / on-disk format の互換性
-
-### 典型 finding 例
-
-- DB schema 変更に migration がない
-- 設定ファイルの key rename が migration なしで導入された
-- updater 適用後に旧バージョンへの rollback ができない
-- 永続化フォーマットの互換性が壊れた (format version の bump がない / migration 経路が不明)
-- IPC contract の breaking change が IPC version を bump せずに入った
-
-### bulk_group 例
-
-| bulk_group | 内容 |
-|-----------|------|
-| `compat:missing-migration` | schema / config 変更に migration なし |
-| `compat:rollback-broken` | rollback 経路が壊れている |
-
----
-
-## 5. Release Lens
-
-### 主な観点
-
-- **配布**: installer / package / artifact 構成への影響
-- **updater**: 自動更新の経路 / signature 検証 / rollback 経路
-- **artifact**: 配布物に含まれる依存・asset・config の変更
-- **version**: semver / version 表記の整合性 / cargo / npm / pubspec / installer の version bump
-
-### 典型 finding 例
-
-- installer に含めるべき asset が漏れた
-- updater が新 binary を取得できない (URL pattern 変更未追従)
-- version bump 漏れ (Cargo.toml / package.json / pubspec.yaml の不整合)
-- artifact 構成変更が CI / release pipeline と不整合
-
-### bulk_group 例
-
-| bulk_group | 内容 |
-|-----------|------|
-| `release:version-mismatch` | version 表記が不整合 |
-| `release:asset-missing` | 配布物に必要 asset が漏れ |
-
----
-
-## 6. Spec Lens
-
-### 主な観点
-
-- **Issue 要求充足**: PR が Issue の要求をすべて実装したか
-- **acceptance criteria**: success_criteria を実装が満たすか
-- **scope_in / scope_out**: scope_out への越境がないか / scope_in の漏れがないか
-- **過剰実装**: Issue が要求していない機能を勝手に追加していないか
-- **PR 本文整合**: PR 本文の記述と diff が一致するか
-
-### 典型 finding 例
-
-- Issue が要求した acceptance criteria の一部が実装されていない
-- Issue scope_out に明記されたファイルへの変更
-- Issue が要求していない大規模 refactor が混入
-- PR 本文に「○○を実装」と書かれているが diff に該当変更がない
-- PR タイトルが規則違反 (`feat:` / `fix:` 等の prefix が ない / 命名規約違反)
-
-### bulk_group 例
-
-| bulk_group | 内容 |
-|-----------|------|
-| `spec:scope-out-violation` | scope_out への越境 |
-| `spec:over-implementation` | Issue 要求外の追加実装 |
-| `spec:pr-body-mismatch` | PR 本文と diff の不一致 |
-
----
-
-## 7. Refactor / Maintainability Lens
-
-### 主な観点
-
-- **構造劣化**: 対象 repo 既定 2 階層 (repo の CLAUDE.md 定義があればそれ) を超えるネスト / 関数 100 行超過 / 責務混線
-- **過剰抽象化**: 1 関数 1 ファイル / interface / impl 形式分離 / 不要な generic
-- **命名・配置**: 一貫性のない命名 / 既存ディレクトリ規則からの逸脱
-- **バグの種**: 暗黙の副作用 / 非対称な dispose / 後で踏みやすい罠
-
-### 典型 finding 例
-
-- ネストが対象 repo 既定 2 階層 (repo の CLAUDE.md 定義があればそれ) を超過
-- 同じ責務のコードが 3 箇所に散在 (DRY 違反)
-- 既存命名規則と異なる命名で導入された (例: snake_case / camelCase 混在)
-- 不要な抽象化が複雑性を増した (層が増えただけで価値がない)
-
-### CLAUDE.md 規約との関係
-
-CLAUDE.md (user's global directives) は本 lens の **絶対基準**として扱う。
-ネスト上限 / コメントポリシー / フォルダ階層 / アンチパターンに違反する diff は finding 対象。
-
-### bulk_group 例
-
-| bulk_group | 内容 |
-|-----------|------|
-| `refactor:nest-over-limit` | ネスト上限超過 |
-| `refactor:duplicate-logic` | 同責務の重複 |
-| `refactor:naming-inconsistency` | 命名不統一 |
-
----
-
-## lens 別 severity の目安
-
-| Lens | Critical | High | Medium / Low |
-|------|---------|------|-------------|
-| Security / Abuse | 露出面拡大 / 認可破壊 / 機密漏洩 | 入力検証漏れ / capability 過剰 / IPC 検証欠如 | 通常 finding に出さない |
-| Workflow / UX | 主要導線完全停止 / 復帰不能 | 操作破壊 / a11y 退化 (focus 削除等) | 通常 finding に出さない |
-| Test / Regression | リグレッションテスト欠如 (bug fix で) | 検証コマンド漏れ / silenced failure | 通常 finding に出さない |
-| Compatibility | rollback 不能 / 既存データ破壊 | migration 欠如 / version bump 漏れ | 通常 finding に出さない |
-| Release | installer 致命的破壊 | version 不整合 / artifact 漏れ | 通常 finding に出さない |
-| Spec | scope_out 重大越境 / acceptance criteria 重大未達 | 過剰実装 / PR 本文 vs diff 不一致 | 軽微な記述ズレは Notes |
-| Refactor | バグの種 (副作用 / dispose 漏れ等) | ネスト超過 / 命名不統一 | 軽微な好みは finding に出さない |
-
-severity は `~/.claude/skills/_shared/severity-rubric.md` に従う。
-review-expert は **Critical / High 主体** で finding を出し、Medium 以下のノイズは出さない。
-ただし Spec / Refactor lens で「PR の品質要件未充足」を伴うものは Medium でも残してよい (PR 本文の体裁等)。
-
----
-
-## 司令官 (op-run) への提案 — 同 lens 内 specialist の推奨
-
-review-expert は finding ごとに `recommended_fix_expert` を提案する (op-run の判定優先順位 1-8 で最終決定)。
-
-| Lens | 第一候補 (apply = recommended_fix_expert) | requires_post_check | 第二候補 (条件) |
-|------|----------------------------------------|--------------------|---------------|
-| Security / Abuse | security-expert (active) | security-expert | debug-expert (security-expert が unavailable な場合のみ fallback) |
+| Lens | recommended_fix_expert | requires_post_check | 条件付きの第二候補 |
+|------|----------------------|--------------------|-------------------|
+| Security / Abuse | security-expert | security-expert | debug-expert (security-expert が unavailable の場合のみ) |
 | Workflow / UX (state / recovery / flow / a11y 実装) | feature-expert | ux-ui-audit-expert | designer-expert (token / visual の同時修正が混じる場合) |
-| Workflow / UX (visual / component / design token / layout pattern) | designer-expert | ux-ui-audit-expert | — |
-| Test / Regression | test-expert | null | spec-expert (仕様不明確時は spec-expert へ先) |
-| Compatibility | compatibility-expert (planned) | null | debug-expert / refactor-expert (fallback) |
-| Release | release-expert (planned) | null | 方針判断は `needs_human_decision`。build / packaging failure / artifact / config 構造整理が主題の場合のみ **誤分類の再分類** として debug-expert / refactor-expert。**release-expert を経路に残す fallback は禁止** |
-| Spec | spec-expert (Utility Worker) | null | feature-expert (実装観点) |
-| Refactor / Maintainability | refactor-expert | null | debug-expert (バグの種なら) |
+| Workflow / UX (visual / component / token / layout) | designer-expert | ux-ui-audit-expert | — |
+| Test | test-expert | null | 仕様不明確なら needs-specialist-review |
+| Compatibility | compatibility-expert (planned) | null | debug-expert / refactor-expert |
+| Release | release-expert (planned) | null | 方針判断は `needs_human_decision`。build / packaging / artifact / config 構造が主題なら誤分類として debug-expert / refactor-expert へ再分類 (`handoff-boundaries.md` §7-2) |
+| Spec | spec-expert (Utility Worker) | null | feature-expert |
+| Refactor | refactor-expert | null | debug-expert (バグの種) |
 
-**`recommended_fix_expert` には `ux-ui-audit-expert` / `review-expert` を指定しない**。
-- `ux-ui-audit-expert`: 検出 + post-check 専任、apply を持たない。UX/UI 系の apply 担当は visual / component / token / layout pattern なら `designer-expert`、state / recovery / flow / a11y 実装なら `feature-expert`。再確認担当として `requires_post_check: ux-ui-audit-expert` を別フィールドで指定する。
-- `review-expert`: 監査専任 (self-review 禁止)。
-
-- **active expert**: `security-expert` は Phase 2 で実装済み。security domain finding は第一候補として `security-expert` を提案する
-- **planned expert** (`compatibility-expert` / `release-expert` / `env-expert`) は実装後に有効。planned 期間中は op-run が spawn 前に正規化する。
-  - `compatibility-expert` / `env-expert` は active fallback (`debug-expert` / `refactor-expert`) または `needs_human_decision` に置き換える
-- **Utility Worker** (`spec-expert`) は active だが op-run routing 対象外 (op-spec 専用 worker)。recommended_fix に現れても op-run は spawn 前に `feature-expert` (acceptance 明確) / `needs_human_decision` (仕様不明) に正規化する (`op-run-expert: spec-expert → feature-expert`)。
-  - `release-expert` は **fallback destination として扱わない** (解決規則の詳細は `handoff-boundaries.md` §7-2)
-  - canonical な正規化ルールは `~/.claude/skills/_shared/expert-spawn.md` の Planned Expert Notice を参照
-
-`recommended_fix_expert` はあくまで提案。op-run が以下の優先順位で最終決定する。
-
-```text
-1. Issue / PR の scope_in / scope_out
-2. 変更ファイルのドメイン
-3. finding の lens
-4. failure mode / 失敗種別
-5. required post-check
-6. review-expert の recommended_fix_expert (参考)
-7. ownership / 直前に修正した expert
-8. 不明なら needs-specialist-review または blocked
-```
+- `review-expert` / `ux-ui-audit-expert` は指定しない。UX/UI の修正は visual 系なら designer-expert、state / flow / a11y 実装なら feature-expert。
+- planned expert・`spec-expert` は op-run が spawn 前に正規化する (`~/.claude/skills/_shared/planned-experts.md` / `active-expert-registry.md`)。

@@ -1,24 +1,3 @@
-/**
- * 機能概要:
- *   op-run 探知 (discover) フェーズの Dynamic Workflow (ADR-0009 Phase C / C1)。
- *   controller が cluster ごとに事前 provision した base_sha worktree で investigation reader を
- *   並列 spawn し、files_likely_to_modify / risk_files / needs_serialization を含む investigation
- *   report を controller へ返す。**controller はこの戻り値で Stage2 競合検出・density 再計算・
- *   serialization partition を行う (= barrier はここ、apply pipeline には埋めない)**。
- *
- * 作成意図:
- *   現行 SKILL.md 2-A-2 の single-message Agent 並列 spawn + Monitor 待ちを Workflow へ移行。
- *   explore を apply pipeline に内蔵すると Stage2 barrier が消え clustering.md L36/L487 が必須化する
- *   二段階競合検出が成立しないため、discover を独立 workflow に分離して controller-visible barrier を残す。
- *
- * 注意点:
- *   - exploration-only。reader は編集・commit・push しない (commits_added を出さない)。
- *   - worktree は controller が事前確定 (案B′)。reader は input 注入の worktree_path に cd して Read のみ。
- *   - **args は Workflow tool から JSON 文字列で到着する (段階1.5 実測)**。normalizeArgs() で parse する。
- *     動的値 (base_sha / worktree_path / cluster) は全て args 注入 (F2 対策、agent の改変余地を消す)。
- *   - REAL_API 準拠: export const meta (pure literal) / top-level agent・parallel / 非決定 API 不使用。
- */
-
 export const meta = {
   name: "op-run-discover",
   description:
@@ -26,7 +5,6 @@ export const meta = {
   phases: [{ title: "discover" }],
 };
 
-// investigation report schema — 現行 SKILL.md 2-A-2 の report JSON 契約に整合。
 // files_likely_to_modify / risk_files / needs_serialization が controller の Stage2 partition の入力。
 const investigationSchema = {
   type: "object",
@@ -44,23 +22,19 @@ const investigationSchema = {
   },
 };
 
-// args は Workflow tool から JSON 文字列で到着する (段階1.5 実測) → parse + 入力検証。
 const input = normalizeArgs();
 
 phase("discover");
 
-// --- plugin scoped-name: Workflow agent() の agentType は plugin 登録名 (op-skill:<name>) で解決する ---
-// built-in (general-purpose/Explore/Plan) は plugin component でないため bare 維持。data (expert 名等) は
-// bare 正本、spawn 境界でのみ前置する (skills/_shared/expert-spawn.md「Plugin scoped-name 規約」)。
+// agentType は plugin scoped 名 (op-skill:<name>)。built-in は bare。
 const BUILTIN_AGENTS = new Set(["general-purpose", "Explore", "Plan"]);
 const scopedAgentType = (n) => (n && !BUILTIN_AGENTS.has(n) ? `op-skill:${n}` : n);
 log(`op-run-discover: ${input.clusters.length} clusters (base ${input.base_sha} @ ${input.base_ref})`);
 if (input.fable_guard_corrections.length)
   log(
-    `[fable-guard] read-only spawn への fable 指定を opus へ矯正: ${input.fable_guard_corrections.join(", ")} (model-selection.md §7.2 F3)`
+    `[fable-guard] read-only spawn への fable 指定を opus へ矯正: ${input.fable_guard_corrections.join(", ")} (model-selection.md §7.2)`
   );
 
-// 全 cluster を 1 turn 内で並列発火 (controller 人為 cap は撤廃、runtime の min(16,cores-2) が透過キューイング)。
 const reports = (
   await parallel(
     input.clusters.map((cluster) => () =>
@@ -75,27 +49,22 @@ const reports = (
   )
 ).filter(Boolean);
 
-// controller はこの戻り値で Stage2 競合検出 → partition (parallel_clusters / serial_chains) を確定する。
 return { base_sha: input.base_sha, base_ref: input.base_ref, ts: input.ts, reports };
 
-// ---- args 正規化 + 入力アサーション (Workflow input には schema 強制が無いため entry で fail-fast) ----
 function normalizeArgs() {
   const a = typeof args === "string" ? JSON.parse(args) : args;
   if (!a || !Array.isArray(a.clusters) || a.clusters.length === 0)
     throw new Error("op-run-discover: args.clusters must be a non-empty array");
   if (!a.base_sha || !a.base_ref)
     throw new Error("op-run-discover: args.base_sha and args.base_ref are required");
-  // model-selection.md (>=5) §7.2 F3: 本 workflow の spawn はすべて read-only 経路のため `fable` 禁止
-  //   (write phase の承認 gate = op-run 1-2-g / op-codev 3-B-gate でのみ fable が載る)。controller が
-  //   誤注入しても silent 受理せず opus へ矯正し、矯正記録を fable_guard_corrections に残す (warning + 続行)。
+  // read-only spawn は fable 禁止 (model-selection.md §7.2)。opus へ矯正して記録する。
   a.fable_guard_corrections = [];
   for (const c of a.clusters) {
     if (!c.id || !c.expert || !Array.isArray(c.issues) || c.issues.length === 0)
       throw new Error("op-run-discover: each cluster needs id, expert, non-empty issues");
     if (!c.worktree_path)
       throw new Error(`op-run-discover: cluster ${c.id} missing pre-provisioned worktree_path`);
-    // §7.2 F3: investigation (探知) は read-only ゆえ fable 禁止。cluster が Fable 昇格を承認済でも
-    // 昇格は apply spawn (cluster.apply_model) にのみ載る契約であり、探知には波及させない。
+    // Fable 昇格承認済 cluster でも探知には波及させない (apply_model のみ)。
     if (c.model === "fable") {
       c.model = "opus";
       a.fable_guard_corrections.push(`cluster:${c.id}`);
@@ -104,8 +73,6 @@ function normalizeArgs() {
   return a;
 }
 
-// 探知 reader への prompt。現行 SKILL.md 2-A-2 の investigation 指示を踏襲しつつ、
-// worktree は controller provision 済 (cd するだけ) に変更。
 function buildDiscoverPrompt(cluster, a) {
   const issuesLine = cluster.issues.map((n) => "#" + n).join(", ");
   return [
@@ -114,7 +81,7 @@ function buildDiscoverPrompt(cluster, a) {
     "以下のクラスタの **探知のみ** を実行してください。この段階では **コードを編集・コミット・push しない**。",
     "",
     "共通宣言 (invocation_mode / 質問禁止 / 必読 checklist / commits_added):",
-    "`~/.claude/skills/_shared/spawn-prompt-common.md (>=1)` §1〜§4 を参照。",
+    "`~/.claude/skills/_shared/spawn-prompt-common.md` §1〜§4 を参照。",
     "本フェーズは investigation (exploration-only) のため commits_added は出さない (commit は行わない)。",
     "",
     "You must not ask interactive questions. Do not stop and wait for commander or user replies.",

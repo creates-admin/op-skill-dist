@@ -168,7 +168,7 @@ test("normalizeArgs は regions 空 / today 欠落 / run_id 欠落で throw す�
   assert.throws(() => na.run({ regions: [{ id: "r1" }], today: "2026-06-02" }), /run_id is required/);
 });
 
-// ---- fable guard (model-selection.md (>=5) §7.2 F3: 区画 audit は read-only ゆえ fable 禁止) ----
+// ---- fable guard (model-selection.md §7.2 F3: 区画 audit は read-only ゆえ fable 禁止) ----
 test("normalizeArgs は区画 audit expert の fable 指定を opus へ矯正する", () => {
   const out = na.run({
     regions: [

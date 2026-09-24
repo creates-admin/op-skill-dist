@@ -208,29 +208,6 @@ export function loadPureFns(scriptName, { functions = [], consts = [], sandbox =
 }
 
 /**
- * 機能概要: workflow script からトップレベル const (object/array/scalar リテラル) の値を取り出して
- *           map で返す。loadPureFns は関数参照しか返さないため、純粋な定数マップ
- *           (ROLE_MODEL_FALLBACK 等の役別 model 既定値) を回帰 assert したいケース用。
- * 作成意図:
- *   #676 RVW-002: op-enrichment の ROLE_MODEL_FALLBACK は async runRolePipeline 内消費で
- *   pure-fn harness の対象外だが、マップ定義自体は top-level const なのでソースから決定的に
- *   切り出して値を固定できる。runtime (phase/parallel/return) は評価しない。
- * @param {string} scriptName  例 "op-enrichment.js"
- * @param {string[]} names     取り出す const 名
- * @returns {object} const 名 → 評価済みの値
- */
-export function loadConsts(scriptName, names = []) {
-  const src = readSource(scriptName);
-  // 依存定数の宣言だけを切り出し、IIFE で評価して値を map で返す。
-  // 他の loader と同様 runInThisContext で host realm の Array/Object を共有する
-  // (deepEqual の cross-realm prototype 不一致を避ける)。
-  const parts = names.map((n) => extractConst(src, n));
-  const code = `(function(){\n${parts.join("\n\n")}\n\nreturn { ${names.join(", ")} };\n})`;
-  const factory = vm.runInThisContext(code, { filename: `extracted:${scriptName}:consts` });
-  return factory();
-}
-
-/**
  * 機能概要: workflow script の normalizeArgs() を取り出して、与えた args (object or JSON 文字列) で
  *           評価する。args は vm context のグローバルとして注入する (本体と同じ `const a =
  *           typeof args === "string" ? JSON.parse(args) : args` 経路を通す)。

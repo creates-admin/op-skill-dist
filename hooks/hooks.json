@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "mkdir -p \"$HOME/.claude/workflows\" 2>/dev/null; cp -f \"${CLAUDE_PLUGIN_ROOT}/workflows/\"op-*.js \"$HOME/.claude/workflows/\" 2>/dev/null; exit 0"
+            "command": "mkdir -p \"$HOME/.claude/workflows\" 2>/dev/null; for w in op-enrichment op-plan-judge op-architect-judge op-run-judge-clustering op-explore-render; do rm -f \"$HOME/.claude/workflows/$w.js\"; done; cp -f \"${CLAUDE_PLUGIN_ROOT}/workflows/\"op-*.js \"$HOME/.claude/workflows/\" 2>/dev/null; exit 0"
           },
           {
             "type": "command",

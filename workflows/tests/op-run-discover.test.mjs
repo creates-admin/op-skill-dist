@@ -52,7 +52,7 @@ test("normalizeArgs は正しい args をそのまま返す", () => {
   assert.equal(out.clusters.length, 1);
 });
 
-// ---- fable guard (model-selection.md (>=5) §7.2 F3: 探知は read-only ゆえ fable 禁止) ----
+// ---- fable guard (model-selection.md §7.2 F3: 探知は read-only ゆえ fable 禁止) ----
 test("normalizeArgs は cluster.model の fable を opus へ矯正する (apply 昇格を探知へ波及させない)", () => {
   const out = na.run({
     clusters: [

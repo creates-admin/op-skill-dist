@@ -8,7 +8,7 @@
  * 注意点:
  *   - 本体 op-survey.js は改変しない (_extract.mjs が runtime 非干渉でソースから切り出す)。
  *   - 判定・順位付けは workflow に持たせない (findings を返すだけ) ため、集約系の純関数は
- *     flatWithProvenance / collectCoverageNotes のみ (op-explore-render と同じ「判定なし」規律)。
+ *     flatWithProvenance / collectCoverageNotes のみ。
  *   - 非決定 API (Date / Math.random / performance.now) は assertion に持ち込まない (固定入力→固定出力)。
  */
 
@@ -163,7 +163,7 @@ test("normalizeArgs は goal のみ (axes/preset 無し) で goal-derived 単一
   assert.equal(out.axes.length, 1);
 });
 
-// ---- fable guard (model-selection.md (>=5) §7.2 F3: investigator は read-only ゆえ fable 禁止) ----
+// ---- fable guard (model-selection.md §7.2 F3: investigator は read-only ゆえ fable 禁止) ----
 test("normalizeArgs は investigator model の fable を opus へ矯正する", () => {
   const out = na.run({ repo_root: "/repo", goal: "横断調査したい", model: "fable" });
   assert.equal(out.model, "opus");

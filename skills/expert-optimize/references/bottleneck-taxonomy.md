@@ -1,333 +1,80 @@
-# Bottleneck Taxonomy — scan モード用の分類表
+# Bottleneck Taxonomy — scan 用の分類表
 
-<!--
-機能概要: optimize-expert scan モードで「なんとなく遅そう」を防ぐための分類表。
-作成意図: scan は性能問題を断定しないが、加点要素 (severity 昇格根拠) と
-         減点要素 (起票しない理由) を明文化し、ノイズを構造的に減らす。
-注意点: ここに書かれていないパターンは ignored_noise の可能性が高い。
-       入力規模・ホットパス性が示せないものは confirmed にしない。
--->
+「遅い」と断定せず、「この入力規模・呼び出し頻度なら計算量 / I/O 回数が破綻する」と書く。confirmed にする条件は 3 つ全て:
 
-## scan モードの責務
+1. 計算量 / I/O 回数が静的に確定する
+2. 入力規模が運用上大きくなることが既知 (page_count / job_count / OCR block_count / file_count 等)
+3. measurement_plan (どう測れば確定できるか) を書ける
 
-> 「これは遅い」と断定するのではなく、
-> 「この入力規模・この呼び出し頻度なら計算量 / I/O 回数が破綻するリスクがある」と書く。
+1 だけなら investigation_candidates。ここに無いパターンは ignored_noise の可能性が高い。
 
-判定の核は以下 3 点:
+各行の bulk_group は SKILL.md の表の値。
 
-1. **計算量 / I/O 回数が静的に確定する**
-2. **入力規模が運用上大きくなることが既知** (page_count / job_count / OCR block_count / file_count 等)
-3. **measurement_plan を書ける** (op-run でどう測れば bottleneck と確定できるか)
+## algorithm (`perf-nested-loop-on2` / `perf-repeated-compile`)
 
-3 点全て揃って初めて confirmed_findings。
-1 だけなら investigation_candidates。
+| パターン | 検出兆候 | 昇格根拠 | 改善方針 |
+|---|---|---|---|
+| nested loop O(n²)/O(n*m) | 外側 loop 内で同一・関連 collection を走査、join 戦略なしの items × rules | n が運用上 100 以上、かつホットパス | HashMap / HashSet index |
+| repeated linear search | loop 内 `vec.contains` / `iter().find` / `iter().position` | 探索元・探索回数とも n 規模 | HashSet / HashMap / IndexMap |
+| repeated sort | 呼び出し・iteration ごとに `sort_by` | 同上 | sort once + `binary_search`、sorted 構造で保持 |
+| repeated parse | loop 内で同じ JSON / XML / IDML を parse、`Path` ↔ `String` 往復 | 同上 | parse once、typed intermediate |
+| repeated regex compile | 関数 / loop 内 `Regex::new` | 呼び出し頻度が高い | `static LazyLock<Regex>` |
 
----
+## io (`perf-loop-io` / `perf-tauri-ipc-chatty`)
 
-## 分類: algorithm
+| パターン | 検出兆候 | 改善方針 |
+|---|---|---|
+| ループ内 file I/O | `for { fs::read / fs::write }`、async でも syscall コストは同じ、1 行ずつ append | read once / `BufReader`・`BufWriter` / batch |
+| N+1 | loop 内で 1 件ずつ HTTP / DB / `invoke` / COM | batch API / IN 句 / JOIN / multi-get / batch command |
+| async 内同期 I/O | `async fn` 内の `std::fs` / `std::process::Command::output()` / `std::thread::sleep` | `tokio::fs` / `tokio::process` / `tokio::time::sleep` / `spawn_blocking`。バグ寄りなので性能影響を示せる場合のみ optimize で起票 |
+| Tauri IPC chatty | render loop・scroll handler 内 `invoke`、巨大 JSON / binary を base64 で送る、1 件ずつの command | batching / event 通知 / file path handoff (`tauri-performance.md`) |
 
-### algo-nested-loop-on2 — O(n²) / O(n*m) ネストループ
+昇格根拠: 件数 n が 100 以上かつホットパス。I/O 1 回 1 ms でも 1 万件で 10 秒。
 
-| 検出兆候 | 例 |
-|---------|---|
-| 二重 for で外側と内側が同じ collection / 関連 collection | `for x in items { for y in items { ... } }` |
-| 外側 loop 内で内側 collection を線形探索 | `for x in xs { if ys.contains(&x.id) { ... } }` |
-| 関連 collection を join するパターンで join 戦略がない | items × rules マトリクス処理 |
+## allocation / memory (`perf-unnecessary-clone` / `perf-unbounded-growth`)
 
-severity 昇格根拠:
-- n が運用上 100 以上に達することが既知 (例: page_count, rule_count, OCR block_count)
-- ホットパス (main loop / batch processor / per-page 処理)
+| パターン | 検出兆候 | 昇格根拠 | 改善方針 |
+|---|---|---|---|
+| 大量 clone / String 化 | 巨大 `Vec` / `HashMap` の `.clone()`、ホットパスの `iter().cloned().collect()`、`&str` で済む `.to_string()` | 1 MB 以上 / 10 万要素以上かつホットパス | borrow / `Cow` / `Arc` / iterator chain |
+| serde roundtrip | `from_str` → 加工 → `to_string` → `from_str`、Tauri 境界での 2 重 serialize | 同上 | typed intermediate |
+| unbounded growth | eviction なしの cache insert、truncate なしの履歴 push、listener / watcher / timer の解除漏れ (Vue `onUnmounted`、Flutter `dispose`、Tauri `unlisten`) | 常駐アプリ (Tauri / Flutter) で長時間運用の OOM 経路 | bounded cache (LRU / TTL) / dispose / unmount cleanup |
+| 大 buffer の長期保持 | 処理後も struct field に bitmap / OCR 中間 buffer / Tauri state の巨大 Vec | 同上 | scope を狭める / `mem::take` / streaming |
+| capacity なし push | 既知サイズの大量 push、`push_str` 連発 | n が大きい場合のみ (小さければ noise) | `with_capacity` |
 
-改善方針: HashMap / HashSet による index 化、`algorithmic-optimization.md` 参照。
+dispose 漏れはバグとしては debug-expert、長時間のメモリ肥大として示せるなら optimize で起票する。
 
-### algo-repeated-linear-search — Vec::contains の多重利用
+## parallelism (`perf-bad-parallelism`)
 
-| 検出兆候 | 例 |
-|---------|---|
-| ループ内で `vec.contains(&key)` 反復 | seen チェックを Vec で行う |
-| `vec.iter().find(...)` 多発 | id lookup を毎回線形 |
-| `vec.iter().position(...)` 多発 | 同上 |
+| パターン | 検出兆候 | 改善方針 |
+|---|---|---|
+| par_iter + Mutex | `for_each` 内で `Mutex<Vec>` push / `Arc<Mutex<HashMap>>` insert | `map().collect()` / fold + reduce |
+| I/O-bound par_iter | `par_iter` 内で file / HTTP / DB | async + semaphore |
+| 極小粒度 | 数十要素以下、または 1 要素 < 1 µs | threshold 切替 / sequential |
+| スレッド制約越境 | `par_iter` 内で Tauri Window・WebView 操作 / InDesign COM (STA) / Flutter platform channel | sequential に戻す / UI thread へディスパッチ。クラッシュ・不定動作なら昇格 |
 
-severity 昇格根拠:
-- 探索元の Vec が n 規模、探索回数も n 規模 (合計 O(n²))
+詳細は `rayon-playbook.md`。
 
-改善方針: HashSet / HashMap / IndexMap への置き換え。
+## bundle / frontend (`perf-bundle-fullimport`)
 
-### algo-repeated-sort — 同じデータを毎回 sort
+| パターン | 検出兆候 | 昇格根拠 | 改善方針 |
+|---|---|---|---|
+| 全 import | `import _ from 'lodash'` / `import * as moment` / icon library 全 import | initial bundle 1 MB 超、または LCP に明確な影響 | named import / tree-shakable 代替 / icon 個別 |
+| lazy route 不在 | router の全 route が同期 import、巨大 dialog を eager load | 同上 | `() => import()` / `defineAsyncComponent` |
+| tree-shake 阻害 | `"sideEffects": false` 未宣言、barrel `export *` | 同上 | sideEffects 宣言 / barrel 解消 |
 
-| 検出兆候 | 例 |
-|---------|---|
-| 関数呼び出し / loop iteration ごとに `sort_by` | sort 結果を cache していない |
-| 同じデータに対する `sort` + `binary_search` のうち sort が外側 loop 内 | sort once + binary_search の機会喪失 |
+runtime 系 (computed 過剰再計算 / deep watch / virtualization 欠如) は `frontend-bundle-performance.md`。
 
-改善方針: sort once + binary_search、または事前に sorted 構造で持つ。
+## Tauri 境界 (`perf-tauri-ipc-chatty`)
 
-### algo-repeated-parse — 同じ入力を毎回 parse
+| パターン | 検出兆候 | 改善方針 |
+|---|---|---|
+| 巨大 payload | `Vec<u8>` / `Vec<f64>` を戻り値にする、100 KB 以上の JSON を高頻度送信 | file path handoff + `convertFileSrc` / streaming / progress event |
+| main thread blocking | `#[tauri::command]` 内の重い同期処理 / `block_on` | `spawn_blocking` / progress event |
 
-| 検出兆候 | 例 |
-|---------|---|
-| ループ内で同じ JSON / XML / IDML を `serde_json::from_str` | 結果を cache していない |
-| `Path::new(s)` を毎回作って `to_str()` で戻す | 文字列 ↔ Path 変換が往復 |
+## ignored_noise (報告しない)
 
-改善方針: parse once、typed intermediate を持つ。
-
-### algo-repeated-regex-compile — Regex を毎回 compile
-
-| 検出兆候 | 例 |
-|---------|---|
-| 関数 / loop 内で `Regex::new("...")` | 関数呼び出しごとに compile |
-| 同じ pattern を複数箇所で `Regex::new` | DRY 違反かつ性能問題 |
-
-改善方針: `static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new("...").unwrap());`
-
----
-
-## 分類: io
-
-### io-loop-file-rw — ループ内 file I/O
-
-| 検出兆候 | 例 |
-|---------|---|
-| `for ... { fs::read(...) }` / `fs::write(...)` | 1 件ずつ open/close を繰り返す |
-| `for ... { tokio::fs::write(...).await }` | async でも syscall コストは変わらない |
-| 1 行ずつ append で大量書き込み | `BufWriter` で済むのに |
-
-severity 昇格根拠:
-- 件数 n が 100 以上、かつホットパス
-
-改善方針: read once + in-memory 処理 / `BufReader` + `BufWriter` / batch I/O。
-
-### io-n-plus-one — N+1 (DB / HTTP / IPC / fs)
-
-| 検出兆候 | 例 |
-|---------|---|
-| `for item in items { fetch_detail(item.id) }` | 1 件ずつ HTTP / DB |
-| `for page in pages { invoke('get_meta', { page }) }` | Tauri command N+1 |
-| `for job in jobs { com.GetItem(job.id) }` | InDesign COM N+1 |
-
-改善方針: batch API / IN 句 / multi-get / `invoke('get_meta_batch', { pages })`。
-
-### io-sync-on-async-runtime — async 内同期 I/O
-
-| 検出兆候 | 例 |
-|---------|---|
-| `async fn` 内で `std::fs::*` 直呼び | runtime block |
-| `async fn` 内で `std::process::Command::output()` | runtime block |
-| tokio context で `std::thread::sleep` | runtime block |
-
-改善方針: `tokio::fs::*` / `tokio::process::Command` / `tokio::time::sleep`。
-ただし debug-expert と境界が近い (バグ寄り)。性能影響が示せれば optimize で起票。
-
-### io-tauri-ipc-chatty — Tauri IPC の高頻度往復
-
-| 検出兆候 | 例 |
-|---------|---|
-| frontend が `invoke` を高頻度に呼ぶ | render loop 内 invoke、scroll handler 内 invoke |
-| 巨大 JSON / 巨大 binary を base64 で渡す | serialize コストが支配的 |
-| 1 件ごとに command 分割 | batch command がない |
-
-改善方針: command batching / 結果の event 通知化 / binary は file path handoff、`tauri-performance.md` 参照。
-
----
-
-## 分類: allocation
-
-### alloc-unnecessary-clone — 大量 clone / String 化
-
-| 検出兆候 | 例 |
-|---------|---|
-| 巨大 `Vec<T>` / `HashMap` の `.clone()` 連発 | 関数引数で毎回 clone |
-| `&str` で済むところで `.to_string()` | API 設計の問題、性能影響あり |
-| `iter().cloned().collect()` がホットパス | borrow で済む可能性 |
-
-severity 昇格根拠:
-- データ規模が大きい (1MB 以上 / 10万要素以上)、かつホットパス
-
-改善方針: `&[T]` / `Cow<'_, str>` / `Arc<T>` / borrow / iterator chain。
-
-### alloc-serde-roundtrip — parse → serialize → parse の往復
-
-| 検出兆候 | 例 |
-|---------|---|
-| `from_str` → 加工 → `to_string` → `from_str` | 中間で typed 構造を持てば 1 回で済む |
-| Tauri 境界で 2 回 serialize | frontend / backend で同じ struct を typed で扱う |
-
-改善方針: typed intermediate、parse once。
-
-### alloc-unbounded-growth — 無限成長する cache / listener
-
-| 検出兆候 | 例 |
-|---------|---|
-| `HashMap` への insert のみで eviction なし | LRU や TTL がない |
-| `Vec` への push のみで truncate なし | 履歴 buffer 等 |
-| event listener / watcher の addEventListener のみで removeEventListener なし | dispose 漏れ |
-
-severity 昇格根拠:
-- 長時間運用 (Tauri / Flutter アプリ常駐) で OOM 経路
-
-改善方針: bounded cache (LRU / TTL / size cap) / dispose / unmount cleanup。
-
-### alloc-vec-no-capacity — `Vec::push` 多発で再 alloc
-
-| 検出兆候 | 例 |
-|---------|---|
-| 大量 push 前に `Vec::with_capacity(n)` がない | 既知サイズなのに |
-| `String::push_str` 連発で初期 capacity なし | string builder 用途 |
-
-改善方針: `with_capacity` / `String::with_capacity`。
-ただし n が小さい場合は ignored_noise (micro optimization)。
-
----
-
-## 分類: parallelism
-
-### par-mutex-vec-push — par_iter + Mutex<Vec> push
-
-| 検出兆候 | 例 |
-|---------|---|
-| `par_iter().for_each(|x| { results.lock().unwrap().push(...) })` | 並列化が逆に遅くなる |
-| `Arc<Mutex<HashMap>>` への並列 insert | 同上 |
-
-改善方針: `par_iter().map(...).collect()` / fold + reduce / thread local accumulation、`rayon-playbook.md` 参照。
-
-### par-io-bound — I/O-bound に par_iter
-
-| 検出兆候 | 例 |
-|---------|---|
-| `par_iter` 内で file read / HTTP / DB | I/O 待ちで CPU 並列化しても効果薄 |
-| `par_iter` 内で Tauri command / COM 呼び出し | スレッド制約に違反する場合も |
-
-改善方針: async + concurrency limit (semaphore) / worker pool / batch API。
-
-### par-small-input — 極小粒度 par_iter
-
-| 検出兆候 | 例 |
-|---------|---|
-| 数十要素以下の Vec への par_iter | overhead が処理時間を上回る |
-| 1 要素の処理が 1 µs 未満 | 同上 |
-
-改善方針: threshold で sequential / parallel を切り替え、または並列化を諦める。
-
-### par-ui-thread-violation — UI / COM スレッド制約越境
-
-| 検出兆候 | 例 |
-|---------|---|
-| `par_iter` 内で Tauri WebView / Window 操作 | UI スレッド制約 |
-| `par_iter` 内で InDesign COM 呼び出し | COM apartment 違反 |
-| `par_iter` 内で Flutter platform channel | UI thread 制約 |
-
-severity 昇格根拠: クラッシュ / 不定動作
-
-改善方針: 並列化を取り下げる / UI thread にディスパッチ / sequential に戻す。
-
----
-
-## 分類: memory
-
-### mem-listener-leak — listener / watcher / timer 解除漏れ
-
-| 検出兆候 | 例 |
-|---------|---|
-| `addEventListener` のみで `removeEventListener` なし | unmount cleanup 不在 |
-| Vue で `watch` / `setInterval` を `onUnmounted` で停止していない | 同上 |
-| Flutter で controller の `dispose` 不在 | TextEditingController / FocusNode / AnimationController |
-| Tauri で `listen` のみで unlisten なし | event subscription 漏れ |
-
-> debug-expert との境界が近い。バグ (dispose 漏れ) としては debug、長時間メモリ肥大として optimize で起票。
-
-改善方針: `onUnmounted` / `onDispose` / `unlisten()` の追加。
-
-### mem-large-buffer-retention — 不要な大 buffer の保持
-
-| 検出兆候 | 例 |
-|---------|---|
-| PDF / 画像の bitmap を処理後も struct field に保持 | drop 時期が遅い |
-| OCR の中間 image buffer を最終結果まで持ち回る | 段階的 drop で十分 |
-| Tauri state に巨大 Vec を抱えたまま | 解放タイミングがない |
-
-改善方針: scope を狭める / `mem::take` で drop / 不要になった時点で `= None` / streaming 化。
-
----
-
-## 分類: bundle (frontend)
-
-### bundle-full-import — 巨大ライブラリの全 import
-
-| 検出兆候 | 例 |
-|---------|---|
-| `import _ from 'lodash'` (named import なし) | tree-shaking 効かず全 bundle |
-| `import * as moment from 'moment'` | 全 locale 込み |
-| icon library 全 import | `import { Icon } from '@iconify/vue'` 等で named import 推奨 |
-
-severity 昇格根拠: initial bundle が 1MB 超、または LCP に明確な影響
-
-改善方針: named import / tree-shakable な代替 (date-fns / dayjs) / icon は SVG 個別。
-
-### bundle-no-lazy-route — route lazy load 不在
-
-| 検出兆候 | 例 |
-|---------|---|
-| router の全 route が同期 import | initial bundle に全画面が乗る |
-| `defineAsyncComponent` を使わない巨大コンポーネント | dialog / modal も初期ロード |
-
-改善方針: `() => import('./Page.vue')` で route 単位 splitting / `defineAsyncComponent`。
-
-### bundle-no-treeshake-side-effects — sideEffects 設定不在
-
-| 検出兆候 | 例 |
-|---------|---|
-| `package.json` に `"sideEffects": false` がない | tree-shaking が効かない |
-| barrel re-export (`export * from ...`) で全 import 化 | 同上 |
-
-改善方針: `sideEffects` 宣言 / barrel 解消。
-
----
-
-## 分類: tauri (Rust + WebView 境界)
-
-詳細は `tauri-performance.md`。
-
-### tauri-ipc-chatty — IPC 高頻度往復 (再掲、io 系と同じカテゴリ)
-
-### tauri-large-payload — 巨大 JSON payload
-
-| 検出兆候 | 例 |
-|---------|---|
-| `Vec<u8>` / `Vec<f64>` を `Vec<u8>` 経由で frontend に送る | base64 / JSON serialize コスト |
-| 100KB 以上の JSON を毎フレーム送る | 同上 |
-
-改善方針: file path handoff (Rust が tmp file に書き、frontend が `convertFileSrc` で読む) / streaming / progress event。
-
-### tauri-main-thread-blocking — main thread をブロックする command
-
-| 検出兆候 | 例 |
-|---------|---|
-| `#[tauri::command]` 内で重い同期処理 | UI が freeze |
-| `#[tauri::command]` 内で `block_on` | runtime 自殺 |
-
-改善方針: `tokio::spawn_blocking` / `tokio::task::spawn` / progress event で incremental 通知。
-
----
-
-## 分類で扱わないもの (ignored_noise)
-
-以下は scan で報告しない:
-
-- 1 回しか呼ばれない初期化処理の clone 1 個
-- 入力規模が確実に小さい UI helper (10 要素以下が確実)
-- iterator chain vs explicit loop の好み
-- `String` vs `&str` の好み (借用関係が明確で性能差が誤差レベル)
-- micro optimization (`u32` vs `usize` の好み等)
-- benchmark で測っても誤差範囲の改善しか見込めない箇所
-- 既存コードが CLAUDE.md 規約に従っているもの
-- React / Go (disabled stack)
-
----
-
-## scan 出力時の注意
-
-- `evidence` には該当コード 5〜10 行を貼る (該当行の前後文脈を含めて)
-- `why_it_matters` には **入力規模・呼び出し頻度・ホットパス性** を必ず書く
-- `measurement_plan` には **baseline 取得コマンドと入力 fixture** を書く
-- `risk` (low / medium / high) を `risk-and-rollback.md` に従って付与
-- `recommendation.type` は `optimize` (改善方針が明確) または `investigation` (まず計測)
+- 1 回だけの初期化処理の clone / 10 要素以下が確実な UI helper
+- iterator chain vs explicit loop、`String` vs `&str`、`u32` vs `usize` の好み
+- 計測しても誤差範囲の改善しか見込めない箇所
+- 対象 repo の CLAUDE.md 規約に従っているコード
+- disabled stack (React / Go)

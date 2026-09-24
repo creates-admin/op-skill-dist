@@ -1,142 +1,51 @@
-# parser-boundary.md — PDF / image / zip / IDML / CSV / JSON / TOML parser の境界
+# parser-boundary.md — parser / archive / deserialize
 
-<!--
-機能概要: 外部ファイルを parse / deserialize / extract する経路の audit 観点。
-作成意図: zip-slip / decompression bomb / deserialize DOS / parser DOS / archive escape を構造化して防ぐ。
-注意点: 入力源 (boundary E: imported file) の取扱は trust-boundaries.md。
-       parser 自体の脆弱性 (CVE) は dependency 監査 (env-expert) と分担。
--->
+外部ファイル (境界 E) を parse・展開する経路。parser crate 自体の既知脆弱性は依存監査の領域。
 
-## audit 対象
+## 1. zip-slip
 
-- serde_json / serde_yaml / toml / quick_xml の deserialize
-- pdf-rs / lopdf / poppler の PDF parse
-- image / zune-image / kamadak-exif の image parse
-- zip / tar / flate2 / brotli / zstd の archive extraction
-- IDML (XML over zip) の parse / extraction
-- CSV (csv crate) の parse
-- TOML (toml crate) の parse
-
----
-
-## 検査観点
-
-### 1. zip-slip (archive entry path traversal)
-
-```text
-- entry name に `..` / 絶対 path / `\` (Windows) を含むものを reject
-- 解凍先が canonicalize 後に scope 内か確認
-- entry name は component 単位で iterate
-```
+entry name の `..` / 絶対 path / `\` を reject し、展開先が canonicalize 後に展開 root 内かを確認する。
 
 ```rust
-fn safe_extract_entry(dest_dir: &Path, entry_name: &str) -> Result<PathBuf, &'static str> {
-    let entry_path = Path::new(entry_name);
-    
-    // parent traversal reject
-    if entry_path.components().any(|c| matches!(c, Component::ParentDir)) {
-        return Err("zip-slip");
+fn safe_entry_path(dest_dir: &Path, name: &str) -> Result<PathBuf, &'static str> {
+    let p = Path::new(name);
+    if name.contains('\\') || p.is_absolute()
+        || p.components().any(|c| !matches!(c, Component::Normal(_) | Component::CurDir)) {
+        return Err("unsafe entry name");
     }
-    
-    // 絶対 path / device path reject
-    if entry_path.is_absolute() {
-        return Err("absolute path in archive");
+    let root = dest_dir.canonicalize().map_err(|_| "dest")?;
+    let dest = root.join(p);
+    // 親が既に存在するなら canonicalize して root 内か確認する (symlink 済み directory 対策)
+    if let Some(parent) = dest.parent().and_then(|d| d.canonicalize().ok()) {
+        if !parent.starts_with(&root) { return Err("path escape"); }
     }
-    
-    // Windows separator も含めて確認
-    if entry_name.contains('\\') {
-        return Err("backslash in archive entry");
-    }
-    
-    let dest = dest_dir.join(entry_path);
-    let dest_canonical = dest_dir.canonicalize().map_err(|_| "canonicalize failed")?;
-    
-    // dest が dest_dir の外を指していないか
-    if let Ok(d) = dest.canonicalize() {
-        if !d.starts_with(&dest_canonical) {
-            return Err("path escape");
-        }
-    }
-    
     Ok(dest)
 }
 ```
 
-### 2. decompression bomb (zip bomb / tar bomb)
+archive 内の symlink / hardlink entry は作成しない (skip または reject)。
 
-```text
-- archive 全体のサイズ上限
-- 個別 entry のサイズ上限
-- 解凍後合計サイズ上限
-- 圧縮比 (compressed / decompressed) の上限
-- entry 数の上限
-- ネストされた archive (zip in zip) の depth 上限
-```
+## 2. decompression bomb
 
-```rust
-const MAX_TOTAL_DECOMPRESSED: u64 = 100 * 1024 * 1024;  // 100 MB
-const MAX_ENTRY_DECOMPRESSED: u64 = 10 * 1024 * 1024;   // 10 MB
-const MAX_ENTRIES: usize = 10_000;
-const MAX_RATIO: f64 = 100.0;  // compressed:decompressed = 1:100 まで
-```
+上限を持つ: archive 全体サイズ / entry ごとの展開後サイズ / 展開後合計 / entry 数 / 圧縮比 / ネスト (zip in zip) の深さ。
+例: 合計 100 MB、entry 10 MB、10,000 entries、圧縮比 1:100。実際の読み出しバイト数で数える (header の申告値を信じない)。
 
-### 3. deserialize DOS (serde_json / quick_xml)
+## 3. deserialize / parser DoS
 
-```text
-- size 上限を deserialize 前に確認
-- depth limit (default は無制限のものが多い)
-- count limit (巨大配列 / 巨大 map)
-- 巨大 string (base64 encode された巨大 binary 等)
-- recursion limit
-```
+- parse 前に入力サイズ上限を確認する (例 `if input.len() > 5 * 1024 * 1024 { return Err(..) }`)。
+- depth / count / 巨大 string (base64 の巨大 binary 等) / recursion の上限。
+- XML は外部 entity と entity 展開を無効化する (XXE / billion laughs)。
+- magic number と encoding (UTF-8 / UTF-16 / Shift_JIS) を明示してから parser に渡す。
+- parse 失敗で panic しない (`Result` + 構造化 error)。
 
-```rust
-// serde_json の例
-let limit = 5 * 1024 * 1024;  // 5 MB
-if input.len() > limit {
-    return Err("input too large");
-}
-let value: MyStruct = serde_json::from_str(input)?;
-```
+## 4. 典型 finding
 
-### 4. parser に user input を直接渡す前のチェック
-
-```text
-- file size を確認
-- magic number / file signature を確認
-- encoding (UTF-8 / UTF-16 / Shift_JIS 等) を明示
-- parser に渡す前に外周で size limit
-```
-
-### 5. archive 内 symlink / hardlink
-
-```text
-- archive entry が symlink / hardlink の場合は reject (作成しない)
-- tar / zip-rs / 7z 等で symlink を含む archive を「作成」しない
-- 既存 archive を「展開」する際も symlink entry を skip
-```
-
----
-
-## 典型 finding
-
-| pattern | severity | mitigation |
-|---------|----------|-----------|
-| zip extraction で `..` reject なし (zip-slip) | Critical | entry path validation + scope check |
-| archive size 上限なし (decompression bomb) | High | size / count / ratio limit |
-| serde_json::from_str に巨大 input (DOS) | High | size limit |
-| XML parser で entity expansion (XXE / billion laughs) | High | entity expansion disable |
-| archive 内 symlink を作成 (任意 path 上書き) | High | symlink reject |
-| nested archive (zip in zip) の depth 制御なし | Medium | depth limit |
-| parser 失敗時に panic (unwrap / expect) | High | Result + structured error |
-
----
-
-## bulk_group 例
-
-- `security:zip-slip`
-- `security:decompression-bomb-no-limit`
-- `security:deserialize-dos`
-- `security:xxe-or-entity-expansion`
-- `security:archive-symlink-allowed`
-- `security:parser-panic-on-input`
+| パターン | severity 目安 | mitigation |
+|---|---|---|
+| 展開で `..` / 絶対 path を reject しない | Critical (import 操作が要るなら High) | entry 検証 + scope |
+| archive の size / count / ratio 上限なし | High | 上限 |
+| `serde_json::from_str` に上限なしの入力 | High | size 上限 |
+| XML の entity 展開が有効 | High | 無効化 |
+| archive 内 symlink を作成 | High | reject |
+| parse 失敗で panic | High | Result |
+| nested archive の深さ制御なし | Medium (報告しない) | depth 上限 |

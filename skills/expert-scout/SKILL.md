@@ -1,211 +1,75 @@
 ---
 name: expert-scout
-description: scout agent の方法論教科書。単一 finding の実在確認 gate・起票手順・lite enrichment 契約・返却スキーマを集約する。直接 invoke は想定せず、agent.md の skills フィールド経由で自動プリロードされる前提で動作する知識ベース。
+description: scout agent の方法論教科書。単一 finding の実在確認 gate・起票前ゲート・起票手順・返却スキーマを集約する。直接 invoke は想定せず、agent.md の skills フィールド経由で自動プリロードされる前提で動作する知識ベース。
 ---
 
 # expert-scout: scout agent の知識ベース
 
-<!--
-機能概要: scout agent が op-report controller から単一 finding を受け取り、
-         実在確認→lite enrichment→起票 or 構造化返却を行う際に参照する方法論教科書。
-作成意図: scout は active-expert-registry 外の utility worker のため、
-         方法論を本ファイルに集約して agent.md を心臓のみに絞る。
-         op-scan 同等品質を lite enrichment で担保しつつ、Design Plan / cross-review を省く
-         「隔離 context で単一確認→起票」特化の教科書として設計。
-注意点: agent から skills: [expert-scout] で自動プリロードされる前提。
-       直接 /expert-scout のような起動は想定しない。
--->
+op-report controller から渡された単一 finding を、実在確認 → 起票前ゲート → 起票 or 構造化返却する手順。
 
-## このドキュメントの位置づけ
+## 1. 実在確認 gate
 
-scout agent (`~/.claude/agents/scout.md`) が `skills: [expert-scout]` で本ファイルを自動プリロードする。
-agent は以下の手順・gate・スキーマに従って自走する:
+静的根拠 (Read / Grep / Glob) のみで次のいずれかに判定する。
 
-- **実在確認 gate** (4 値判定の定義)
-- **起票 6 手順** (正本への canonical 参照のみ、再定義禁止)
-- **lite enrichment 契約** (collision gate のみ、不変則8)
-- **返却契約スキーマ** (controller への構造化返却)
-- **参照ドキュメント表** (正本一覧と schema_version pin)
+| 値 | 条件 | 動作 |
+|---|---|---|
+| `confirmed` | finding が実在すると静的に確認できた (`evidence_grade` は `direct` か根拠が複数ある `inferred`) | 2 章の手順で起票 |
+| `not_confirmed` | 根拠が見当たらない / 実行時にしか確認できない (`requires_runtime`) / 状況証拠が 1 本のみ / 「可能性がある」レベル | 起票せず返却 |
+| `duplicate` | 2 章の重複チェックで既存 Issue と一致 | 起票せず `existing_issue` を返却 |
+| `needs_human_decision` | 既存パターンが複数で基準が定まらない / deprecated 資産が絡み可否不明 / 設計意図が静的に復元できない / 解釈が複数ある / 類似 Issue がある (warn) | 起票せず返却。`options` / `recommended_option` / `safest_default` を含める |
 
----
+severity は起票可否に使わない (ラベルと本文の記述にのみ使う。判定基準は `~/.claude/skills/_shared/severity-rubric.md`)。
 
-## 1. 実在確認 gate — 4 値判定の定義
+## 2. 起票手順 (`confirmed` のときのみ)
 
-scout の核心判定。静的根拠のみで 4 値のいずれかを選択し、判定結果に従って動作する。
+起票前ゲートの正本は `~/.claude/skills/_shared/filing-gate.md` (op-report の起票前レビュー = scout の実在確認)。
 
-### confirmed
+1. **fingerprint 生成** (手書き禁止):
+   `op core fingerprint --plain --domain <domain> --title "<title>" --file <files[0]> [--symbol <symbol>]`
+2. **重複チェック**: finding を JSON に書き、`op scan dedup --finding-json draft.json --json` を実行する。
+   - 重複 → `duplicate` で返す。類似 (warn) → 起票せず `needs_human_decision` で返す (既存 Issue の URL を options に含める)
+   - `OP_GITHUB_CHANNEL=mcp` では gh が使えないため、既存 Issue を `mcp__github__search_issues` で取得して保存し
+     `--input-json <file>` で渡す (`~/.claude/skills/_shared/github-channel.md` §6。MCP tool の schema は ToolSearch で load)
+3. **本文組立**: `~/.claude/skills/_shared/pr-templates.md`「Issue 本文 (指示書フル版)」に従う。
+   hidden marker は `op-fingerprint` / `op-run-expert` / `op-post-check-expert` のうち該当するものだけ。
+   `op-run-expert` / `op-post-check-expert` は `~/.claude/skills/_shared/clustering.md`「Step 6: expert アサイン」の
+   category → expert 表で決め、`active-expert-registry.md` に無い expert は書かない。
+   UI を含む場合も見た目の仕様は文章で書かない (デザインモックの URL があれば `デザインモック: <URL>` の 1 行のみ)
+4. **lint → 起票** (1 件、直列、失敗を握りつぶさない):
 
-**条件**: Read / Grep / Glob の静的根拠で finding が実在すると確認できた。
+   ```bash
+   op core marker-lint --body-file body.md --source-hint issue-body --strict
+   op issue create --title "<title>" --body-file body.md --label "auto-report,pro-<op-run-expert>" --ensure-labels
+   ```
 
-- 実在確認ができれば **severity に関係なく全件起票する** (Low severity でも起票する)
-- evidence_grade は `direct` または `inferred` (requires_runtime は confirmed 不可)
-- 複数の独立した根拠が揃えば confidence が高まる
+   mcp channel では `op issue create` が call-spec を emit する。scout 自身が `github-channel.md` §3〜§4
+   (verbatim 実行 → `issue_read` で read-back → `op issue ingest-result`) を完遂し、ingest の出力を正とする。
+   VerifyFailed は自動リトライせず、orphan URL を `needs_human_decision` に載せて返す
+5. 返却に `filed_issue_url` を含める
 
-**動作**: 起票 6 手順に進む。
+## 3. 返却スキーマ (JSON)
 
-### not_confirmed
-
-**条件**: 以下のいずれかに該当する。
-
-- 静的根拠が見当たらない
-- 実行時にしか確認できない (`requires_runtime`)
-- 状況証拠のみで断定できない (`inferred` かつ根拠が 1 本のみ)
-- 「可能性がある」「テストすれば分かる」レベル
-
-**動作**: 起票しない。`result: not_confirmed` + evidence + evidence_grade を返却する。
-
-### duplicate
-
-**条件**: fingerprint 照合で既存 Issue と一致した。
-
-- `_shared/dedup-policy.md` の手順で fingerprint を生成して照合する
-- 照合前に起票しない (dedup は必須前処理)
-
-**動作**: 起票しない。`result: duplicate` + `existing_issue` (既存 Issue URL) を返却する。
-
-### needs_human_decision
-
-**条件**: 以下のいずれかで判断不能。
-
-- 既存パターンが複数あって起票基準が定まらない
-- deprecated / 廃止中の資産が関与していて再利用可否が不明
-- 設計意図が静的解析で復元できない
-- finding の解釈が複数あってどれかを選べない
-
-**動作**: 起票しない。`result: needs_human_decision` を `_shared/expert-spawn.md` の正規スキーマで返却する。
-`options` / `recommended_option` / `safest_default` を必ず含める。
-
----
-
-## 2. 起票 6 手順 (canonical 参照のみ — 再定義禁止)
-
-confirmed になった場合のみ実行する。各手順の正本を参照し、再定義しない (不変則1)。
-
-| # | 手順 | 正本 |
-|---|------|------|
-| 1 | **severity 判定** (起票可否でなくラベル付与のみ) | `_shared/severity-rubric.md (>=4)` |
-| 2 | **fingerprint 生成 + dedup 照合** | `_shared/dedup-policy.md (>=3)` |
-| 3 | **Issue body 組立** (指示書フォーマット・marker 埋め込み) | `_shared/pr-templates.md (>=13)` |
-| 4 | **hidden marker 付与** (`op-source: op-report` 等) | `_shared/markers/labels-and-markers.md (>=9)` |
-| 5 | **lite enrichment 実行** (collision gate のみ §7.5) | `_shared/issue-enrichment.md (>=2)` §7.5 のみ |
-| 6 | **marker-lint 検証 → `op issue create`** | `_shared/expert-spawn.md (>=16)` Marker Publish Validate 節 |
-
-### 手順の補足
-
-**手順 2 (fingerprint + dedup)**:
-- fingerprint は手書きせず `op core fingerprint --plain ...` で生成する (`expert-spawn.md §369` 参照)
-- dedup 照合は `op scan dedup --finding-json <draft.json>` で実行する
-- 照合で既存 Issue が見つかった場合は `duplicate` として返却し、手順 3 以降に進まない
-- OP_GITHUB_CHANNEL=mcp (Cloud) では gh fetch が fail-closed になるため、素材を
-  `github-channel.md` §6 の手順 (search_issues) で取得し `--input-json` で渡す (詳細は §6 参照)
-
-**手順 5 (lite enrichment)**:
-- collision gate (`_shared/issue-enrichment.md §7.5`) **のみ** 実行する
-- §5 (Design Plan 生成) は呼ばない
-- §6 (cross-review) は呼ばない
-- collision gate が block を返した場合は起票せず `needs_human_decision` として返却する
-- mcp channel では、collision gate の EXISTING 素材に手順 2 で取得した同一の search 由来 JSON を再利用する。
-  **§7.5 の `gh issue list` fence は mcp channel では実行しない** (gh 不達で EXISTING が空になり、
-  gate が warning なしに clear へ silent 縮退するため — 素材は必ず search 由来 JSON を使う)
-
-**手順 6 (marker-lint → 起票)**:
-- `op issue create --title ... --body-file ... --label "auto-report,..." --ensure-labels` 前に
-  必ず `op core marker-lint --body - --source-hint issue-body --strict` で検証する
-- lint が pass してから `op issue create` を実行する
-- 起票後、返却値に `filed_issue_url` を含める
-- mcp channel では `op issue create` が call-spec を emit する。この場合 scout 自身が
-  `github-channel.md` §3-§4 の protocol (verbatim MCP 実行 → issue_read read-back →
-  `op issue ingest-result`) を隔離 context 内で完遂してから `filed_issue_url` を返す。
-  MCP tool の schema は ToolSearch で load する
-
----
-
-## 3. lite enrichment 契約 (不変則8)
-
-scout は Issue 起票前に **lite enrichment** のみを実行する。
-フル enrichment (Design Plan + cross-review) は呼ばない。
-
-### 実行するもの
-
-- **collision gate** (`_shared/issue-enrichment.md §7.5`): 既存 Issue との衝突確認
-  - fingerprint と title の双方でチェックする
-  - block 判定 → 起票しない、`needs_human_decision` で返却
-
-### 実行しないもの
-
-| 項目 | 理由 |
-|------|------|
-| §5 Design Plan 生成 | 不変則8: op-scan 由来 finding への Design Plan は op-scan / op-plan の責務 |
-| §6 cross-review | 不変則8: single finding の隔離確認に cross-review は不要かつ token 過剰 |
-| ux-ui-audit gate | フル enrichment 経路のみで発動する gate、lite では回さない |
-
-### lite / full の判断基準
-
-scout は常に lite。full enrichment が必要な場合は、controller (op-report) が判断して op-scan / op-plan へ委譲する。
-
----
-
-## 4. 返却契約スキーマ (JSON)
-
-scout は controller に以下の JSON を返す。controller への要約テキストは 1 行のみ。詳細は JSON 各フィールドへ格納する。
+controller への要約テキストは 1 行。詳細は JSON に入れる。
 
 ```json
 {
   "result": "filed | not_confirmed | duplicate | needs_human_decision",
-
   "filed_issue_url": "https://github.com/owner/repo/issues/N",
-
-  "finding_summary": "finding の内容を 1〜2 文で要約",
-
-  "evidence": "静的根拠の説明 (ファイル名:行番号 + 観測内容)",
-
+  "finding_summary": "finding の 1〜2 文要約",
+  "evidence": "静的根拠 (ファイル:行 + 観測内容)、または根拠が得られなかった旨",
   "evidence_grade": "direct | inferred | requires_runtime",
-
   "existing_issue": "https://github.com/owner/repo/issues/N",
-
-  "needs_human_decision": {
-    "required": true,
-    "decision_type": "behavior | scope",
-    "question": "判断を求める内容",
-    "options": ["選択肢A", "選択肢B"],
-    "recommended_option": "選択肢A",
-    "safest_default": "選択肢A",
-    "blocking": true
-  },
-
-  "assumptions": [
-    "推定した内容 (確認できなかった項目)"
-  ]
+  "needs_human_decision": { "required": true, "decision_type": "behavior | scope", "question": "...",
+    "options": ["..."], "recommended_option": "...", "safest_default": "...", "blocking": true },
+  "assumptions": ["確認できなかった項目の推定"]
 }
 ```
 
-### フィールド説明
-
-| フィールド | 必須条件 | 説明 |
-|-----------|---------|------|
-| `result` | 常時必須 | 4 値のいずれか |
-| `filed_issue_url` | result = filed 時必須 | 起票した Issue の URL |
-| `finding_summary` | 常時推奨 | finding の 1〜2 文要約 |
-| `evidence` | 常時推奨 (not_confirmed 時必須。filed 時も Issue body 組立に転記する) | 静的根拠または根拠が得られなかった旨 |
-| `evidence_grade` | 常時推奨 (not_confirmed 時必須。filed 時も Issue body 組立に転記する) | `direct` / `inferred` / `requires_runtime` |
-| `existing_issue` | result = duplicate 時必須 | 既存 Issue の URL |
-| `needs_human_decision` | result = needs_human_decision 時必須 | `_shared/expert-spawn.md` 正規スキーマに従う |
-| `assumptions` | 推定がある場合 | 確認できなかった項目の推定内容 |
-
-`needs_human_decision` フィールドの正規スキーマは `_shared/expert-spawn.md` を参照する (再定義しない)。
-
----
-
-## 5. 参照ドキュメント表 (Single Canonical Source)
-
-| Path | 役割 | schema_version pin |
-|------|------|-------------------|
-| `skills/_shared/severity-rubric.md` | severity 判定 (起票ラベル付与) | `(>=4)` |
-| `skills/_shared/dedup-policy.md` | fingerprint 生成 + dedup 照合 | `(>=3)` |
-| `skills/_shared/pr-templates.md` | Issue body 組立 / 指示書フォーマット | `(>=13)` |
-| `skills/_shared/markers/labels-and-markers.md` | hidden marker 付与 / op-source enum | `(>=9)` |
-| `skills/_shared/issue-enrichment.md` | lite enrichment 契約 (§7.5 collision gate のみ) | `(>=2)` |
-| `skills/_shared/expert-spawn.md` | Marker Publish Validate 節 / needs_human_decision 正規スキーマ / fingerprint CLI helper | `(>=16)` |
-| `skills/_shared/runtime-contract.md` | runtime spawn 境界 / apply 可否 | `(>=1)` |
-| `skills/_shared/github-channel.md` | GitHub I/O channel / call-spec protocol (mcp channel 時の実行手順) | `(>=2)` |
-| `skills/_shared/invocation-mode.md` | OP-managed Mode 契約 (Direct Mode なし) | — |
+| フィールド | 必須条件 |
+|---|---|
+| `result` | 常時 |
+| `filed_issue_url` | `filed` 時 |
+| `evidence` / `evidence_grade` | `not_confirmed` 時必須、それ以外も推奨 (`filed` 時は本文にも転記) |
+| `existing_issue` | `duplicate` 時 |
+| `needs_human_decision` | `needs_human_decision` 時 (正規スキーマは `~/.claude/skills/_shared/invocation-mode.md`) |
+| `assumptions` | 推定がある時 |

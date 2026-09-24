@@ -1,272 +1,88 @@
 # security-contract.md — 作業冒頭の核
 
-<!--
-機能概要: security-expert が spawn 直後に黙読する動作スニペット。
-作成意図: mode 判定 (Direct / OP-managed) → 4 モード (scan / patrol / apply / post-check) の選択 →
-         入力取得 → 必須手順 → 出力契約 → usable security 不変則 までを 1 枚で完結させ、
-         他 reference に飛び回らずに security 監査 / 修正 / 再監査を起動できるようにする。
-注意点: 本ファイルは "起動時の核"。露出面棚卸しの本体は attack-surface-map.md、
-       severity 判定軸は source-sink-analysis.md、apply policy は apply-policy.md、
-       post-check 8 観点は post-check-policy.md、出力 schema は report-schema.md。
-       ここに exposure surface 表や mitigation ladder の本文を書き戻さないこと (重複保持コストが上がる)。
--->
+spawn 直後に読む。mode を決め、該当 mode の手順と出力契約に従う。
 
-## 1. mode 判定 (最初に必ず行う)
+## 1. invocation mode
 
-`~/.claude/skills/_shared/invocation-mode.md` に従って Direct / OP-managed を判定する。
+判定と振る舞いは `~/.claude/skills/_shared/invocation-mode.md`。曖昧なら OP-managed 側に倒す。
+OP-managed では質問で停止せず、不足情報は `assumptions[]` に記録し、自動判断できないものは
+`needs_human_decision` (decision_type は通常 `security` / `scope` / `risk`) で返す。
 
-### OP-managed Mode と判定する条件 (一つでも該当)
+## 2. モード
 
-- spawn prompt に `invocation_mode: op_managed` がある
-- spawn prompt に `op-scan` / `op-patrol` / `op-run` 由来であることが明記されている
-- 入力に hidden marker (`<!-- op-domain: security -->` / `<!-- op-source: op-scan -->` / `<!-- op-post-check-meta -->` 等) が含まれる
-- Issue 番号 / PR 番号 / worktree path / branch / cluster id が OP から渡されている
+| mode | 起動元 | 入力 | 出力 |
+|---|---|---|---|
+| scan | op-scan / Direct (scope 指定) | scope | `{"findings": [...]}` envelope (security-finding payload) |
+| patrol | op-patrol | controller が選んだ area | 同上 |
+| refute | op-scan / op-patrol の refute フェーズ | 1 件の finding | refute verdict JSON |
+| apply | op-run apply | Issue 指示書 + worktree + branch | commit (push しない) + 修正完了報告 |
+| post-check | op-run post-check | PR diff + 元 Issue + head SHA | PR コメント (自然文) + 構造化返却 |
 
-判定が曖昧な場合は **OP-managed Mode 寄り**に倒す (= 対話せず構造化返却)。
+spawn prompt に mode が明記されていればそれに従う。無ければ入力から推定する (scope のみ → scan、PR diff + Issue → post-check)。
 
-### OP-managed Mode の不変条件
+## 3. モード別手順
 
-- 司令官・ユーザーに質問して停止しない
-- Issue / PR コメントで質問して待たない
-- 判定は post-check 時に 4 種 (PASS / PASS_WITH_NOTES / BLOCK / NEEDS_HUMAN_DECISION) のいずれかに必ず閉じる
-- canonical schema 拡張 (security / threat_model / usable_security) を **必ず**付ける
-- post-check 時は `<!-- op-security-post-check -->` + `<!-- op-post-check-meta -->` block を出す
-- 自由質問テキスト / "判断保留" は出さず構造化返却に閉じる。finding は静的証拠 (コード引用・呼出経路) で裏付けて報告する
+### scan / patrol
 
----
+1. 露出面を棚卸しする (`attack-surface-map.md`)。patrol では同節の「新規追加変更の優先対象」を先に見る。
+2. 入力源を信頼境界 A〜G に分類する (`source-sink-analysis.md` §1)。
+3. source → sink の到達経路を steps で示す。`reachable: true` にできないものは報告しない (§2〜§3)。
+4. threat model (actor / preconditions / required_user_action / asset_at_risk) を確定する (§4)。
+5. exploitability × impact と evidence_grade で severity を決める (§5〜§6)。Critical / High 以外は出さない。
+6. usable security を判定する (`usable-security.md`): affected_user_capability / legitimate_workflow_preserved /
+   ux_impact / preferred_mitigation / forbidden_shortcuts。`legitimate_workflow_preserved: true` にできる mitigation しか提案しない。
+7. `recommendation.steps` を mitigation ladder の順で書く (`usable-security.md` §5)。
+   `verification_steps` には「元の attack_path を再現する regression test を足す」と「forbidden_shortcuts を守る」、
+   `success_criteria` には「attack_path.steps が再現しない / legitimate_workflow_preserved == true / 新たな露出面がない」を入れる。
+   `scope_out` には UI の大幅再設計・認証モデル再設計などを入れる。
+8. 領域別の観点は各カタログ (tauri-ipc / path-file-io / shell-process / secrets-and-logs / external-url-updater / parser-boundary) を参照。
 
-## 2. モード判定 (4 種から 1 つ)
+scan は read-only (Level 0)。Issue 起票は controller が行う。
 
-| mode | 起動契機 | 入力 | 出力 |
-|------|---------|------|------|
-| **scan** | `op-scan` (security domain) / Direct Mode で scope 指定 | scope / hidden marker / 既存 Issue Ledger | canonical finding の `{"findings": [...]}` envelope |
-| **patrol** | `op-patrol` | repo map / Patrol Ledger / area 候補 | 同上 (Critical/High のみ) |
-| **apply** | `op-run` フェーズ2-C (security domain Issue) | Issue 指示書 + worktree + branch | apply report + commit (push しない) |
-| **post-check** | `op-run` フェーズ3.5-B | PR diff + Issue + reviewed_head_sha | PASS / PASS_WITH_NOTES / BLOCK / NEEDS_HUMAN_DECISION + meta block |
+### refute (skeptic)
 
-判定方法:
+契約は `~/.claude/skills/_shared/refute-contract.md`。security domain の default は `confirmed`。
+`refuted` にするには `security_unreachable_proof` (source → sink が届かない / trust boundary で遮断される /
+required_user_action が成立しない、を実コード引用で示す) が必要。示せなければ `confirmed`。
+severity 過大は `source-sink-analysis.md` §5〜§6 で `downgrade` を判定する。
 
-- spawn prompt に `mode: post-check` / `mode: apply` 等が明記されていれば従う
-- description に「scan: security on <scope>」とあれば scan
-- description に「post-check: PR #N」とあれば post-check
-- description に「apply: cluster-N」とあれば apply
-- それ以外は spawn prompt 全体を読み、hidden marker / 入力種別から推定 (scope のみ → scan、PR diff + Issue → post-check 等)
+### apply
 
----
+`apply-policy.md` に従う。要点: 可否マトリクスで判定 → UX 中立な mitigation のみ実装 → security regression test 追加 →
+検証 → commit (push しない) → 修正完了報告。
 
-## 3. 入力取得 (mode 別の標準入力)
+### post-check
 
-### scan / patrol mode
+`post-check-policy.md` に従う。要点: worktree の HEAD が指定 head SHA と一致するか確認 (不一致なら BLOCK で報告) →
+PR diff と元 Issue の success_criteria / scope を照合 → 8 観点 → 判定 4 種 → PR コメント + 構造化返却。
+PR 全体の lens (Workflow / UX / Test / Compatibility / Release / Spec / Refactor) は review-expert の担当なので重複監査しない。
 
-| 入力 | 取得元 | 用途 |
-|------|--------|------|
-| scope | spawn prompt | 監査対象ディレクトリ / ファイル群 |
-| hidden marker | Issue 本文 (`<!-- op-domain: security -->` 等) | 既存 Issue との重複判定 |
-| 既存 Issue Ledger | `gh issue list --label "auto-report" --state open` | 重複起票防止 |
-| project profile | `~/.claude/skills/_shared/project-profile.md` | Rust / Vue / Tauri / Flutter 想定スタックと P0 対象 |
+## 4. 出力契約
 
-### apply mode
+| mode | 正本 |
+|---|---|
+| scan / patrol | envelope は `~/.claude/skills/_shared/expert-spawn.md`「scan 出力 envelope 契約」。field は `op help payload security-finding` (`report-schema.md`) |
+| refute | `~/.claude/skills/_shared/refute-contract.md` §6 |
+| apply | `~/.claude/skills/_shared/expert-spawn.md`「修正完了報告 schema」+ `apply-policy.md`「完了報告の security 追加 field」 |
+| post-check | `post-check-policy.md`「返却 field」 |
 
-| 入力 | 取得元 | 用途 |
-|------|--------|------|
-| Issue 番号 | spawn prompt | `gh issue view <N>` で本文取得 |
-| Issue 指示書 | Issue 本文の指示書フル版節 | scope_in / scope_out / verification_steps / success_criteria / gotchas |
-| worktree path | spawn prompt | apply 作業ディレクトリ |
-| branch 名 | spawn prompt | commit 対象 branch (push しない) |
-| canonical schema 拡張 | Issue hidden marker + 本文 | security / threat_model / usable_security の context 継承 |
+security finding の固定値: `domain: security` / `severity: critical | high` /
+`recommended_runner: security-expert | debug-expert` (op-run が最終決定) / `post_check_expert: security-expert`。
+`security` / `threat_model` / `usable_security` / `post_check` の 4 拡張は必須。
 
-### post-check mode
+HTML marker は書かない。label も操作しない (controller の責務)。
 
-| 入力 | 取得元 | 用途 |
-|------|--------|------|
-| PR 番号 | spawn prompt | `gh pr view <N>` で本文取得 |
-| PR diff | `git diff origin/${BASE_REF}...HEAD` | 修正内容の確認 |
-| 元 Issue 番号 | PR 本文 (`Fixes #N`) または spawn prompt | success_criteria / scope_in / scope_out 照合 |
-| reviewed_head_sha 候補 | `git rev-parse HEAD` (判定確定時) | `<!-- op-post-check-meta -->` の `post_checked_head_sha` |
-| 既存 post-check コメント | `gh pr view <N> --json comments` | round 計算 / re-post-check の文脈 |
-| post_check_round | spawn prompt or 既存 meta block | round 上限管理 |
+## 5. 禁止事項
 
-入力が不足している場合の扱い:
-
-- **OP-managed Mode**: 質問せず `assumptions[]` に「入力 X が欠落、Y を仮定」と記録し、
-  必要なら `needs_human_decision` (decision_type: "behavior" or "security") を完了報告に返す
-- **Direct Mode**: target / mode / output が未指定なら初回確認テンプレで確認
-
----
-
-## 4. 必須手順
-
-### scan / patrol mode
-
-```text
-1. exposure surface map を作る (attack-surface-map.md)
-   - Tauri command / IPC / file IO / path / shell / capability / parser / log / external URL / InDesign COM
-2. trust boundary 分類 (trust-boundaries.md)
-   - frontend free text (untrusted) / OS file picker (user-granted) / app 内部 (trusted internal) /
-     config 復元 (stale trusted) / 外部ファイル内 path (untrusted) / CLI arg (env-controlled) /
-     network (remote)
-3. source → sink reachability (source-sink-analysis.md)
-   - source kind / sink kind / attack_path.steps を steps で示す
-   - reachable: true でないものは起票しない (theoretical / hardening のみは Medium 以下扱い)
-4. severity scoring
-   - exploitability (none / theoretical / reachable / practical)
-   - impact (C / I / A 各 none / low / medium / high)
-   - data_sensitivity 列挙
-   - direct evidence のみ Critical 可。inferred / requires_runtime は High 上限
-5. threat model 確定 (threat-model-and-actors.md)
-   - actor / preconditions / required_user_action / asset_at_risk
-6. usable security 判定 (usable-security.md / user-capability-preservation.md)
-   - affected_user_capability / legitimate_workflow_preserved / ux_impact
-   - preferred_mitigation を mitigation ladder から選択
-   - forbidden_shortcuts (do_not_remove_*) を必ず付与
-7. canonical schema 拡張で出力 (report-schema.md)
-   - security / threat_model / usable_security / post_check の各 block を埋める
-   - recommended_runner = security-expert または debug-expert (op-run が最終決定)
-   - post_check_expert = security-expert (固定)
-8. Issue 起票 (op-scan / op-patrol が承認後に gh issue create)
-   - templates/security-scan-finding.md の指示書フル版で本文化
-```
-
-### apply mode
-
-```text
-1. apply 可否判定 (apply-policy.md)
-   - UX impact / legitimate_workflow_preserved / mitigation ladder
-   - UX impact == high または capability 再設計 → needs_human_decision で停止
-2. UX 中立な改修のみ実装
-   - path canonicalization / scope check / shell args 配列化 / unsafe scheme reject /
-     known-bad path class reject / token sanitize / overwrite confirm 追加 (UI 既存導線維持) /
-     IPC 入力検証追加 / capability 過剰許可縮小 (実 unused のみ)
-3. security regression test を追加
-   - 到達経路の再発を防ぐ test
-   - canonical schema 拡張 + 元 Issue の verification_steps を満たす
-4. CLAUDE.md 規約準拠 (ネスト 2、日本語コメント)
-5. apply report を返す (templates/security-apply-report.md)
-   - mitigation_applied / legitimate_workflow_preserved / ux_impact / aux_post_check_required
-6. commit (push しない、push は op-run の責務)
-```
-
-### post-check mode
-
-```text
-0. 作業ディレクトリ確認: spawn prompt の <WT_PATH> / <PR_HEAD_SHA> で git rev-parse HEAD と一致確認
-   不一致なら BLOCK で報告 (op-run controller に worktree 取り違えを通知)
-1. base ref 解決: BASE_REF=$(gh pr view <N> --json baseRefName --jq '.baseRefName')
-2. PR diff 取得: git diff "origin/${BASE_REF}...HEAD" (triple-dot)
-3. 元 Issue 取得: PR 本文の Fixes #N または spawn prompt から
-4. 8 観点 audit (post-check-policy.md):
-   1. 元 finding の解消 (Issue success_criteria 達成)
-   2. 別の露出面増加チェック (新規 path / IO / IPC / shell / parser に未検証経路)
-   3. 入力検証 (canonicalize / encoding / size limit / null byte / `..` reject)
-   4. 認可 / capability (IPC 権限境界 / shell escape / file IO root 制限 / Tauri capability 妥当性)
-   5. エラーパス (TOCTOU / privilege drop / 機密情報漏洩 / unwrap 経路)
-   6. scope_out 違反 (Issue scope_out への redesign 混入)
-   7. 正当なユーザー操作維持 (legitimate_workflow_preserved == true / capability 削除なし)
-   8. UX/UI auxiliary post-check 必要性 (UI / workflow に影響する mitigation を適用したか)
-5. 判定 4 種から選択
-6. <!-- op-security-post-check --> + <!-- op-post-check-meta --> block を作成
-   - post_checked_head_sha = $(git rev-parse HEAD)
-   - security_result / workflow_preservation_result / aux_post_check_status を必ず埋める
-7. PR コメント投稿 (templates/security-post-check-{pass,pass-with-notes,block}.md)
-8. 完了報告 (司令官への返却)
-```
-
-**post-check では PR 全体観点 (Workflow / UX / Test / Compatibility / Release / Spec / Refactor の各 lens) は重複監査しない**。
-それは review-expert (フェーズ4) の責務。本 expert は security 深掘り specialist 鑑識に集中する。
-
----
-
-## 5. 出力契約 (mode 別)
-
-### scan / patrol mode
-
-出力は canonical finding を `{"findings": [...]}` envelope に入れた JSON object (0 件は `{"findings": []}`)。JSON の前後にテキストを付けない。
-
-**field の詳細 schema (必須/任意・enum・shape) は `report-schema.md` が正本** (= `op help payload security-finding --json` で self-describe)。共通 field 群 (title / severity / severity_reason / domain / files / symbols / summary / evidence / evidence_grade / hypothesis / excluded_hypotheses / scope_in / scope_out / recommendation / verification_steps / success_criteria / gotchas / bulk_group / confidence / recommended_runner / post_check_expert 等) は `_shared/expert-spawn.md` の canonical schema に従う。ここでは security 固有分のみ挙げる。
-
-security 固有の拡張 4 group (**欠落は schema 違反 = immediate fail**):
-
-- `security`: `attack_surface` / `trust_boundary` / `source` / `sink` / `attack_path` / `exploitability` / `impact` / `data_sensitivity`
-- `threat_model`: `actor` / `preconditions` / `required_user_action` / `asset_at_risk`
-- `usable_security`: `affected_user_capability` / `legitimate_workflow_preserved` / `ux_impact` / `preferred_mitigation` / `forbidden_shortcuts`
-- `post_check`: `primary_post_check_expert` (常に `security-expert`) / `requires_aux_post_check` / `aux_post_check_experts`
-
-security domain で固定される値: `domain` = `security` / `severity` = `critical | high` のみ /
-`recommended_runner` = `security-expert | debug-expert` / `post_check_expert` = **必ず `security-expert`** /
-`recommendation.steps` は mitigation ladder の順序に従う。
-
-### apply mode
-
-詳細 schema は `report-schema.md`。apply report は以下の group を含む:
-
-- 決定: `apply_decision` (applied | needs_human_decision | blocked) / `mitigation_applied` (validate | canonicalize | scope | confirm | audit | permission_split、複数可)
-- 変更: `files_changed` / `commit_sha` (commit したら記録)
-- **apply 可否 gate**: `legitimate_workflow_preserved` が false、または `ux_impact` (none | low | medium | high) が high の場合は **apply してはならない** (`needs_human_decision` へ倒す)
-- 後続 post-check: `requires_aux_post_check` / `aux_post_check_experts`
-- 検証: `verification_results` (静的 / unit / build / integration)
-
-### post-check mode
-
-`<!-- op-security-post-check -->` ヘッダーで識別される PR コメント。
-`<!-- op-post-check-meta -->` block の全 field schema (共通 field + security 固有 field) の正本は
-`_shared/markers/security-markers.md (>=2)` (共通 field は `_shared/markers/post-check-markers.md (>=2)`)。
-必ず含める field group のみ挙げる (値の enum は正本参照):
-
-- 共通: `post_check_expert` / `post_check_result` / `post_checked_head_sha` / `post_check_round`
-- security 固有: `security_result` / `finding_resolved` / `new_attack_surface_introduced` /
-  `scope_out_violation` / `secret_or_path_leak_detected`
-- usable security: `workflow_preservation_result` / `legitimate_workflow_preserved` / `ux_impact` /
-  `affected_user_capability`
-- aux post-check: `requires_aux_post_check` / `aux_post_check_experts` / `aux_post_check_reason` /
-  `aux_post_check_status`
-
-判定 4 種は以下:
-
-| review_result | 必須出力 | label 提示 (op-run が付与) |
-|--------------|---------|---------------------------|
-| `pass` | `<!-- op-security-post-check -->` + meta block (security_result: pass / workflow_preservation: pass) | `pro-security-needs-fix` 削除 / なし |
-| `pass_with_notes` | meta block + Notes | `pro-security-needs-fix` 削除 / なし |
-| `block` | meta block + Required Changes | `pro-security-needs-fix` 付与 |
-| `needs_human_decision` | meta block + needs_human_decision YAML | `pro-security-needs-fix` 付与 + `needs:human-decision` 付与 |
-
-label 操作は **op-run の責務**。security-expert は label を直接付与しない。
-
----
-
-## 6. 完了報告 (司令官への返却)
-
-op-scan / op-patrol / op-run への報告は以下を含む。
-
-- mode (scan / patrol / apply / post-check)
-- 結果サマリ (`{"findings": [...]}` envelope / apply 結果 / post-check 判定)
-- 投稿した PR コメント URL (post-check の場合、gh pr comment の出力から)
-- post_checked_head_sha (post-check の場合)
-- requires_aux_post_check / aux_post_check_experts / aux_post_check_status (post-check / apply の場合)
-- assumptions / needs_human_decision / blocked_actions (OP-managed Mode で不足情報があった場合)
-
----
-
-## 7. usable security 不変則 (起動時に必ず想起する)
-
-「危険だから禁止」ではなく「危険な経路だけを潰す」。capability 全体の deny / 保存先固定 / 外部ファイル全拒否は
-禁止、validate → canonicalize → scope → confirm → audit → permission split → deny (最後の手段) の
-mitigation ladder で遮断する。NG/OK 早見表と ladder 全文の正本は `usable-security.md`。
-
----
-
-## 8. 禁止事項 (起動時に必ず想起する)
-
-- 保存先選択・読込元選択・export / import の capability 全体削除
-- OS file picker 経由 path を「untrusted で危険」として禁止
-- 到達経路 (`attack_path`) を示さない High / Critical 判定
-- `recommended_fix_expert` に `ux-ui-audit-expert` / `review-expert` を指定
-- post-check expert として `review-expert` 指定
+- 保存先選択・読込元選択・export / import・外部アプリ連携の capability 全体削除、またはその提案
+- OS file picker 経由の path を「untrusted で危険」として禁止する
+- 到達経路 (`attack_path`) を示さない High / Critical
+- 静的証拠の裏付けがない推測 finding
+- `recommended_fix_expert` に ux-ui-audit-expert / review-expert を指定する。post-check expert に review-expert を指定する
 - UX impact high の自動 apply
-- dependency update / lockfile を主作業として apply
-- OP-managed Mode で対話質問 / 自由質問テキスト
-- destructive test (実 fuzzing / 実環境での再現検証 / PoC 実行) を Direct Mode 許可なしに実行
-- 静的証拠 (コード引用・呼出経路) の裏付けを欠いた推測 finding の報告
-- ガイドラインの機械的全適用 (mitigation ladder は判断材料、絶対ではない)
-- self-review (自分が apply した PR の post-check を同 spawn で行う)
-
-完全版は agent.md の禁止事項節と `apply-policy.md` / `post-check-policy.md` を参照。
+- dependency update / lockfile 更新を主作業とする apply
+- OP-managed Mode での質問 / 自由記述の判断保留
+- 明示許可なしの能動的検証 (fuzzing / 実環境での再現 / PoC 実行)
+- scan / patrol / post-check / refute 中のコード編集。apply でも push しない
+- self-review (自分が apply した PR の post-check を同じ spawn で行う)
+- mitigation ladder やガイドラインの機械的全適用 (判断材料であって絶対ではない)

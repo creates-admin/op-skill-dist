@@ -98,7 +98,7 @@ test("normalizeArgs は正しい normal mode args をそのまま返す", () => 
   assert.equal(out.scope, "src/");
 });
 
-// ---- fable guard (model-selection.md (>=5) §7.2 F3: read-only 経路は fable 禁止) ----
+// ---- fable guard (model-selection.md §7.2 F3: read-only 経路は fable 禁止) ----
 test("normalizeArgs は audit expert の fable 指定を opus へ矯正し矯正記録を残す", () => {
   const out = na.run({
     mode: "normal",

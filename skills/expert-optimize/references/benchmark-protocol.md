@@ -1,121 +1,57 @@
-# Benchmark Protocol — optimize-expert の心臓部
+# Benchmark Protocol — Before / After 計測と統計判定
 
-<!--
-機能概要: optimize-expert apply mode の Before / After 計測手順を統一する。
-作成意図: 「速くなったつもり」を構造的に排除する唯一の根拠。
-         hyperfine / criterion / プロファイラの使い分け、warmup・min-runs・
-         入力規模・cold/warm cache 区別・統計的有意性の判定までを 1 ファイルに集約。
-注意点: scan モードでは benchmark を実行しない (Level 0 限定)。
-       本ドキュメントは apply mode と investigation Issue 用。
--->
+scan では実行しない (apply / investigation 用)。
 
-## 大原則
+## 原則
 
-1. **計測なき最適化は出荷しない**
-2. **Before / After は同じコマンド・同じ入力・同じ環境で取る**
-3. **release build で測る** (debug build の数値で判断しない)
-4. **warmup と min-runs を必ず入れる**
-5. **平均値だけでなく標準偏差を見る** (有意性判定の根拠)
-6. **入力規模は small / medium / large で分ける** (n が変わると勝負が逆転する場合がある)
-7. **コマンド・環境・入力 fixture を report に残す** (再現可能性)
-
----
+1. 計測なき最適化は出荷しない
+2. Before / After は同じコマンド・同じ入力・同じ環境で取る
+3. release build で測る (debug build の数値で判断しない)
+4. warmup ≥ 3、runs ≥ 10
+5. mean と stddev を並べて判定する
+6. 入力は small / medium / large で分ける (n が変わると勝敗が逆転しうる)
+7. コマンド・環境・fixture を報告に残す
 
 ## ツール選択
 
-| 計測対象 | 推奨ツール | 補助 |
-|---------|----------|------|
-| CLI / コマンド全体 / build / pipeline | hyperfine | — |
-| Rust 関数単位 / data structure micro bench | criterion | cargo bench |
-| Rust ホットパスの可視化 | cargo flamegraph / perf | samply |
-| Rust メモリ / allocation | dhat / valgrind massif | heaptrack |
-| Vue / TS frontend bundle | vite-bundle-visualizer / rollup-plugin-visualizer | — |
-| Vue / TS runtime | Chrome DevTools Performance / Lighthouse | playwright + tracing |
-| Flutter | flutter devtools / `--profile` mode | observatory |
-| Tauri 全体 | hyperfine + Tauri 起動 / WebDriver 計測 | DevTools 接続 |
+| 対象 | 推奨 | 補助 |
+|---|---|---|
+| CLI / build / pipeline 全体 | hyperfine | — |
+| Rust 関数単位 | criterion (`cargo bench`) | — |
+| Rust ホットパスの可視化 | cargo flamegraph / perf | samply (perf 不要) |
+| Rust メモリ / allocation | dhat / valgrind massif | heaptrack、peak RSS は `/usr/bin/time -v` |
+| Vue / TS bundle | vite-bundle-visualizer / rollup-plugin-visualizer | — |
+| Vue / TS runtime | Chrome DevTools Performance / Lighthouse | playwright tracing |
+| Flutter | `flutter run --profile` + devtools | `flutter build apk --release --analyze-size` |
+| Tauri | hyperfine + DevTools / WebDriver | — |
+
+mean が 1 ms 以下の関数は hyperfine の精度限界を下回るので criterion を使う。
 
 ---
 
-## hyperfine の使いどころ
+## hyperfine
 
-CLI / build / コマンド全体の wall-clock を取る用途。warmup と min-runs が標準で入る。
-([sharkdp/hyperfine](https://github.com/sharkdp/hyperfine) — warmup / min-runs / export-json 等を備えたコマンドラインベンチマークツール)
-
-### 単発計測 (baseline 取得)
+`git checkout` を hyperfine 内に入れるとノイズが増える。**before / after の binary を別名で保存して並べる**:
 
 ```bash
-hyperfine \
-  --warmup 3 \
-  --runs 10 \
-  --export-json target/bench/baseline.json \
-  --export-markdown target/bench/baseline.md \
-  './target/release/app input/sample-large.json'
-```
+# Before (実装前)
+cargo build --release --bin app && mkdir -p target/bench && cp target/release/app target/bench/before
+# ... 改善実装 ...
+cargo build --release --bin app && cp target/release/app target/bench/after
 
-### Before / After 比較 — 推奨パターン
-
-`git checkout` を hyperfine 内に入れるとノイズが増える。
-**before / after の binary を別名でビルドして並べて比較する** のが安定:
-
-```bash
-# 1. before binary を保存
-git stash  # apply 中の変更を退避
-cargo build --release --bin app
-cp target/release/app target/bench/before
-git stash pop
-
-# 2. after binary をビルド
-cargo build --release --bin app
-cp target/release/app target/bench/after
-
-# 3. 比較
-hyperfine \
-  --warmup 3 \
-  --runs 10 \
-  --export-markdown target/bench/result.md \
-  './target/bench/before input/sample-large.json' \
-  './target/bench/after input/sample-large.json'
-```
-
-### 入力規模別の比較
-
-```bash
-hyperfine \
-  --warmup 3 \
-  --runs 10 \
+hyperfine --warmup 3 --runs 10 \
   --parameter-list size small,medium,large \
-  --export-markdown target/bench/by-size.md \
+  --export-markdown target/bench/result.md --export-json target/bench/result.json \
   './target/bench/before input/sample-{size}.json' \
   './target/bench/after input/sample-{size}.json'
 ```
 
-### cold / warm cache 区別 (I/O 影響時)
+- cold / warm (I/O 系): cold は `--warmup 0 --prepare 'sync && echo 3 > /proc/sys/vm/drop_caches'` (Linux only)。Windows / WSL では drop_caches が使えないので cold は「初回実行」として別取得
+- `--setup` (全 run 前に 1 回) / `--prepare` (各 run 前に毎回、前提リセット) / `--cleanup` (最後に 1 回)
+- `--shell=none` で shell 起動オーバーヘッドを除く
+- JSON から数値抽出: `jq '.results[] | {command, mean, stddev}' result.json` (単位は秒)
 
-```bash
-# cold: OS page cache を毎回クリア (Linux only)
-hyperfine \
-  --warmup 0 \
-  --runs 10 \
-  --prepare 'sync && echo 3 > /proc/sys/vm/drop_caches' \
-  './target/bench/after input/large.idml'
-
-# warm: warmup 込み (定常状態の wall-clock)
-hyperfine \
-  --warmup 3 \
-  --runs 10 \
-  './target/bench/after input/large.idml'
-```
-
-> Windows / WSL では drop_caches が使えないため、cold は実質「初回実行」として 1 回 + warm を別途取得する。
-
----
-
-## criterion の使いどころ
-
-Rust 関数単位の micro-benchmark。run 間の統計を保存し、回帰検出ができる。
-([Criterion.rs](https://bheisler.github.io/criterion.rs/book/) — statistics-driven micro-benchmarking)
-
-### `Cargo.toml` 設定
+## criterion
 
 ```toml
 [dev-dependencies]
@@ -126,26 +62,17 @@ name = "target_bench"
 harness = false
 ```
 
-### 最小 bench (`benches/target_bench.rs`)
-
-`templates/criterion-bench-template.rs` の完全版を参照。
-
 ```rust
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-
-fn load_fixture(size: &str) -> Vec<Item> {
-    // small / medium / large の fixture を返す
-}
+// benches/target_bench.rs
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
 fn bench_target(c: &mut Criterion) {
     let mut group = c.benchmark_group("target_function");
     for size in ["small", "medium", "large"] {
-        let input = load_fixture(size);
+        let input = load_fixture(size); // 実 fixture か synthetic data
+        group.throughput(Throughput::Elements(input.len() as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &input, |b, input| {
-            b.iter(|| {
-                let result = target_function(black_box(input));
-                black_box(result);
-            });
+            b.iter(|| black_box(target_function(black_box(input))));
         });
     }
     group.finish();
@@ -155,105 +82,25 @@ criterion_group!(benches, bench_target);
 criterion_main!(benches);
 ```
 
-### 実行と結果
-
 ```bash
-cargo bench --bench target_bench
-# target/criterion/target_function/large/report/index.html を確認
-# JSON 結果: target/criterion/target_function/large/new/estimates.json
+cargo bench --bench target_bench -- --save-baseline before   # Before
+cargo bench --bench target_bench -- --baseline before        # After (improved / regressed / no change)
+# 数値: target/criterion/target_function/<size>/new/estimates.json
+# ノイズが大きい時: -- --warm-up-time 5 --measurement-time 30
 ```
-
-### baseline 保存と比較
-
-```bash
-# baseline 保存 (Before)
-cargo bench --bench target_bench -- --save-baseline before
-
-# 改善後の比較 (After)
-cargo bench --bench target_bench -- --baseline before
-# 結果に "Performance has improved" / "regressed" / "no change" が表示される
-```
-
----
 
 ## プロファイリング (どこが遅いか分からない時)
 
-### Rust — flamegraph
-
-```bash
-cargo install flamegraph
-sudo cargo flamegraph --bin app -- input/sample-large.json
-# flamegraph.svg が生成される
-```
-
-WSL2 / Linux で perf 権限が必要。`echo -1 > /proc/sys/kernel/perf_event_paranoid` の調整が要る場合あり。
-
-### Rust — samply (perf 不要、portable)
-
-```bash
-cargo install samply
-samply record ./target/release/app input/sample-large.json
-# Firefox Profiler 互換 UI で確認
-```
-
-### Rust — メモリ (dhat)
-
-```toml
-[dependencies]
-dhat = { version = "0.3", optional = true }
-
-[features]
-dhat = ["dep:dhat"]
-```
-
-```rust
-#[cfg(feature = "dhat")]
-use dhat::{Dhat, DhatAlloc};
-
-#[cfg(feature = "dhat")]
-#[global_allocator]
-static ALLOCATOR: DhatAlloc = DhatAlloc;
-
-fn main() {
-    #[cfg(feature = "dhat")]
-    let _dhat = Dhat::start_heap_profiling();
-    // ...
-}
-```
-
-```bash
-cargo run --release --features dhat
-# dhat-heap.json が生成される → https://nnethercote.github.io/dh_view/dh_view.html で確認
-```
-
-### Frontend — bundle 分析 (Vite)
-
-```bash
-npx vite-bundle-visualizer
-# stats.html が開く。treemap で大きい dependency を視覚的に確認
-```
-
-### Frontend — runtime profile
-
-Chrome DevTools の Performance タブで record → load。
-Lighthouse で Core Web Vitals (LCP / TBT / CLS) を取る。
-
-### Flutter — profile mode + devtools
-
-```bash
-flutter run --profile -d <device>
-# devtools URL が表示される → Performance タブで CPU profile
-flutter build apk --release --analyze-size
-# build/apk/release/snapshot/code-size-snapshot.json を確認
-```
+- flamegraph: `cargo flamegraph --bin app -- <input>`。perf 権限不足なら `perf_event_paranoid` を調整するか samply (`samply record ./target/release/app <input>`) を使う
+- dhat: `dhat` を optional feature で入れ、`#[global_allocator]` に `dhat::Alloc` を設定して `cargo run --release --features dhat` → `dhat-heap.json` を dh_view で開き、支配的な allocation site を見る
+- bundle: `npx vite-bundle-visualizer` の treemap で大きい dependency を確認
+- Lighthouse: `npx lighthouse <url> --output html`。目安 LCP < 2.5s / TBT < 200ms / CLS < 0.1
 
 ---
 
 ## 統計的有意性の判定
 
-mean だけ見ると測定誤差を改善と勘違いする。**標準偏差 (stddev) と並べて判定する**。
-
-単位は ms に統一する (criterion 等が ns / s で返す場合は ms に揃える)。
+単位は ms に揃える (criterion の ns / hyperfine の s を換算)。
 
 ```text
 improvement_ms     = before_mean_ms - after_mean_ms
@@ -261,71 +108,55 @@ combined_stddev_ms = sqrt(before_stddev_ms^2 + after_stddev_ms^2)
 ratio              = improvement_ms / combined_stddev_ms
 ```
 
-| 判定 | 条件 | 行動 / decision |
-|------|------|----------------|
-| **clear** | ratio >= 3 (両側で重ならない) | 実装確定、コミット (decision = applied) |
-| **marginal** | 1 <= ratio < 3 | 実装可だが message に marginal 旨明記 (decision = applied / risk medium 以上は reverted) |
-| **none** | ratio < 1 (誤差内 or 劣化) | **撤退**、改善なし報告 (decision = reverted) |
-| **unstable** | before_stddev_ms > before_mean_ms * 0.2 or after_stddev_ms > after_mean_ms * 0.2 | 判定保留、ベンチ条件を改善 (decision = deferred) |
+| 判定 | 条件 | decision |
+|---|---|---|
+| **unstable** (先に評価) | before_stddev > before_mean × 0.2 または after_stddev > after_mean × 0.2 | revert して `deferred` |
+| **clear** | ratio ≥ 3 | `applied` |
+| **marginal** | 1 ≤ ratio < 3 | risk low なら `applied` (marginal と明記)、medium 以上は `reverted` / `escalated` |
+| **none** | ratio < 1 (誤差内 or 劣化) | `reverted` |
 
-例:
+例: Before 250±8 ms / After 220±6 ms → improvement 30、combined ≈ 10、ratio ≈ 3.0 → clear。Before 250±30 / After 240±28 → ratio ≈ 0.24 → none。
 
-```text
-Before: mean = 250 ms, stddev = 8 ms, runs = 10
-After:  mean = 220 ms, stddev = 6 ms, runs = 10
+`improvement.ratio_percent` = improvement_ms / before_mean_ms × 100、`speedup` = before_mean / after_mean (例 `"3.0x"`)。
 
-improvement = 30 ms
-combined stddev ≈ sqrt(8² + 6²) ≈ 10 ms
-improvement / combined_stddev ≈ 3.0 → clear (ぎりぎり)
-```
+## ノイズ抑制 (Windows / WSL / クラウド VM で不安定な時)
 
-```text
-Before: mean = 250 ms, stddev = 30 ms, runs = 10
-After:  mean = 240 ms, stddev = 28 ms, runs = 10
-
-improvement = 10 ms
-combined stddev ≈ 41 ms
-improvement / combined_stddev ≈ 0.24 → none (撤退)
-```
-
----
-
-## ベンチマーク環境ノイズの抑制
-
-特に Windows / WSL / クラウド VM で安定しない場合:
-
-- 他プロセスを止める (browser, IDE, antivirus scan)
-- CPU governor を performance に固定 (Linux: `cpupower frequency-set -g performance`)
-- 低消費電力モード OFF (laptop は AC 接続)
-- thermal throttling 確認 (連続実行で stddev が悪化していないか)
-- `--warmup 5` に増やす
-- `--runs 20` に増やす
-- 同じ binary を 2 回 baseline 取って差分が誤差内か確認 (ベンチ自体の信頼性確認)
+- 他プロセス (browser / IDE / antivirus scan) を止める、laptop は AC 接続・省電力 OFF
+- Linux は `cpupower frequency-set -g performance`
+- 連続実行で stddev が悪化するなら thermal throttling を疑う
+- `--warmup 5` / `--runs 20` に増やす
+- 同じ binary の baseline を 2 回取り、差が誤差内かでベンチ自体の信頼性を確認する
 
 ---
 
 ## 報告の最低記載項目
 
-`templates/benchmark-report.md` のフォーマットに従う。最低限:
+完了報告 (apply-report) と PR / commit message に:
 
-- 計測コマンド (hyperfine / criterion の正確な引数)
-- ツールバージョン (`hyperfine --version`, `cargo --version`)
+- 計測コマンド (正確な引数) とツールバージョン
 - OS / CPU / RAM / WSL or native
-- 入力 fixture (path / size / 内容概要)
-- Before / After の mean / stddev / runs
-- 改善率 (%) と統計判定 (clear / marginal / none / unstable)
-- cold / warm 区別 (I/O 系の場合)
+- 入力 fixture (path / 規模 / 内容概要)、I/O 系は cold / warm の区別
+- 規模別の Before / After の mean ± stddev / runs、speedup、統計判定
+- 互換性 (公開 API 不変 / 出力差分なし / 既存テスト pass / エッジケース)
+- リスクレベルと根拠、撤退しなかった理由、残課題 (別 bottleneck)
 
----
+commit message の Benchmark 節の例:
+
+```
+perf(dispatcher): seen 判定を HashSet 化 (Fixes #N)
+
+ベンチマーク (release, criterion):
+- 1000 件: 250 ms → 82 ms (3.0x, clear)
+- 10000 件: 24500 ms → 820 ms (30x, clear)
+互換性: 公開 API 変更なし / 出力順序維持 / 既存テスト全 pass
+リスク: low (データ構造置き換えのみ)
+```
 
 ## 禁止事項
 
-- debug build での計測 (`cargo run` のまま)
-- warmup なし
-- 1 回しか実行しない計測
-- 平均値だけ報告して stddev を書かない
-- mean が 1 ms 以下の関数を criterion なしで hyperfine する (hyperfine の精度限界)
-- 入力 fixture を毎回変える (再現性が消える)
-- Before と After で異なる入力を使う
+- debug build (`cargo run`) での計測
+- warmup なし / 1 回だけの計測
+- mean だけ報告して stddev を書かない
+- Before と After で入力・コマンド・環境を変える / fixture を毎回変える
 - After だけ取って Before を取らない
 - 「速くなった気がする」での実装確定

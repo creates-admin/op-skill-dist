@@ -1,608 +1,149 @@
-<!--
-schema_version: 1
-last_breaking_change: なし
-notes: v1 (2026-07-29, Wave A3 F08/F09): §3.5-B-0 Legacy guard を要約圧縮 (発火条件 =
-       registry-verify error / verify 失敗の fail-safe、発火時の legacy skip 動作 6 点は全数保全、挙動不変)。
-       post-check expert の label 直接操作禁止則 (3 箇所同文) を §3.5-W に一本化し、
-       3.5-A-2 / 3.5-B-2 / 3.5-B-4 は 3.5-W への 1 行参照に短縮。契約不変のため schema_version 据置。
-       v1 (2026-07-29): SKILL.md 参照ドキュメント索引への追記 (F10) に伴い、
-       他 reference ファイルと同形式の schema_version header を additive 追加。
-       内容変更なし。
--->
-
-<!--
-機能概要: op-run フェーズ3.5 の Post-check Dispatcher 全体 (dispatch 判定 / spawn 手順 /
-         判定後処理 / skip 分岐 / error 分岐) を SKILL.md 本体から物理切り出した参照ファイル。
-作成意図: SKILL.md の god file 化解消 (Issue #407)。Phase 3.5 の dispatcher 全体をここに集約し、
-         SKILL.md 本体は ~15 行の pointer に圧縮する。
-         2026-05-30 ADR-0009 Phase C C1: post-check expert の spawn 機構を single-message
-         ADR-0016 (2026-06-15): post-check dispatch / spawn は ClusterOrchestrator
-         (cluster-orchestrator-directives.md フェーズ5.5) が担う。dispatch 判定ロジック
-         (routing / null-skip / active / planned / error 分岐) はここが正本。
-         executor が Workflow → ClusterOrchestrator に移行 (機構差替であり契約不変)。
-注意点: Agent prompt 文字列は `references/post-check-prompts.md` に分離済み。
-        controller は dispatch 判定後に各 PR の prompt_text を post-check-prompts.md から注入する。
-        本ファイルはそれ以外のすべての dispatcher ロジック (routing / 判定後処理 / 失敗 gate) を保持する。
-        dispatcher の動作 / label helper 呼び出し名 / result enum を変更すると
-        op-merge gate との整合が崩れる。変更前に labels-and-markers.md を確認する。
--->
-
-<!-- op-domain: refactor -->
-<!-- op-source: op-run -->
-
 # op-run: Post-check Dispatcher (Phase 3.5)
 
-op-run フェーズ3.5 の dispatcher 全体。
-SKILL.md 本体から物理切り出し (Issue #407)。
-Agent prompt 文字列は `references/post-check-prompts.md` 参照。
+ClusterOrchestrator (CO、`cluster-orchestrator-directives.md` フェーズ5.5) が global review の**前に**実行する、
+Issue 固有の domain-specific 再監査。global review (review-expert) とは別工程:
 
-post-check expert の spawn は **ClusterOrchestrator** (cluster-orchestrator-directives.md フェーズ5.5) が担う (ADR-0016)。
-dispatch 判定 (routing) / label transition / 失敗 gate のロジック正本は本ファイル。
-spawn 自体は ClusterOrchestrator が担い、controller は ClusterSummary のみ受け取る。
-`op-run-postcheck` workflow は ADR-0016 で削除済み。
+- **post-check**: 元 Issue の success_criteria を満たしたか / 元 finding が解消したか / 修正が新たな露出面を生んでいないか
+- **global review**: PR 全体の副作用・PR 本文整合・検証記録・横断的観点 (7 lens)
 
----
+review-expert は post-check expert にしない。
 
 ## フェーズ3.5: Post-check Dispatcher (post_check 解決済みクラスタのみ)
 
-フェーズ1-2-c で **post-check 担当** が解決されたクラスタについて、review-expert による global review (フェーズ4) の **前に**
-issue 固有の post-check を expert 別に dispatch する。canonical schema の `post_check_expert` 値に応じて分岐する:
+post_check_expert (フェーズ1-2-c で解決済み) で分岐する。spawn するのは 3.5-A / 3.5-B (+ 3.5-B-4) だけ。
 
-```
-match post_check_expert:
-  "ux-ui-audit-expert"  → 3.5-A. UX/UI Post-check (使いやすさ・a11y・状態網羅 の再監査)
-  "security-expert"     → 3.5-B. Security Post-check (深掘り security 専門再監査の 8 観点を実行)
-  "env-expert"          → 3.5-D. Planned Env Post-check Skip (planned のため spawn しない)
-  null                  → 3.5-C. Skip (フェーズ4 へ直接進む)
-  default               → 3.5-E. Default Branch (unknown / unregistered / 他 planned を弾く)
-```
-
-> **dispatch 判定は ClusterOrchestrator が実施する (Dynamic Workflow に委譲しない)**:
-> 下記の判定優先 (null skip / active post-check / planned skip / unregistered error) は
-> すべて ClusterOrchestrator がフェーズ5.5 冒頭で本ファイルのロジックに従い実施する
-> (ADR-0016 移管済み。旧「controller がフェーズ3.5 冒頭で実施」は廃止 — op-run/SKILL.md
-> フェーズ3.5 の移管宣言を参照)。**3.5-A / 3.5-B (+ 3.5-B-4 aux) に振り分けられた
-> active post-check のみ spawn に進む**。null skip (3.5-C) / planned skip (3.5-D) /
-> unregistered error (3.5-E) は spawn せずフェーズ5.5 内で完結する。
-
-dispatcher の判定優先 (上から順):
-
-```text
-if post_check_expert is null:
-    → 3.5-C (skip)。フェーズ4 へ直接進む。
-elif post_check_expert is active and post-check capable
-     (= active-expert-registry.md の Post-check 列が yes / conditional / specialist):
-    → 3.5-A (ux-ui-audit-expert) / 3.5-B (security-expert) / 該当節 (将来 active 化された expert)
-elif post_check_expert == "env-expert":
-    → 3.5-D (planned env post-check skip marker を残してフェーズ4 へ進む)
-elif post_check_expert in {"release-expert", "compatibility-expert", "spec-expert"}:
-    # release-expert / compatibility-expert は planned (3.5-D のような documented skip 経路を持たない)。
-    # spec-expert は active だが op-spec 専用 Utility Worker で post-check capability を持たない
-    # (active-expert-registry.md の Post-check 列に該当しない)。いずれも post-check として spawn 不可。
-    # runtime-contract.md §6 (Planned Expert Rule) / Utility Worker 規約に従って spawn 不可。
-    return needs_human_decision  # 内部 enum (snake_case)
-    abort_dispatch()              # post-check expert を再決定させる (controller が再 routing)
-elif post_check_expert is unregistered (active-expert-registry / planned-experts どちらにも無い):
-    # runtime-contract.md §7 (Unregistered Expert Rule) に従って contract error
-    abort_dispatch_with_contract_error()
-else:
-    # 想定外。clear contract error として停止
-    abort_dispatch_with_contract_error()
-```
-
-> **planned post-check expert の取り扱い**:
-> `op-post-check-expert: env-expert` が marker / label / domain から解決された場合、
-> `env-expert` は planned expert のため **直接 spawn しない**。3.5-D の planned skip
-> branch に倒し、PR 本文 / コメントに `<!-- op-planned-post-check-skipped: env-expert -->`
-> marker を残す。`security-expert` は active expert のため通常通り 3.5-B で spawn する。
->
-> `release-expert` / `compatibility-expert` / `spec-expert` を post_check_expert に
-> 指定された場合、3.5-D のような documented planned-skip 経路を持たないため、
-> dispatcher は `needs_human_decision` (内部 enum) を返して post-check expert resolution の
-> やり直しを controller に要求する。`active-expert-registry.md` / `planned-experts.md` の
-> どちらにも無い expert を指定された場合は contract error として停止する
-> (`runtime-contract.md` §7 の Unregistered Expert Rule に整合)。
-
-post-check は **issue 固有の domain-specific 再監査** であり、フェーズ4 の **全 PR 対象 global review (review-expert)** とは役割が分かれる:
-
-- **post-check (3.5)**: 元 Issue の success_criteria を満たしたか / 元 finding が解消されたか / 修正が新たな露出面を生んでいないか (domain 専門観点)
-- **global review (4)**: PR 全体の副作用 / PR 本文の整合 / 検証記録の充足 / 横断的観点 (review-expert の Security/Abuse/UX/Test/Compatibility/Release/Spec/Refactor の各 lens)
-
-review-expert は post-check expert ではない。`<!-- op-post-check-expert: review-expert -->` 指定は禁止。
-
-post-check が `null` のクラスタ (バックエンドのみの修正 / DB / CLI 等) は本フェーズをスキップしてフェーズ4 へ直接進む。
-
----
+| post_check_expert | 動作 |
+|---|---|
+| `null` | 3.5-C: 何もせず review へ (警告なし) |
+| `ux-ui-audit-expert` | 3.5-A |
+| `security-expert` | 3.5-B |
+| `env-expert` (planned) | 3.5-D: spawn せず review へ |
+| `release-expert` / `compatibility-expert` (planned)、`spec-expert` (Utility Worker、post-check 不可) | 3.5-E: `needs_human_decision` |
+| registry / planned-experts のどちらにも無い | 3.5-E: contract error で停止 |
 
 ## 3.5-W. Active Post-check の spawn 機構 (ClusterOrchestrator / 共通)
 
-3.5-A (ux-ui) / 3.5-B (security) / 3.5-B-4 (aux ux-ui) の active post-check spawn は、
-すべて **ClusterOrchestrator (cluster-orchestrator-directives.md フェーズ5.5)** が担う。
-ClusterOrchestrator は dispatch 判定 (本ファイルの 3.5-A / 3.5-B / 3.5-C / 3.5-D / 3.5-E 分岐) に従って
-post-check expert を Agent tool で spawn する。**`subagent_type` は plugin scoped 名**
-`"op-skill:ux-ui-audit-expert"` / `"op-skill:security-expert"` を渡す (下表 `expert` field は bare 名の正本、
-spawn 境界でのみ `op-skill:` を前置する。正本は `_shared/expert-spawn.md`「Plugin scoped-name 規約」)。
+CO が Agent tool で spawn する (`subagent_type`: `"op-skill:ux-ui-audit-expert"` / `"op-skill:security-expert"`)。
 
-### 渡す値の契約 (ClusterOrchestrator → post-check expert)
+| 渡す値 | 内容 |
+|---|---|
+| model | `opus`。read-only 監査のため `fable` は使わない (cluster が Fable 承認済みでも波及させない) |
+| worktree_path | apply worktree を再利用 (read-only。新規 worktree を作らない) |
+| issues | 元 Issue 番号 |
+| prompt_text | `post-check-prompts.md` の該当節 (3.5-A / 3.5-B-1 / 3.5-B-4) の本文 |
+| base_ref | `OP_RUN_BASE_REF` |
+| design_mock_url | Issue の `デザインモック:` 行の URL (ux-ui のみ、あれば) |
 
-| フィールド | 値 |
-|-----------|---|
-| `expert` | `"ux-ui-audit-expert"` または `"security-expert"` (dispatch 判定の結果) |
-| `model` | `"opus"` (model-selection.md §5.1)。post-check は read-only 監査のため **`fable` 禁止** — cluster が Fable 昇格を承認済でも波及させない (§7.2 F3 (>=5)) |
-| `worktree_path` | フェーズ2-A で確定した apply worktree path を reuse 注入 (read-only 監査) |
-| `issues` | 元 Issue 番号配列 |
-| `prompt_text` | `post-check-prompts.md` 該当節の本文を ClusterOrchestrator が注入 |
-| `base_ref` | `OP_RUN_BASE_REF` (フェーズ0-base で確定済み) |
+- post-check expert は監査専任 (`commits_added: []`)。label 操作は CO だけが行い、expert は `gh pr edit` / label 操作をしない。
+- 判定確定後、CO は **label 遷移 → state push** の順に行う (下記テンプレ)。
 
-- **apply worktree 再利用**: post-check は read-only 監査のため新規 worktree を作らない。
-- **post-check expert は監査専任**: コードを修正・push しない (exploration-only)。`commits_added: []` が正解。
-- **label 排他制御は controller 専任 (3.5-A-2 / 3.5-B-2 / 3.5-B-4 共通の禁止則)**: 判定確定後の
-  ラベル遷移は、必ず op-run controller が label helper (`apply_ux_post_check_labels` /
-  `apply_security_post_check_labels`、4-3-2 で定義) を呼んで排他制御する。
-  **post-check expert (aux 含む) が直接 `gh pr edit` / label helper を呼ぶことは禁止**。
+### 判定後処理テンプレ (3.5-A-2 / 3.5-B-2 / 3.5-B-4 共通)
 
-### prompt_text の注入 (ClusterOrchestrator の責務、正本は post-check-prompts.md)
+```bash
+: "${PR_NUMBER:?}" "${WORKTREE_PATH:?}" "${OP_RUN_SESSION_ID:?}" "${RESULT:?pass|pass_with_notes|block|needs_human_decision|skipped}"
+POST_CHECKED_HEAD_SHA=$(git -C "$WORKTREE_PATH" rev-parse HEAD)   # 監査した (push 済み) head
+: "${POST_CHECK_ROUND:?その expert の post-check 実行回数 (1 始まり)}"
 
-各 PR の `prompt_text` の **正本は `references/post-check-prompts.md`**。ClusterOrchestrator は dispatch 判定後、
-対象 expert に応じて以下の節の本文を読み、spawn prompt に注入する:
+case "$RESULT" in                       # label-transition の result 名へ変換
+  block) LABEL_RESULT=needs-fix-post-check ;;
+  pass_with_notes) LABEL_RESULT=pass-with-notes ;;
+  needs_human_decision) LABEL_RESULT=needs-human-decision ;;
+  *) LABEL_RESULT="$RESULT" ;;
+esac
+op pr label-transition --pr "$PR_NUMBER" --target "$LABEL_TARGET" --result "$LABEL_RESULT" \
+  ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"}
 
-| dispatch 先 | post-check-prompts.md の節 |
-|------------|---------------------------|
-| 3.5-A (ux-ui-audit-expert) | 「ux-ui-audit-post-check (3.5-A)」節 |
-| 3.5-B (security-expert) | 「security-post-check (3.5-B-1)」節 |
-| 3.5-B-4 (aux ux-ui-audit-expert) | 「ux-ui-aux-post-check (3.5-B-4)」節 |
+jq -n --arg key "$STATE_KEY" --arg expert "$EXPERT" --arg r "$RESULT" --arg sha "$POST_CHECKED_HEAD_SHA" \
+  --argjson round "$POST_CHECK_ROUND" --argjson extra "${EXTRA_JSON:-{\}}" \
+  '{kind:"post_check", expert:$key, post_check_result:$r, audit_result:($r|ascii_upcase),
+    post_checked_head_sha:$sha, post_check_round:$round, post_check_expert:$expert} + $extra' \
+  | op review state push --pr "$PR_NUMBER" --apply-json - \
+      --write-id "${OP_RUN_SESSION_ID}-postcheck-${STATE_KEY}-r${POST_CHECK_ROUND}" --session "$OP_RUN_SESSION_ID" \
+      ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"}
+```
+
+| 節 | `LABEL_TARGET` | `STATE_KEY` | `EXPERT` | `EXTRA_JSON` |
+|---|---|---|---|---|
+| 3.5-A (ux-ui primary) | `ux-post-check` | `ux-ui-audit-expert` | `ux-ui-audit-expert` | なし |
+| 3.5-B (security) | `security-post-check` | `security-expert` | `security-expert` | `{"requires_aux_post_check": <bool>}` |
+| 3.5-B-4 (aux ux-ui) | `ux-post-check` | `ux-ui-audit-expert@aux` | `ux-ui-audit-expert` | `{"triggered_by": "security-expert"}` |
+
+payload は flatten 形式 (entry の各 field を top-level に置く。`entry:{}` / `value:{}` で包まない)。
+aux は primary と同じ map に入るため key に `@aux` を付ける。
+
+### 失敗時の扱い (3.5-A-3 / 3.5-B-3 / aux 共通)
+
+spawn timeout / agent error / 判定欠落で結果が得られない場合は `RESULT=skipped` で上記テンプレを実行し、
+review は `full` モードで進め、完了報告に warning を出す。
+
+| 対象 | 追加の扱い |
+|---|---|
+| UI 影響あり PR (apply 担当が designer-expert / UI path を変更 / post-check が ux-ui) | `pro-ux-ui-audit-skipped` が残る。PR コメント (自然文) で ux-ui-audit-expert の再実行を人間に促す |
+| security 影響あり PR (post-check が security / `pro-security-expert` label / fingerprint domain が security) | `pro-security-post-check-skipped` が残る。同様に security-expert の再実行を促す |
+| それ以外 | warning のみ |
+
+UI 影響の path 判定は `_shared/project-profile.md`「UI 影響判定 path パターン」(`src` / `lib` / `app` 単体マッチは不可)。
 
 ---
 
 ## 3.5-A. UX/UI Post-check (post_check_expert == "ux-ui-audit-expert")
 
-ux-ui-audit-expert を post-check モードで監査させる (本フェーズの完了後にフェーズ4 の review-expert global review に進む)。
-PR ごとに別 worktree を作る必要はない (read-only 監査のため、apply の worktree を再利用)。
-
-spawn は ClusterOrchestrator が担う (cluster-orchestrator-directives.md フェーズ5.5)。ClusterOrchestrator は dispatch 判定で
-本クラスタを ux-ui post-check に振り分け、ux-ui-audit-expert を Agent tool で spawn する
-(`op-run-postcheck` workflow は ADR-0016 で削除済み)。
+ux-ui-audit-expert を post-check モードで spawn する。
 
 ### 3.5-A-2. 判定に応じた処理 (controller 主語)
 
-op-run controller は、ClusterOrchestrator が post-check expert から受け取る結果から当該 PR の判定結果を確認した後、
-必ず `apply_ux_post_check_labels "<PR>" "<result>"` を呼んでラベルを排他制御する (label 境界の禁止則は 3.5-W 参照)。
+| 判定 | 動作 |
+|---|---|
+| PASS / PASS_WITH_NOTES | review へ進む |
+| BLOCK | review を呼ばず、designer-expert (または feature-expert) を再 spawn して Required Changes を実装させる (当該クラスタのみフェーズ2 から再実行)。再実装は 2 回まで、3 回目は `blocked` として human escalation report (PR / クラスタ / Required Changes / 履歴) を返す |
 
-workflow 戻り値の `verdict` (PASS / BLOCK / NEEDS_HUMAN_DECISION) と post-check meta block
-(`PASS_WITH_NOTES` を含む) を controller が label helper 引数へ正規化する。
-
-| 判定 | 司令官の動作 | label helper 呼び出し |
-|------|------------|----------------------|
-| PASS | フェーズ4 (review-expert global review) に進める | `apply_ux_post_check_labels $PR pass` |
-| PASS_WITH_NOTES | Notes は post-check コメントに既に残っているので、review-expert global review にそのまま進める | `apply_ux_post_check_labels $PR pass_with_notes` |
-| BLOCK | review-expert global review を呼ばず、designer-expert (または feature-expert) を再 spawn して Required Changes を実装させる (フェーズ2-C を当該クラスタのみ再実行)。最大 2 回まで再実装、3 回目は `blocked` のまま human escalation report (PR / クラスタ ID / Required Changes / 再実行履歴を含む構造化サマリ) を commander に返し、人間への提示は commander / OP skill が行う | `apply_ux_post_check_labels $PR block` |
-
-```bash
-# 3.5-A-2: controller が UX post-check result を受け取った後に呼ぶ実装例
-# op pr label-transition が内部で label fetch + delta + apply + verify を完結させるため pre-fetch 不要
-# UX_POST_CHECK_RESULT は ClusterOrchestrator が post-check expert から受け取る結果の verdict を正規化した結果 (pass/pass_with_notes/block/skipped)
-apply_ux_post_check_labels "$PR_NUMBER" "$UX_POST_CHECK_RESULT"
-
-# state push (post_check payload、ADR-0027 6b、機械正本)。expert key は "ux-ui-audit-expert"。
-# payload は flatten 形式 (entry の各 field を top-level に置く。nested な entry:{} ラッパは
-# CLI (ApplyJsonPayload の #[serde(flatten)]) が受理しない — 正は review/state.rs)。
-# `auditor` は **必須** (op-skill #132): op-merge gate 11c が auditor == "ux-ui-audit-expert" を
-# 空文字も含めて要求する。これを落とすと UI 影響 PR が manual override なしでは merge 不能になる。
-POST_CHECK_PAYLOAD=$(jq -n --arg result "$UX_POST_CHECK_RESULT" --arg sha "$POST_CHECKED_HEAD_SHA" \
-  --argjson round "$POST_CHECK_ROUND" \
-  '{kind:"post_check", expert:"ux-ui-audit-expert", post_check_result:$result, audit_result:($result|ascii_upcase),
-    post_checked_head_sha:$sha, post_check_round:$round, post_check_expert:"ux-ui-audit-expert",
-    auditor:"ux-ui-audit-expert", triggered_by:null}')
-printf '%s' "$POST_CHECK_PAYLOAD" | op review state push --pr "$PR_NUMBER" \
-  --apply-json - --write-id "${OP_RUN_SESSION_ID}-postcheck-ux-ui-audit-expert-r${POST_CHECK_ROUND}" \
-  --session "$OP_RUN_SESSION_ID" \
-  ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"} \
-  || echo "❌ PR #${PR_NUMBER}: state push (post_check ux-ui-audit-expert) が失敗しました。" >&2
-```
-
-`pro-ux-ui-audit-needs-fix` ラベルが付いた PR は、designer-expert の再実装が完了して
-ux-ui-audit-expert が再 audit で PASS / PASS_WITH_NOTES を出すまで review-expert global review に進まない。
-再 audit で PASS / PASS_WITH_NOTES を取得した瞬間に helper が `pro-ux-ui-audit-needs-fix` を剥がすため、
-gate stuck は発生しない。
-
-### 3.5-A-3. 失敗時の扱い (UI 影響有無で gate を変える)
-
-ClusterOrchestrator が post-check expert から当該 PR の判定材料を受け取れなかった場合 (spawn timeout / agent error /
-判定欠落) の扱いは **UI 影響あり / なしで分岐**する。
-
-#### UI 影響なし (バックエンドのみの修正 / DB / CLI 等)
-
-- post-check スキップとして扱い、`apply_ux_post_check_labels $PR skipped` で `pro-ux-ui-audit-skipped` を付与
-- フェーズ4 (review-expert global review) に進める (BLOCK しない)
-- op-merge の対象になる (post-check が必須でない PR のため)
-- 完了報告に warning を出す
-
-#### UI 影響あり (designer-expert apply / frontend ファイル変更を含む PR)
-
-- post-check スキップとして扱い、`apply_ux_post_check_labels $PR skipped` で `pro-ux-ui-audit-skipped` を付与
-- フェーズ4 (review-expert global review) には進めてよい
-- ただし **op-merge gate は不可**: `pro-ux-ui-audit-skipped` が残ったままの UI 影響 PR は op-merge から自動的に除外される
-- 解除には以下のいずれかが必要:
-  1. ux-ui-audit-expert を手動で再 spawn し PASS / PASS_WITH_NOTES を得る (推奨)
-  2. 人間が `pro-ux-ui-audit-manual-override` ラベルを付与し明示承認する (例外運用)
-- 完了報告に warning を出し、人間に再実行 / 承認を促す
-
-これにより post-check の不安定さが pipeline を止めない (review-expert global review は通る) が、
-**UI 影響 PR は ux-ui-audit-expert post-check の signal を経ずにマージされない**。
-silent な UX 退化を構造的に防ぐ。
-
-UI 影響判定は以下のいずれか満たす場合 (path 判定は `~/.claude/skills/_shared/project-profile.md`
-の「UI 影響判定 path パターン」節に集約。`src` / `lib` / `app` 単体マッチは禁止):
-- apply 担当が `designer-expert`
-- 変更ファイルが project-profile.md の **UI 影響あり path パターン** にマッチ
-  (除外パス `src-tauri/**` / `crates/**` / `**/*.rs` 等は UI 影響なし扱い)
-- post-check 担当が `ux-ui-audit-expert` として解決されている (フェーズ1-2-c の結果)
-
----
+再 audit で PASS / PASS_WITH_NOTES になるまで review に進まない。
 
 ## 3.5-B. Security Post-check (post_check_expert == "security-expert")
 
-security domain Issue (canonical schema 上で `post_check_expert: "security-expert"` が指定されたクラスタ) に対して、
-security-expert を post-check モードで監査させ **Issue 固有の深掘り再監査** を実行する。
-PR ごとに別 worktree を作る必要はない (read-only 監査のため、apply の worktree を再利用)。
-
-**フェーズ4 (global review by review-expert) との役割分離**:
-- **3.5-B (本フェーズ)**: security 領域を深掘りする専門鑑識 (元 finding の解消 / 別の露出面増加 / IO・IPC・shell・path・capability の Issue 固有再監査)
-- **フェーズ4 (global review)**: review-expert が PR 全体を 7 lens (Security/Abuse, Workflow/UX, Test, Compatibility, Release, Spec, Refactor) で横断確認。3.5-B 通過後は Security/Abuse Lens を「PR 全体として新たな露出面が増えていないかのみ軽く」に切り替え (重複回避)
-
-脅威アクター視点・不正利用の可能性は review-expert の Security/Abuse Lens で扱い、
-深掘り専門鑑識 (IPC / file IO / path / capability / shell / token / updater 等) は security-expert に集約する。
-
-### 3.5-B-0. Legacy guard: security-expert installed 確認 (sanity check)
-
-**Phase 2 で security-expert は active 化済み**のため本 step は通常 `true` に倒れ、通常運用では
-skip 動作には倒れない。「agent 実体が万一削除された場合の安全装置 (legacy guard)」としてのみ残す。
-判定は下記 fence: registry-verify の error (target=security-expert) 検出、または registry-verify 自体の
-失敗 (JSON 空) を `installed=false` に倒す (fail-safe — 空 JSON を「error なし」と読まない)。
-
-```bash
-# security-expert installed 判定 (Phase 2 以降は true が期待値)。path flag は省略し CLI の
-# plugin-aware 解決チェーンに委譲 (Cloud は $HOME/.claude/agents 不在のため自動解決が必須)。
-SECURITY_EXPERT_INSTALLED=false
-REGISTRY_VERIFY_JSON=$(op core registry-verify --lens registry-agent 2>/dev/null) || true
-SECURITY_EXPERT_ERROR=$(printf '%s' "$REGISTRY_VERIFY_JSON" \
-  | jq -r '.. | objects | select(.rule_id? and (.effective_severity? == "error") and (.target? == "security-expert")) | .target' \
-  2>/dev/null | head -1)
-[ -n "$REGISTRY_VERIFY_JSON" ] && [ -z "$SECURITY_EXPERT_ERROR" ] && SECURITY_EXPERT_INSTALLED=true
-```
-
-`true` (通常状態) → 3.5-B-1 で通常どおり spawn する。`false` (agent 削除 / 設定不整合の異常状態) →
-**legacy skip 動作**: ClusterOrchestrator は security-expert を spawn せず (spawn 失敗を構造的に防ぐ)、
-(1) `<!-- op-security-post-check -->` 付き skipped メモを PR コメントに残し、(2) `pro-security-post-check-skipped`
-ラベルを付与、(3) フェーズ4 (review-expert global review) は **`review_mode = full`** で実行、
-(4) 完了報告に `security_post_check_skipped: agent_missing` warning を出し、(5) ユーザーに
-「security-expert agent が見つかりません。`agents/security-expert.md` の整合を確認してください」を提示する。
-silent な露出面復活を防ぐため、security 影響 PR は op-merge gate 14〜16 でマージ対象外になる。
-解除には agent 実体の復元または `pro-security-post-check-manual-override` (例外運用) が必要。
-
-### 3.5-B-1. security-expert を post-check モードで spawn (active)
-
-> **本ステップは `SECURITY_EXPERT_INSTALLED == true` のときのみ実行する**。
-> Phase 2 以降は通常 true なので、3.5-B-0 の legacy skip 動作には倒れない。
-
-ClusterOrchestrator が本クラスタを security post-check に振り分け、security-expert を Agent tool で spawn する
-(`op-run-postcheck` workflow は ADR-0016 で削除済み)。
+security-expert を post-check モードで spawn し、Issue 固有の深掘り再監査 (元 finding の解消 / 別の露出面 /
+IO・IPC・shell・path・capability) をさせる。脅威アクター視点・不正利用は review-expert の Security/Abuse Lens が扱う。
+security-expert が spawn 不能 (agent 不在) なら `RESULT=skipped` の失敗時扱いにする。
 
 ### 3.5-B-2. 判定に応じた処理 (controller 主語)
 
-op-run controller は、ClusterOrchestrator が post-check expert から受け取る結果から当該 PR の判定結果を確認した後、
-必ず `apply_security_post_check_labels "<PR>" "<result>"` を呼んでラベルを排他制御する (label 境界の禁止則は 3.5-W 参照)。
+| 判定 | 動作 |
+|---|---|
+| PASS / PASS_WITH_NOTES | `requires_aux_post_check: true` なら 3.5-B-4 を先に実行。そうでなければ review へ (light モード) |
+| BLOCK | review を呼ばず、判定優先順位に従い apply expert (security-expert / debug-expert) を再 spawn して Required Changes を実装させる。再実装は 2 回まで、3 回目は `blocked` + `needs_human_decision` を返す |
+| NEEDS_HUMAN_DECISION | review を呼ばず停止。`needs_human_decision` (decision_type / options / safest_default / blocked_actions) を ClusterSummary の blocker_reason に要約し、PR コメントに全文を残す |
 
-workflow 戻り値の `verdict` (PASS / BLOCK / NEEDS_HUMAN_DECISION) と post-check meta block
-(`PASS_WITH_NOTES` / `requires_aux_post_check` を含む) を controller が label helper 引数へ正規化する。
-
-| 判定 | 司令官の動作 | label helper 呼び出し |
-|------|------------|----------------------|
-| PASS | `requires_aux_post_check: false` ならフェーズ4 (review-expert global review) に **軽量モード**で進める (Security/Abuse Lens は新たな露出面のみ軽く)。`requires_aux_post_check: true` なら 3.5-B-4 (aux UX post-check) を先に実行 | `apply_security_post_check_labels $PR pass` |
-| PASS_WITH_NOTES | Notes は post-check コメントに既に残っているので、PASS と同じフロー。`requires_aux_post_check: true` なら 3.5-B-4 へ | `apply_security_post_check_labels $PR pass_with_notes` |
-| BLOCK | フェーズ4 を呼ばず、op-run の判定優先順位に従って apply 担当 expert (security-expert または debug-expert) を再 spawn し Required Changes を実装させる (フェーズ2-C を当該クラスタのみ再実行)。最大 2 回まで再実装、3 回目は `blocked` とし `needs_human_decision` を含む report を返す。人間への提示は commander / OP skill が行う | `apply_security_post_check_labels $PR block` |
-| NEEDS_HUMAN_DECISION | フェーズ4 を呼ばず、人間判断待ち。op-run は自動継続しない。`needs_human_decision` block (decision_type / options / safest_default / blocked_actions) を完了報告に転載し、commander / OP skill がユーザーに提示する | `apply_security_post_check_labels $PR needs_human_decision` |
-
-```bash
-# 3.5-B-2: controller が security post-check result を受け取った後に呼ぶ実装例
-# op pr label-transition が内部で label fetch + delta + apply + verify を完結させるため pre-fetch 不要
-# SECURITY_POST_CHECK_RESULT は ClusterOrchestrator が post-check expert から受け取る結果の verdict を正規化した結果 (pass/pass_with_notes/block/needs_human_decision)
-apply_security_post_check_labels "$PR_NUMBER" "$SECURITY_POST_CHECK_RESULT"
-# requires_aux_post_check: true の場合: 3.5-B-4 で aux UX post-check 完了後に同じ PR_NUMBER で呼ぶ
-# apply_ux_post_check_labels "$PR_NUMBER" "$AUX_UX_RESULT"
-
-# state push (post_check payload、ADR-0027 6b、機械正本)。expert key は "security-expert"。
-# `auditor` は必須 (op-skill #132)。security の gate 14c は `!is_empty()` ガードを持つため
-# 欠落しても BLOCK にはならないが、欠落すると gate が silent に無効化される (検査されない)。
-POST_CHECK_PAYLOAD=$(jq -n --arg result "$SECURITY_POST_CHECK_RESULT" --arg sha "$POST_CHECKED_HEAD_SHA" \
-  --argjson round "$POST_CHECK_ROUND" --argjson requires_aux "${REQUIRES_AUX_POST_CHECK:-false}" \
-  --argjson legit "${LEGITIMATE_WORKFLOW_PRESERVED:-true}" \
-  '{kind:"post_check", expert:"security-expert", post_check_result:$result, audit_result:($result|ascii_upcase),
-    post_checked_head_sha:$sha, post_check_round:$round, post_check_expert:"security-expert",
-    auditor:"security-expert", triggered_by:null,
-    requires_aux_post_check:$requires_aux, legitimate_workflow_preserved:$legit}')
-printf '%s' "$POST_CHECK_PAYLOAD" | op review state push --pr "$PR_NUMBER" \
-  --apply-json - --write-id "${OP_RUN_SESSION_ID}-postcheck-security-expert-r${POST_CHECK_ROUND}" \
-  --session "$OP_RUN_SESSION_ID" \
-  ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"} \
-  || echo "❌ PR #${PR_NUMBER}: state push (post_check security-expert) が失敗しました。" >&2
-```
-
-`pro-security-needs-fix` ラベルが付いた PR は、apply 担当 expert の再実装が完了して
-security-expert が再 audit で PASS / PASS_WITH_NOTES を出すまでフェーズ4 へ進まない。
-再 audit で PASS / PASS_WITH_NOTES を取得した瞬間に controller helper が
-`pro-security-needs-fix` / `pro-security-post-check-skipped` を剥がすため、
-op-merge gate 14〜16 の stuck は発生しない。
-
-generic な `needs:human-decision` は複数 domain で共有されるため、
-security post-check helper だけでは自動 remove しない。
-未解決の human decision がないことを controller が別途証明できる場合のみ、
-controller が明示的に remove してよい。
-
-#### NEEDS_HUMAN_DECISION の典型ケース
-
-```text
-- security risk が high だが、修正案が UX impact: high になる (capability 縮小が必要)
-- legitimate_workflow_preserved == false が検出された (apply で UI 削除 / 出力先固定が混入)
-- 修正方針に複数の選択肢があり (validation 強化 vs capability 制限)、自動判断不能
-- 認証 model / token storage / updater 設計の再設計が必要
-- 大規模 capability 再設計が必要
-```
-
-このとき op-run は apply 担当の再 spawn を行わず、`needs_human_decision` block を `pro-review-blocked`
-相当の人間判断待ちに寄せる。詳細は `~/.claude/skills/expert-security/references/post-check-policy.md`。
-
-### 3.5-B-3. 失敗時の扱い (security 影響有無で gate を変える)
-
-ClusterOrchestrator が post-check expert から当該 PR の判定材料を受け取れなかった場合 (spawn timeout / agent error /
-判定欠落) の扱いは **security 影響あり / なしで分岐**する。
-
-#### security 影響なし
-
-(本フェーズに到達した時点で post_check_expert == "security-expert" のため通常は該当しないが、安全側として記載)
-- post-check スキップとして扱い、`apply_security_post_check_labels $PR skipped` で `pro-security-post-check-skipped` を付与
-- フェーズ4 (global review) に **フルモード**で進める (Security/Abuse Lens を通常通り重く見る)
-- op-merge の対象になる
-- 完了報告に warning を出す
-
-#### security 影響あり (`op-domain: security` または `pro-security-expert` ラベル付き)
-
-- post-check スキップとして扱い、`apply_security_post_check_labels $PR skipped` で `pro-security-post-check-skipped` を付与
-- フェーズ4 (global review) には **フルモード**で進めてよい (Security/Abuse Lens を通常通り重く見る)
-- ただし **op-merge gate は不可**: `pro-security-post-check-skipped` が残ったままの security 影響 PR は op-merge から自動的に除外される
-- 解除には以下のいずれかが必要:
-  1. security-expert を手動で再 spawn し PASS / PASS_WITH_NOTES を得る (推奨)
-  2. 人間が `pro-security-post-check-manual-override` ラベルを付与し明示承認する (例外運用)
-- 完了報告に warning を出し、人間に再実行 / 承認を促す
-
-これにより post-check の不安定さが pipeline を止めない (フェーズ4 はフルモードで通る) が、
-**security 影響 PR は security-expert の Issue 固有深掘り再監査の signal を経ずにマージされない**。
-silent な露出面復活を構造的に防ぐ。
-
-security 影響判定は以下のいずれかを満たす場合:
-- apply 担当が `security-expert` または `debug-expert` かつ Issue marker が `op-domain: security` で起票されている
-- post-check 担当が `security-expert` として解決されている (フェーズ1-2-c の結果)
-- ラベルに `pro-security-expert` を含む
-
----
+`needs:human-decision` label は他 domain と共有のため、security PASS だけで自動 remove しない。
+典型的な NEEDS_HUMAN_DECISION は `expert-security/references/post-check-policy.md` を参照。
 
 ## 3.5-B-4. UX/UI Auxiliary Post-check (security mitigation が UI / workflow に影響する場合)
 
-security-expert が post-check で `requires_aux_post_check: true` + `aux_post_check_experts: [ux-ui-audit-expert]` +
-`aux_post_check_status: required_pending` を返した場合、op-run は **ux-ui-audit-expert を post-check モードで追加 spawn** する。
-これは security mitigation (overwrite confirm dialog 追加 / 削除確認 stage 追加 / 拡張子 warning 等) が
-UI / workflow に影響を与えた場合に、UX 退化 (a11y / focus / contrast / state recovery / step 数増加) を
-構造的に検出するため。
+security post-check が PASS / PASS_WITH_NOTES かつ `requires_aux_post_check: true` かつ `aux_post_check_experts` に
+`ux-ui-audit-expert` を含む場合、security の結果確定後に ux-ui-audit-expert を aux として spawn する
+(`trigger_reason` = security の `aux_post_check_reason`)。
 
-### 起動条件 (すべて満たす)
-
-- security post-check が PASS / PASS_WITH_NOTES を返した
-- security post-check meta block の `requires_aux_post_check == true`
-- `aux_post_check_experts` に `ux-ui-audit-expert` が含まれる
-- `aux_post_check_status == required_pending`
-
-> 重要: aux UX post-check も primary UX (3.5-A) と同じく result enum は
-> `pass` / `pass_with_notes` / `block` の 3 値のみ。`needs_human_decision` は返してはいけない
-> (canonical: `~/.claude/skills/_shared/markers/ux-ui-markers.md` L146)。情報不足は BLOCK + Required Changes
-> に不足情報を書く。controller の `apply_ux_post_check_labels()` は 4 値 (pass / pass_with_notes / block / skipped)
-> しか受け付けないため、`needs_human_decision` を返すと controller が未知 result で落ちる。
-> (post-check expert の結果スキーマは verdict enum を PASS / BLOCK /
-> NEEDS_HUMAN_DECISION に正規化するが、aux UX では NEEDS_HUMAN_DECISION を BLOCK に倒す。`op-run-postcheck` は ADR-0016 で削除済み)
-
-### spawn
-
-ClusterOrchestrator が aux UX post-check expert (ux-ui-audit-expert) を Agent tool で spawn する (cluster-orchestrator-directives.md フェーズ5.5)。
-primary security post-check の結果確定後 (3.5-B-2) に行うため、
-security post-check とは別のタイミングで aux を発火する (security 結果を受けてから aux を発火する)。
-prompt 内の `<trigger_reason>` は ClusterOrchestrator が security post-check meta から展開して注入する。
-`op-run-postcheck` workflow は ADR-0016 で削除済み。
-
-### aux post-check の判定処理 (controller 主語)
-
-op-run controller は、ClusterOrchestrator が post-check expert から受け取る aux post-check 判定結果を確認した後、
-必ず `apply_ux_post_check_labels "<PR>" "<result>"` を呼んでラベルを排他制御する (label 境界の禁止則は 3.5-W 参照)。
-
-| aux_post_check 判定 | 司令官の動作 | label helper 呼び出し |
-|--------------------|------------|----------------------|
-| PASS | security post-check の `aux_post_check_status` を `pass` に更新。フェーズ4 (review-expert global review) に **軽量モード**で進める | `apply_ux_post_check_labels $PR pass` |
-| PASS_WITH_NOTES | aux_post_check_status を `pass` に更新 (`pass_with_notes` も merge 許容)。Notes は PR コメントに既に残る。フェーズ4 に軽量モードで進める | `apply_ux_post_check_labels $PR pass_with_notes` |
-| BLOCK | aux_post_check_status を `block` に更新。フェーズ4 を呼ばず、op-run の判定優先順位 1-8 で apply 担当 expert (designer-expert / feature-expert) を再 spawn して Required Changes を実装させる | `apply_ux_post_check_labels $PR block` |
-
-```bash
-# 3.5-B-4: controller が aux UX post-check result を受け取った後に呼ぶ実装例
-# op pr label-transition が内部で label fetch + delta + apply + verify を完結させるため pre-fetch 不要
-# AUX_UX_RESULT は ClusterOrchestrator が post-check expert から受け取る結果の verdict を正規化した結果 (pass/pass_with_notes/block/skipped)
-apply_ux_post_check_labels "$PR_NUMBER" "$AUX_UX_RESULT"
-
-# state push (post_check payload、ADR-0027 6b、機械正本)。
-# aux は primary (security-expert) と同じ map に同居するため expert key を "<expert>@aux" とし、
-# triggered_by を primary expert 名にする (map key 衝突回避規約、ADR-0027 CLI 契約)。
-# `auditor` は **必須** (op-skill #132): aux 側 gate 18f が primary gate 11c と対称に
-# auditor == "ux-ui-audit-expert" を空文字も含めて要求する。
-POST_CHECK_PAYLOAD=$(jq -n --arg result "$AUX_UX_RESULT" --arg sha "$POST_CHECKED_HEAD_SHA" \
-  --argjson round "$POST_CHECK_ROUND" \
-  '{kind:"post_check", expert:"ux-ui-audit-expert@aux", post_check_result:$result,
-    audit_result:($result|ascii_upcase), post_checked_head_sha:$sha, post_check_round:$round,
-    post_check_expert:"ux-ui-audit-expert", auditor:"ux-ui-audit-expert",
-    triggered_by:"security-expert"}')
-printf '%s' "$POST_CHECK_PAYLOAD" | op review state push --pr "$PR_NUMBER" \
-  --apply-json - --write-id "${OP_RUN_SESSION_ID}-postcheck-ux-ui-audit-expert@aux-r${POST_CHECK_ROUND}" \
-  --session "$OP_RUN_SESSION_ID" \
-  ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"} \
-  || echo "❌ PR #${PR_NUMBER}: state push (post_check ux-ui-audit-expert@aux) が失敗しました。" >&2
-```
-
-### aux post-check spawn 失敗時
-
-ClusterOrchestrator が aux UX post-check expert から判定材料を受け取れなかった場合 (spawn timeout / agent error /
-`checks[]` に当該 `pr_number` が欠落):
-
-- `aux_post_check_status` を `skipped` に更新
-- `apply_ux_post_check_labels $PR skipped` で `pro-ux-ui-audit-skipped` を付与
-- security 影響あり PR は op-merge gate で BLOCK されるため、再 spawn または manual override が必要
-
-### stale 判定
-
-aux post-check 完了後、apply 担当の再実装で head SHA が進んだ場合:
-
-- 再実装 commit を検出したら `aux_post_check_status` を `stale` に更新
-- 再 audit が必要 (3.5-B-4 を再実行)
-
-### head SHA の整合
-
-aux post-check の `<!-- op-post-check-meta -->` block の `post_checked_head_sha` は
-判定確定時の現在 head SHA。op-merge は security-expert post-check / aux ux-ui-audit-expert post-check の
-それぞれの `post_checked_head_sha` を current_head_sha と比較し、いずれかが stale なら merge BLOCK する。
-
----
+- result enum は pass / pass_with_notes / block の 3 値のみ。`needs_human_decision` は返させない (情報不足は BLOCK)。
+- PASS / PASS_WITH_NOTES → review へ (light モード)。BLOCK → review を呼ばず designer-expert / feature-expert を再 spawn。
+- aux 完了後に再実装で head が進んだら aux を再実行する。
 
 ## 3.5-C. Skip (post_check_expert == null)
 
-post-check が `null` のクラスタ (バックエンドのみの修正 / DB / CLI 等) は本フェーズで何もせずフェーズ4 へ進む。
-`null` 値そのものが「明示的に post-check 不要」を意味しているため、警告を出さない。
-controller 内で完結し、ClusterOrchestrator が post-check expert を spawn しない。
-
----
+何もせず review へ進む。spawn しない。
 
 ## 3.5-D. Planned Env Post-check Skip (post_check_expert == "env-expert")
 
-/**
- * 機能概要: env-expert は planned expert のため、post-check expert として spawn しない。
- *           routing metadata 上 `post_check_expert: env-expert` が来ても、本ステップで
- *           planned skip として扱い、active apply fallback (1-2-d) と矛盾しない動作を保証する。
- * 作成意図: env-expert を runtime に漏らさない (ClusterOrchestrator が env-expert を spawn しない)。
- * 注意点: spawn 失敗を skip 扱いしているのではなく、planned 設計として spawn 自体を行わない。
- *         release / installer / updater / distribution 方針判断が主題なら needs_human_decision に倒す。
- */
+env-expert は planned のため spawn しない。
 
-`env-expert` が `post_check_expert` として解決されたクラスタは、controller が本フェーズで以下の処理を行う
-(workflow を呼ばず controller 内で完結する)。
+1. apply expert が 1-2-d で security / debug / refactor-expert に正規化済み、または `needs_human_decision` であることを確認する。
+2. release / installer / updater / distribution 方針判断が主題 (`needs_human_decision`) なら人間レビューに回す。
+3. それ以外は PR に「env-expert は未実装のため post-check を実施していない」旨を自然文で 1 コメント残し、review へ進む。
 
-1. **ClusterOrchestrator が env-expert を spawn しない** (subagent_type: env-expert の spawn 失敗を構造的に防ぐ)
-2. apply expert がフェーズ1-2-d の Active Apply Expert Normalization で `security-expert` /
-   `debug-expert` / `refactor-expert` のいずれかに正規化済みであること、または
-   `needs_human_decision` (内部 enum) に倒れていることを確認する
-3. release / installer / updater / distribution 方針判断が主題と判定された場合 (1-2-d で
-   `needs_human_decision` になっているケース) は本フェーズも skip し、人間レビューに回す
-4. PR 本文 / コメントに planned post-check skip marker を残す
-5. 通常通りフェーズ4 (review-expert global review) へ進む (BLOCK しない)
-
-> **env post-check が security signal を含む場合の post-check 担当切り替え**:
-> Issue / PR の content に OSV / dependency vulnerability / supply-chain / secret leak /
-> credential exposure / permission risk が含まれていて、apply 側が 1-2-d で `security-expert`
-> に正規化されたクラスタは、`post_check_expert` 側も `env-expert` (planned skip) で打ち止めにせず
-> **`security-expert` を post_check_expert として再付与** する (3.5-B Security Post-check が動く)。
-> これにより env routing の中身が security の場合に post-check が空になる事故を防ぐ。
-> 具体的には controller が `post_check_expert` resolution の最後で次の追従ルールを適用する:
->
->     if resolved post_check_expert == "env-expert"
->         and (active_apply_expert == "security-expert"
->              or any(security keyword in issue body / labels)):
->         post_check_expert = "security-expert"  # 3.5-B へ寄せる
->     # 残りの env-expert post-check は本 3.5-D へ流す
-
-### 使用する marker
-
-```md
-<!-- op-planned-post-check-skipped: env-expert -->
-```
-
-### PR コメントテンプレ
-
-```md
-<!-- op-planned-post-check-skipped: env-expert -->
-
-env-expert is currently a planned expert and was not spawned as a post-check expert.
-The env-domain apply path was handled through active fallback
-(see Active Apply Expert Normalization in op-run / phase 1-2-d).
-
-If this change requires release / installer / updater / distribution policy
-decisions, human review is required (see needs_human_decision flow).
-
-🤖 op-run フェーズ3.5-D (Planned Env Post-check Skip)
-```
-
-### 補足
-
-- `env-expert` 実装時は本サブセクションを削除し、3.5-A / 3.5-B と同様の active spawn 節
-  (ClusterOrchestrator による active post-check expert spawn) に置き換える。
-- 本 skip は **fail-open** ではない。env domain の apply 自体が `debug-expert` /
-  `refactor-expert` で正規化されており、PR 全体の global review (フェーズ4) は通常通り行われる。
-
----
+post_check_expert 解決の最後に、`env-expert` かつ (apply expert が security-expert、または Issue 本文 / label に
+OSV / 依存脆弱性 / supply-chain / secret / credential / permission の signal がある) なら post_check_expert を
+`security-expert` に付け替えて 3.5-B を動かす。
 
 ## 3.5-E. Default Branch (unknown / unregistered / 他 planned post-check)
 
-/**
- * 機能概要: 3.5-A / 3.5-B / 3.5-C / 3.5-D のいずれにも該当しない post_check_expert
- *           値を受け取った場合の default 経路。`runtime-contract.md` §6 / §7 の
- *           Planned / Unregistered Expert Rule に整合させ、未知 expert の silent spawn を防ぐ。
- * 作成意図: P1-3 で報告された「dispatcher に default 不在」を埋める。release-expert /
- *           compatibility-expert といった他 planned post-check や、op-run routing 対象外の
- *           Utility Worker (spec-expert: post-check capability なし)、unregistered な expert 名が
- *           紛れ込んだケースを構造的に拒否する。
- * 注意点: ここで `needs_human_decision` を返すのは内部 enum (snake_case) のみ。
- *         GitHub label `needs:human-decision` の付与は controller の label 境界 helper で行う。
- *         本ステップは controller 内で完結し、ClusterOrchestrator が post-check expert を spawn しない。
- */
-
-### 適用ケース
-
-dispatcher の判定優先 (3.5 冒頭) を上から見て、3.5-A / 3.5-B / 3.5-C / 3.5-D の
-いずれにも該当しない `post_check_expert` 値はすべて本ステップに落ちる。具体的には:
-
-- `release-expert` / `compatibility-expert` (planned)、`spec-expert`
-  (active だが op-spec 専用 Utility Worker で post-check capability なし)。
-  いずれも 3.5-D のような documented skip 経路を持たない
-- `active-expert-registry.md` / `planned-experts.md` のどちらにも無い expert 名
-  (typo / 古い marker / 想定外の routing 結果)
-
-### 動作
-
-```text
-case post_check_expert:
-  release-expert | compatibility-expert | spec-expert:
-    # planned (release/compat) または op-run 非対象 Utility Worker (spec-expert) として post-check spawn 不可。
-    # post-check expert resolution の再決定が必要
-    # ClusterOrchestrator が当該 PR の post-check expert を spawn しない
-    log warning("post_check_expert=${post_check_expert} は post-check spawn 不可 (planned or Utility Worker)")
-    return needs_human_decision  # 内部 enum (snake_case)
-    abort_dispatch()
-    # → controller は post_check_expert を null / active expert に再 routing するか、
-    #    人間レビューに回す。本フェーズでは workflow を呼ばない。
-
-  *:  # unregistered
-    # active-expert-registry.md / planned-experts.md のどちらにも無い
-    log error("post_check_expert=${post_check_expert} は unregistered。contract error として停止")
-    raise ContractError
-    abort_dispatch_with_contract_error()
-```
-
-### 後段への影響
-
-- `needs_human_decision` (内部 enum) になったクラスタは controller がフェーズ4 を **呼ばず**、
-  `pro-review-blocked` 相当の人間レビュー待ちに寄せる (`apply_review_labels $PR blocked`)。
-  PR 本文に「post_check_expert dispatch unresolved」を明記し、後段で Issue 起票して再 routing する。
-- contract error abort の場合は op-run controller 側で停止し、registry / agent frontmatter の
-  整合 (CLAUDE.md の Single Canonical Source Rule / runtime-contract.md §7) を人間に確認させる。
-  自動補正してはならない。
+- `release-expert` / `compatibility-expert` / `spec-expert`: spawn しない。`needs_human_decision` を返し、review を呼ばず
+  `op pr label-transition --target review --result blocked`。PR コメントに「post_check_expert の dispatch が未解決」と書く。
+- unregistered: contract error で停止し、registry / agent frontmatter の整合を人間に確認させる (自動補正しない)。

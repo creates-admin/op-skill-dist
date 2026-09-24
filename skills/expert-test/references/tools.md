@@ -1,166 +1,83 @@
-# expert-test ツール・テンプレ辞典
+# ツール・テンプレ辞典
 
-<!--
-機能概要: テストランナー / カバレッジ / parametrize / fixture / mock の言語別最小テンプレ集 +
-         削除 (quarantine / delete) 実施時の PR テンプレと安全弁コマンド
-作成意図: agent が "どう書くか" で迷ったときの参照辞典。実用最小形のみ
-注意点: 環境にツールがない場合は提案 (インストール強制はしない)
-       2026-07-23 の重複解消編集で、他 tools.md (expert-debug / expert-feature) と
-       重複していた基礎テンプレ節 (カバレッジ / parametrize / fixture / 時刻凍結 /
-       env 隔離) は節名 + 要点 1〜2 行に圧縮した (削除はしていない)。
-       test-expert 固有価値 (mock 方針判断・flaky 診断・git blame によるゴミテスト判定)
-       は圧縮せず全文残す。
--->
+環境にツールがなければ導入を提案するに留める (インストールを強制しない)。
 
----
+## カバレッジ計測
 
-## カバレッジ計測コマンド
+主要スタック (Rust / Vue・TS / Flutter) のコマンドは `~/.claude/skills/_shared/project-profile.md`。それ以外:
 
 | 言語 | コマンド |
 |------|---------|
-| Python (pytest-cov) | `pytest --cov=src --cov-branch --cov-report=term-missing` (html は `--cov-report=html` → `htmlcov/index.html`) |
-| TS (vitest / jest) | `vitest run --coverage` / `jest --coverage` → `coverage/` |
-| Rust | `cargo tarpaulin --out Stdout` |
+| Python | `pytest --cov=src --cov-branch --cov-report=term-missing` (未導入なら `pytest-cov` を提案) |
+| TS (jest) | `jest --coverage` |
 | Go | `go test -cover ./...` |
-| Dart | `dart test --coverage=coverage` + `format_coverage` → `coverage/` |
 
-未導入時は `pip install pytest-cov` / `npm i -D @vitest/coverage-v8` を提案。
+## parametrize / fixture
 
----
+- 入力違いの繰り返しは 1 本に畳む: Python `@pytest.mark.parametrize` (`pytest.param(..., id=...)`)、TS `test.each`、Rust `rstest` の `#[case::name(...)]`。
+- 共有セットアップは fixture 化してテスト本体を薄く保つ: Python `@pytest.fixture` (yield で teardown、高コストなものは `scope` で共有)、TS `beforeEach` / `afterEach`。
 
-## parametrize テンプレ (重複テスト統合の主要手段)
+## mock 方針
 
-同一ロジックを入力違いで繰り返すテストは 1 本に畳む。Python は `@pytest.mark.parametrize`
-(`pytest.param(..., id="name")` で読みやすく)、TS は `test.each([[...], ...])`、
-Rust は `rstest` の `#[case::name(...)]` を使う。具体構文は各言語のテストランナー doc 参照。
+mock を書く前に、何を mock するかを決める。
 
----
+| mock してよい | mock してはいけない |
+|--------------|-------------------|
+| 外部 HTTP / ネットワーク | テスト対象の主要ロジック本体 |
+| メール / SMS / Push | validation / authorization の本体 |
+| 決済 API | domain rule / business rule |
+| 時刻 / 乱数 | repository と service を同時に mock して本体経由が消える構成 |
+| OS / FS の危険操作 | |
+| 高コストな外部サービス (LLM API / 画像処理) | |
 
-## fixture テンプレ (DRY 化の主要手段)
+次のどれかに当たれば使い方を見直す:
 
-Python は `@pytest.fixture` (yield で teardown、`scope=function/class/module/session` で
-高コスト fixture を共有範囲に応じて使い分け)、TS は `beforeEach`/`afterEach` でセットアップ/後始末を書く。
-authorization token 付き client などの共有セットアップは fixture 化してテスト本体を薄く保つ。
+- テストが振る舞いではなく「呼び出し順の写経」になっている
+- mock なしの integration / contract test が別に存在しない
+- mock のせいで失敗モード (認可漏れ・契約破綻) を見逃している
+- mock が 5 個以上でテスト本体が読めない
 
----
+`test_intent.mock_policy` に mock するもの / しないもの / 理由を書く。
 
-## mock 方針 (mock してよい / してはいけない の判断)
-
-mock テンプレを使う前に、まず **何を mock するか** を決める。
-mock しすぎると「振る舞いではなく呼び出し順の写経」になり、本体ロジックの変更を検出できなくなる。
-
-### mock してよいもの
-
-- 外部 HTTP / ネットワーク
-- メール送信 / SMS / Push 通知
-- 決済 API
-- 時刻 (`Date.now`, `datetime.now`)
-- 乱数 (`Math.random`, `random`)
-- OS / FS の危険操作 (削除、グローバル書込)
-- 高コストな外部サービス (LLM API、画像処理)
-
-### mock してはいけないもの
-
-- テスト対象の主要ロジック本体
-- validation / authorization の本体
-- domain rule / business rule
-- repository と service の **両方** を同時に mock して、本体経由が消える構成
-
-### 判断基準
-
-以下に 1 つでも該当したら mock の使い方を見直す:
-
-- mock によりテストが「振る舞い」ではなく「呼び出し順の写経」になっている
-- mock なしの integration / contract test が **別に存在しない**
-- mock したことで失敗モード (例: 認可漏れ、契約破綻) を見逃している
-- mock オブジェクトが多すぎてテスト本体が読めない (mock 5 個以上は要警戒)
-
-### 出力 schema との対応
-
-`test_intent.mock_policy` で mock するもの / しないものとその理由を必ず明記する。
-
-```json
-"mock_policy": {
-  "mock": ["fetch", "Date.now"],
-  "do_not_mock": ["UserService の validate", "discount 本体"],
-  "reason": "外部依存と時刻のみ mock。本体ロジックは経由させて検証する"
-}
-```
-
----
-
-## mock テンプレ
-
-上記「mock 方針」で決めた対象を実装するときの最小形。Python は `unittest.mock` /
-`monkeypatch.setattr` で差し替え、TS (vitest) は `vi.fn()` + `vi.mock(...)` で差し替える。
-外部 HTTP は TS では `msw` (`setupServer` + `http.get(...)`) が推奨 (request/response の形まで検証できる)。
-
----
+実装: Python は `unittest.mock` / `monkeypatch.setattr`、TS (vitest) は `vi.fn()` / `vi.mock(...)`。外部 HTTP は TS なら `msw`
+(request / response の形まで検証できる)。
 
 ## 時刻 / 乱数の凍結
 
-flaky の主要原因。テストでは必ず固定する。Python は `pytest-freezegun` の `freezer.move_to(...)`、
-TS (vitest) は `vi.useFakeTimers()` + `vi.setSystemTime(...)` + `vi.advanceTimersByTime(...)` で凍結・進行させる。
+flaky の主因。Python は `pytest-freezegun` (`freezer.move_to(...)`)、TS (vitest) は `vi.useFakeTimers()` + `vi.setSystemTime(...)` +
+`vi.advanceTimersByTime(...)`。乱数は seed 固定か `monkeypatch` で差し替える。
 
----
+## 環境変数の隔離
 
-## 環境変数 / 設定の隔離
+Python は `monkeypatch.setenv(...)`、TS (vitest) は `vi.stubEnv(...)` / `vi.unstubAllEnvs()`。他テストへ漏らさない。
 
-Python は `monkeypatch.setenv(...)`、TS (vitest) は `vi.stubEnv(...)` / `vi.unstubAllEnvs()` で
-テスト用の環境変数 (DB URL 等) に差し替え、他テストへ漏らさない。
-
----
-
-## flaky テスト診断コマンド
+## flaky 診断
 
 ```bash
-# 失敗するテストを特定 (pytest)
-pytest tests/ -v --tb=short
-pytest tests/ --lf  # last failed のみ再実行
-pytest tests/ --ff  # 失敗を最初に実行
-
-# 反復実行で flaky 判定
+pytest tests/ --lf   # 前回失敗分のみ
 for i in {1..10}; do pytest tests/ -x || echo "FAIL on iteration $i"; done
-
-# vitest 反復
 for i in {1..10}; do npx vitest run --bail || echo "FAIL on iter $i"; done
 ```
 
-flaky と判定されたテストは:
-1. 時刻 / 乱数 / 順序依存を疑う (このファイルの「凍結」セクション参照)
-2. 環境依存を疑う (`/tmp`, `process.env`, 実 HTTP)
-3. 並行性を疑う (テスト間でリソース競合していないか)
-4. 修正できないなら `.skip` 化 + チケット起票 (放置スキップにしない)
-
----
-
-## 安全削除の git blame コマンド
-
-ゴミ判定テストを削除する前の必須確認:
-
-```bash
-# テスト追加コミットの確認
-git blame tests/path/to/file.test.ts
-
-# 特定テストブロック (skip 等) の追加コミット
-git log --diff-filter=A --pretty=format:"%H %s" -- tests/path/to/file.test.ts | head -5
-
-# テストが参照している関数の最終変更
-git log -p src/path/to/file.ts | head -50
-
-# Issue / PR から context 復元
-gh search issues "tests/path/to/file" --state=all
-gh search prs "tests/path/to/file" --state=all
-```
-
-これで「なぜ追加されたか」が分かる。それでも不明なら **削除せず .skip** で観察期間を取る。
-
----
+疑う順: 時刻・乱数・順序依存 → 環境依存 (`/tmp` / `process.env` / 実 HTTP) → テスト間のリソース競合。
+直せないなら skip 化 + Issue 起票 (理由とチケット参照のない skip にしない)。
 
 ## 削除時の PR テンプレと安全弁コマンド
 
-**3 段階モデル** (通過条件は SKILL.md の「テスト削除の 3 段階モデル」節が正本) が思想で、本章はその実装。
-quarantine / delete を実施する PR で必ず以下を残す。
+SKILL.md の「テスト削除の 3 段階モデル」の実装。quarantine / delete の PR で必ず残す。
+
+### 安全弁コマンド (apply 前)
+
+```bash
+git blame tests/path/to/file.test.ts                                              # 追加コミット
+git log --diff-filter=A --pretty=format:"%H %s" -- tests/path/to/file.test.ts | head -5
+git log -p src/path/to/file.ts | head -50                                         # 対象コードの最終変更
+gh search issues "tests/path/to/file" --state=all                                 # 追加意図の復元
+gh search prs "tests/path/to/file" --state=all
+```
+
+同等カバレッジは、対象テストを skip 化して coverage を再計測し、低下がないことで確認する。
+追加意図が分からなければ削除せず、`needs_human_decision.required: true` (decision_type: "deletion") で返す。
 
 ### 削除根拠テンプレ (PR 本文 / コミットメッセージ)
 
@@ -168,33 +85,12 @@ quarantine / delete を実施する PR で必ず以下を残す。
 ## 削除根拠
 - 追加コミット: <sha> (<日付>, <作者>)
 - 追加意図 (Issue/PR から復元): <要約>
-- 現状の評価: <なぜ価値喪失したか>
+- 現状の評価: <なぜ価値を失ったか>
 - 同等カバレッジ: <他テストの参照、なければ「補完テスト追加済」>
-- 観察期間: <skip 化からの経過、問題発生有無>
+- 観察期間: <skip 化からの経過、問題の有無>
 - safety_gate 通過記録:
   - blame: ✓ <sha>
   - coverage_diff: ✓ <他テストでカバー>
   - ci_pass: ✓ <runId>
   - observation_period: ✓ <YYYY-MM-DD ~ YYYY-MM-DD>
 ```
-
-### 安全弁コマンド (apply 前に実施)
-
-```bash
-# 1. テスト追加コミットの確認 (blame)
-git blame tests/path/to/file.test.ts
-
-# 2. テストブロック追加コミットの特定
-git log --diff-filter=A --pretty=format:"%H %s" -- tests/path/to/file.test.ts | head -5
-
-# 3. 同等カバレッジ確認 (coverage diff)
-# 対象テストを skip 化 → 再計測 → カバレッジ低下があれば独自カバーあり
-
-# 4. Issue / PR から context 復元
-gh search issues "tests/path/to/file" --state=all
-gh search prs "tests/path/to/file" --state=all
-```
-
-これで「context 喪失で勝手に削除した」事故を構造的に防ぐ。
-不明なまま削除に進むくらいなら `needs_human_decision.required: true` (decision_type: "deletion") で
-構造化された人間判断要求として返す。

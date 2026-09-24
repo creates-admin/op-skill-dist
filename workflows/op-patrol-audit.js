@@ -1,49 +1,11 @@
-/**
- * 機能概要:
- *   op-patrol 区画別観点別 audit + 起票前 refute の Dynamic Workflow (ADR-0009 Phase C / C3)。
- *   - audit  stage: controller が patrol_score / area 選定で確定した region (区画) ごとに、
- *                   area の性質に応じた expert を region.audit_model で並列 spawn し、
- *                   canonical scan-finding (expert-spawn.md) を region 単位に集約して返す (read-only / exploration-only)。
- *                   並列は flat (region, expert) pair で行い、index zip で region_id / detected_by / finding_ref を付与する。
- *   - refute stage: High/Critical finding ごとに **同 domain の別インスタンス skeptic** を spawn し、
- *                   引用 file:line を再 Read して偽陽性 / severity 過大 / 起票不適格を反証する。
- *                   verdict (confirmed/refuted/downgrade) を controller へ返し、controller が
- *                   フェーズ4.5 で verdict 適用 → severity gate → dedup → enrichment → 起票 → Ledger 更新 を行う。
- *
- * 作成意図:
- *   現行 SKILL.md フェーズ4 の single-message Agent 並列 spawn (run_in_background) + Monitor 30分待ちを
- *   Workflow へ移行 (context 節約 / Monitor timeout 機構の撤廃)。同時に C2 (op-scan) で確立した
- *   起票前 adversarial-verify (refute) stage を default-on で同梱し、偽陽性を Patrol Finding Policy /
- *   severity gate / dedup / enrichment (最大 8 spawn/Issue) の前で潰す。
- *   refute は enrichment の cross-review (§6) とは別レイヤー (refute = 個別 code finding の偽陽性除去 /
- *   cross-review = issue_draft 全体の品質 review、C4 の領分)。本 workflow は cross-review を持たない。
- *
- * 注意点:
- *   - audit / refute とも exploration-only。コードを編集・commit・push しない (commits_added を出さない)。
- *   - region 選定 (Patrol Ledger ロード / patrol_score / area 選定) / severity gate / dedup / bulk-group /
- *     enrichment 呼び出し / 直列 issue create / Patrol Ledger 更新 は **controller 保持** (本 workflow は spawn と集約のみ、不変則 7/8)。
- *   - 動的値 (regions / expert / model / today / run_id) は全て args 注入 (F2 対策)。
- *   - **args は Workflow tool から JSON 文字列で到着する (C1/C2 段階1.5 実測)**。normalizeArgs() で parse する。
- *   - refute の trust model: refuteVerdictSchema (evidence_excerpt minLength:1 / reread_performed 必須) +
- *     controller-side literal 照合 (drop 方向) + verdict↔severity 整合。決定論照合が無いため近似 gate であり
- *     証明ではない (限界は SKILL.md / 完了報告に明示)。region isolation は finding_ref (`<region_id>:<expert>#<idx>`) で保持。
- *   - **security 非対称ルール (D7)**: security の Critical/High を refuted にするには到達不可の積極的証拠
- *     (security_unreachable_proof) を必須化し、default を confirmed に倒す (false-negative 防止)。他 domain は対称 skeptic。
- *   - REAL_API 準拠: export const meta (pure literal 第一文) / phase() は body 冒頭のみ (stage callback 内で呼ばない) /
- *     非決定 API (現在時刻取得・乱数生成・引数なしの日付生成) 不使用 (today は args 注入)。
- */
-
 export const meta = {
   name: "op-patrol-audit",
   description:
-    "op-patrol 区画別観点別 audit (region ごとに area→expert を region.audit_model で並列 spawn → canonical scan-finding を region 単位に集約) + 起票前 refute (High/Critical を同 domain 別インスタンス skeptic で偽陽性反証)。region 選定 / severity gate / dedup / bulk-group / enrichment / 直列 issue create / Patrol Ledger 更新 は controller 保持。refute は enrichment cross-review とは別レイヤー",
+    "op-patrol 区画別観点別 audit (region ごとに area→expert を並列 spawn → canonical scan-finding を region 単位に集約) + 起票前 refute (High/Critical を同 domain 別インスタンス skeptic で偽陽性反証)。region 選定 / severity gate / dedup / 起票 / Patrol Ledger 更新は controller 保持",
   phases: [{ title: "audit" }, { title: "refute" }],
 };
 
-// audit finding schema。canonical scan-finding (expert-spawn.md) を findings 配列に入れた object で受ける
-// (StructuredOutput は object 返却が安全)。item.required は cross-domain 共通の最小 5 field のみ hard 強制し
-// (D4: false negative を避けるため null-drop を最小化)、domain extension (refactor / security 等) は additive。
-// controller が転写時に domain ごとの完全性を reject する (op-scan と同一 schema、Single Canonical Source)。
+// canonical scan-finding (expert-spawn.md)。op-scan-audit と同一 schema。
 const scanFindingSchema = {
   type: "object",
   required: ["findings"],
@@ -68,16 +30,13 @@ const scanFindingSchema = {
           evidence_grade: { type: "string", enum: ["direct", "inferred", "requires_runtime"] },
           recommended_runner: { type: "string" },
           post_check_expert: { type: ["string", "null"] },
-          // 残りの canonical field / domain extension は additive (forward-compat、controller が転写時検証)
         },
       },
     },
   },
 };
 
-// refute verdict schema。finding 単位の skeptic 判定。evidence_excerpt は minLength:1 で空証拠を構造 block。
-// finding_ref で controller が verdict↔finding を keying する (op-fingerprint は controller フェーズ5 で採番)。
-// op-scan-audit.js と同一 (Single Canonical Source、流用)。
+// op-scan-audit と同一 schema。
 const refuteVerdictSchema = {
   type: "object",
   required: ["finding_ref", "verdict", "refuted", "reason", "evidence_excerpt", "reread_performed", "supports_claim"],
@@ -85,30 +44,26 @@ const refuteVerdictSchema = {
     finding_ref: { type: "string" },
     verdict: { type: "string", enum: ["confirmed", "refuted", "downgrade"] },
     refuted: { type: "boolean" },
-    // verdict=downgrade で必須 (audit より低い severity)。confirmed/refuted では省略可。
+    // verdict=downgrade で必須
     confirmed_severity: { type: "string", enum: ["critical", "high", "medium", "low", "n/a"] },
     reason: { type: "string" },
-    // 再 Read した実コード片 (自然文要約でなく生コード)。空不可。
     evidence_excerpt: { type: "string", minLength: 1 },
-    // 'file:line-line' (controller が literal 照合する anchor)。
+    // 'file:line-line'
     evidence_location: { type: "string" },
     reread_performed: { type: "boolean" },
     supports_claim: { type: "boolean" },
     evidence_grade_observed: { type: "string", enum: ["direct", "inferred", "requires_runtime"] },
-    // security 非対称 (D7): security の refuted で必須。到達不可の積極的証拠。
+    // security の refuted で必須
     security_unreachable_proof: { type: "string" },
     needs_human_decision: { type: "object" },
   },
 };
 
-// args は Workflow tool から JSON 文字列で到着する (C1/C2 段階1.5 実測) → parse + 入力検証。
 const input = normalizeArgs();
 
 phase("audit");
 
-// --- plugin scoped-name: Workflow agent() の agentType は plugin 登録名 (op-skill:<name>) で解決する ---
-// built-in (general-purpose/Explore/Plan) は plugin component でないため bare 維持。data (expert 名等) は
-// bare 正本、spawn 境界でのみ前置する (skills/_shared/expert-spawn.md「Plugin scoped-name 規約」)。
+// agentType は plugin scoped 名 (op-skill:<name>)。built-in は bare。
 const BUILTIN_AGENTS = new Set(["general-purpose", "Explore", "Plan"]);
 const scopedAgentType = (n) => (n && !BUILTIN_AGENTS.has(n) ? `op-skill:${n}` : n);
 log(
@@ -116,12 +71,10 @@ log(
 );
 if (input.fable_guard_corrections.length)
   log(
-    `[fable-guard] read-only spawn への fable 指定を opus へ矯正: ${input.fable_guard_corrections.join(", ")} (model-selection.md §7.2 F3)`
+    `[fable-guard] read-only spawn への fable 指定を opus へ矯正: ${input.fable_guard_corrections.join(", ")} (model-selection.md §7.2)`
   );
 
-// ---- audit stage: region × expert を flat に read-only 並列 spawn ----
-// flat (region, expert) pair。各 spawn は {findings:[scan-finding]} を返す。
-// filter(Boolean) しない: tasks と結果を index で zip するため (finding に provenance が無く、null は空 batch 扱い)。
+// region × expert を flat に並列 spawn。filter(Boolean) しない: tasks と index で zip する。
 const tasks = [];
 input.regions.forEach((region) => {
   region.expert_list.forEach((expert) => {
@@ -141,11 +94,9 @@ const auditResults = await parallel(
   )
 );
 
-// tasks ↔ auditResults を index で zip し、region 単位に集約 + provenance / finding_ref 付与。
 const regions = regroupByRegion(input.regions, tasks, auditResults);
 
-// ---- refute stage: 全 region の High/Critical finding を同 domain 別インスタンス skeptic で反証 ----
-// Medium 以下は severity gate で落ちるため skip。op-patrol は反復巡回のため取りこぼしは次回再検出。
+// Medium 以下は refute 対象外。
 const refuteTargets = [];
 regions.forEach((rg) => {
   rg.findings.forEach((f) => {
@@ -157,25 +108,20 @@ const verdicts = (
   await parallel(refuteTargets.map((f) => () => runRefute(f, input)))
 ).filter(Boolean);
 
-// controller はこの戻り値で フェーズ4.5 (verdict 適用) → severity gate → dedup → enrichment → 起票 → Ledger 更新 を行う。
 return attachVerdicts(input, regions, verdicts);
 
-// ---- stage 関数 (phase() は body 冒頭で宣言済み。stage 内では呼ばない = parallel race 回避) ----
+// stage callback 内で phase() を呼ばない。
 async function runRefute(finding, a) {
   return await agent(buildRefutePrompt(finding, a), {
     label: `refute ${finding.finding_ref}`,
     phase: "refute",
     schema: refuteVerdictSchema,
-    agentType: scopedAgentType(finding.detected_by), // 同 domain の別インスタンス (D6)。skeptic 性は prompt で代替
-    model: "opus", // 起票可否=不可逆 gate のため Opus 固定 (D5、enrichment 行と整合)
+    agentType: scopedAgentType(finding.detected_by),
+    model: "opus",
   });
 }
 
-// ---- helpers ----
-
-// audit 結果 (raw、未 filter) を tasks (region, expert) と index で zip し、region 単位に集約。
-// 各 finding に detected_by + region_id + finding_ref (`<region_id>:<expert>#<idx>`) を付与する。
-// auditResults[ti] が null (expert 失敗) の場合は空 batch 扱い (index ずれを起こさない、C2 と同方式)。
+// finding_ref = `<region_id>:<expert>#<idx>`。null result (expert 失敗) は空 batch 扱い。
 function regroupByRegion(regionDefs, tasks, auditResults) {
   const byRegion = new Map();
   regionDefs.forEach((r) => byRegion.set(r.id, []));
@@ -195,8 +141,7 @@ function regroupByRegion(regionDefs, tasks, auditResults) {
   return regionDefs.map((r) => ({ region_id: r.id, area: r.area, findings: byRegion.get(r.id) }));
 }
 
-// verdict を finding_ref で region に再配分 + region ごとの audit_report 統計を生成。
-// audit_report は完了報告での可視化用 (本 PR では Patrol Ledger には永続化しない、scope 外)。
+// verdict を finding_ref で region に再配分し、region ごとの audit_report 統計を付ける。
 function attachVerdicts(a, regions, verdicts) {
   const vByRef = new Map();
   verdicts.forEach((v) => {
@@ -243,18 +188,15 @@ function attachVerdicts(a, regions, verdicts) {
   };
 }
 
-// ---- args 正規化 + 入力アサーション (Workflow input には schema 強制が無いため entry で fail-fast) ----
 function normalizeArgs() {
   const a = typeof args === "string" ? JSON.parse(args) : args;
   if (!a) throw new Error("op-patrol-audit: args missing");
   if (!Array.isArray(a.regions) || a.regions.length === 0)
     throw new Error("op-patrol-audit: args.regions must be a non-empty array");
   if (!a.today)
-    throw new Error("op-patrol-audit: args.today (YYYY-MM-DD) required (agent 側 date 実行禁止 = F2 対策)");
+    throw new Error("op-patrol-audit: args.today (YYYY-MM-DD) required");
   if (!a.run_id) throw new Error("op-patrol-audit: args.run_id is required");
-  // model-selection.md (>=5) §7.2 F3: 本 workflow の spawn はすべて read-only 経路のため `fable` 禁止
-  //   (write phase の承認 gate = op-run 1-2-g / op-codev 3-B-gate でのみ fable が載る)。controller が
-  //   誤注入しても silent 受理せず opus へ矯正し、矯正記録を fable_guard_corrections に残す (warning + 続行)。
+  // read-only spawn は fable 禁止 (model-selection.md §7.2)。opus へ矯正して記録する。
   a.fable_guard_corrections = [];
   for (const r of a.regions) {
     if (!r.id || !r.area)
@@ -264,7 +206,6 @@ function normalizeArgs() {
     for (const e of r.expert_list) {
       if (!e.name || !e.model)
         throw new Error(`op-patrol-audit: region ${r.id} expert ${e.name || "?"} missing name/model`);
-      // §7.2 F3: 区画 audit は read-only ゆえ fable 禁止 (誤注入は opus へ矯正して記録)
       if (e.model === "fable") {
         e.model = "opus";
         a.fable_guard_corrections.push(`${r.id}:${e.name}`);
@@ -274,9 +215,6 @@ function normalizeArgs() {
   return a;
 }
 
-// audit prompt: 現行 SKILL.md フェーズ4 spawn テンプレ (L663-738) を verbatim 移植。
-// scope→area、巡回コンテキスト (前回巡回 / 巡回理由 / run_id) を注入。Patrol Finding Policy は
-// workflow spawn された agent が SKILL.md を見られないため本 prompt に inline で埋め込む。
 function buildAuditPrompt(e, region, a) {
   return [
     "invocation_mode: op_managed",
@@ -286,15 +224,13 @@ function buildAuditPrompt(e, region, a) {
     "あなたはこのコードを書いていません。警備員として外部視点で監査します。",
     "",
     "共通宣言 (invocation_mode / 質問禁止 / 必読 checklist / commits_added):",
-    "`~/.claude/skills/_shared/spawn-prompt-common.md (>=1)` §1〜§4 を参照。",
+    "`~/.claude/skills/_shared/spawn-prompt-common.md` §1〜§4 を参照。",
     "本フェーズは patrol (exploration-only) のため commits_added: [] が正解 (commit は行わない)。",
     "You must not ask interactive questions. Do not stop and wait for commander or user replies.",
     "",
     "【実行日 (op-patrol が注入)】",
     `today: ${a.today}`,
-    "architecture_debt finding 等の `first_detected_at` / `last_seen_at` には本値を使用すること",
-    "(agent 側で日付推測 / `date` 実行をしない)。既存 Issue 突合による累積値の上書きは op-patrol の",
-    "責務であり、agent は本日の暫定値のみ返す。",
+    "`first_detected_at` / `last_seen_at` 等の日付には本値を使う (`date` 実行や推測をしない)。",
     "",
     "【巡回コンテキスト】",
     `- 区画: ${region.area}`,
@@ -304,7 +240,7 @@ function buildAuditPrompt(e, region, a) {
     "",
     "【方針】",
     "- コードを変更しない (Read / Grep / Glob のみ)",
-    "- **Patrol Finding Policy を厳守** (後述、op-scan より厳しい)",
+    "- **Patrol Finding Policy を厳守** (後述)",
     "- Critical / High のみ報告。Medium 以下は完全に無視",
     "- 判定基準は ~/.claude/skills/_shared/severity-rubric.md",
     "- スタック前提は ~/.claude/skills/_shared/project-profile.md",
@@ -338,19 +274,18 @@ function buildAuditPrompt(e, region, a) {
     "ux-ui / design / test / feature のいずれか) を入れる。",
     "",
     "【recommended_runner / post_check_expert を必ず出力する】",
-    "canonical schema の `recommended_runner` (apply 担当) と `post_check_expert` (post-check 担当、",
-    "不要なら null) を全検出に必ず含める。op-patrol はこれを Issue 本文の hidden marker",
-    "`<!-- op-run-expert: ... -->` / `<!-- op-post-check-expert: ... -->` に転写する。",
-    "これらは routing recommendation であり apply/fix の spawn authorization ではない",
+    "`recommended_runner` (apply 担当) と `post_check_expert` (post-check 担当、不要なら null) を全検出に含める。",
+    "op-patrol はこれを Issue 本文の `<!-- op-run-expert: ... -->` / `<!-- op-post-check-expert: ... -->` に転写する。",
+    "これらは routing recommendation であり spawn authorization ではない",
     "(op-run が `_shared/runtime-contract.md` の判定優先順位で実 spawn 先を再解決する)。",
     "",
     "domain → 標準値:",
     "- debug / optimize / test: recommended_runner = 自分自身、post_check_expert = null",
-    "- refactor: recommended_runner = \"refactor-expert\"、post_check_expert は Phase 1 の硬い制限で 3 値のみ",
+    "- refactor: recommended_runner = \"refactor-expert\"、post_check_expert は 3 値のみ",
     "    (\"security-expert\" : file IO / path / shell / external input / permission / secret / updater 系、",
     "     \"ux-ui-audit-expert\" : UI state / 操作導線 / 復帰可能性 / a11y / 視覚的 component 系、null : 上記外)。",
     "    両方必要に見える場合は Issue を分割する (1 Issue = 1 post-check)。",
-    "    compatibility / release / test / designer は post_check_expert に書かない。review-expert も指定不可 (global review 専任)。",
+    "    compatibility / release / test / designer / review-expert は post_check_expert に書かない。",
     "- security: recommended_runner = \"security-expert\" (op-run の判定で debug-expert に回ることもある)、",
     "    post_check_expert = \"security-expert\"。canonical schema 拡張 (security / threat_model / usable_security / post_check) を必須出力とする。",
     "- feature: recommended_runner = \"feature-expert\"、UI 影響あれば post_check_expert = \"ux-ui-audit-expert\"",
@@ -360,7 +295,7 @@ function buildAuditPrompt(e, region, a) {
     "【designer-expert の非 frontend area での挙動】",
     "designer-expert は area に UI surface (Vue / React / Svelte / Flutter Widget / pages /",
     "components / theme / token / style / scss / tailwind / vuetify / material theme 定義 等) が",
-    "存在しない場合、即座に {\"findings\": []} を返す (area→expert マッピングで誤って呼ばれた場合の安全弁)。",
+    "存在しない場合、即座に {\"findings\": []} を返す。",
     "",
     "【完了条件】",
     "area 内のコードを Read / Grep で巡回し、Patrol Finding Policy に該当する指摘を全て返す。",
@@ -368,9 +303,6 @@ function buildAuditPrompt(e, region, a) {
   ].join("\n");
 }
 
-// refute prompt: finding ごとの独立 skeptic。引用 file:line 再 Read 必須 + 実コード片 evidence_excerpt 必須。
-// security domain は非対称 (D7): default=confirmed、refuted にするには security_unreachable_proof 必須。
-// op-scan-audit.js と同一ロジック (流用、op-patrol 文言に調整)。
 function buildRefutePrompt(f, a) {
   const isSecurity = f.domain === "security";
   const lines = [
@@ -379,7 +311,7 @@ function buildRefutePrompt(f, a) {
     `あなたは ${f.detected_by} の **別インスタンス (skeptic mode)** です。`,
     "op-patrol の起票前 refute (反証) フェーズから呼ばれた OP-managed Mode 起動です。",
     "コードを変更しない (Read / Grep / Glob のみ)。質問で停止しない。",
-    "共通宣言: `~/.claude/skills/_shared/spawn-prompt-common.md (>=1)` §1〜§4。",
+    "共通宣言: `~/.claude/skills/_shared/spawn-prompt-common.md` §1〜§4。",
     "",
     "【対象 finding (audit が検出、起票候補)】",
     JSON.stringify(f),
@@ -389,14 +321,14 @@ function buildRefutePrompt(f, a) {
     "【あなたの仕事】この finding が **実在し起票に値するか** を反証で精査する。",
     "1. finding.files の引用 file:line を **必ず再 Read する** (該当行 ±20 行、または該当シンボル全体)。",
     "   reread_performed: true は実際に再 Read した場合のみ。再 Read せずに verdict を出すのは contract violation。",
-    "2. reason には再 Read した **実コード片を evidence_excerpt に生のまま引用** し、それが finding の主張",
-    "   (到達経路 / 観測可能な被害) を支持するか (supports_claim) を実コードで論証する。自然文要約のみは不可。",
-    "3. evidence_location に再 Read した範囲を 'file:line-line' で記す (controller が literal 照合する)。",
+    "2. 再 Read した **実コード片を evidence_excerpt に生のまま引用** し、それが finding の主張",
+    "   (到達経路 / 観測可能な被害) を支持するか (supports_claim) を reason で論証する。自然文要約のみは不可。",
+    "3. evidence_location に再 Read した範囲を 'file:line-line' で記す。",
     "",
     "【判定軸 (verdict)】",
-    "- 偽陽性 (引用 file:line に主張の事象が存在しない / コードは読めたが主張の因果が成立しない) → verdict: refuted",
+    "- 偽陽性 (引用 file:line に主張の事象が存在しない / 主張の因果が成立しない) → verdict: refuted",
     "- severity 過大 (severity-rubric.md の到達経路→被害 test に照らし Critical/High より低い) → verdict: downgrade + confirmed_severity",
-    "- evidence_grade が direct 以外 (requires_runtime / inferred) で Critical 申告、または inferred で起票不適格 → verdict: downgrade or refuted",
+    "- evidence_grade が direct 以外で Critical 申告、または inferred で起票不適格 → verdict: downgrade or refuted",
     "- 実在し severity 妥当 → verdict: confirmed",
     "",
     "判定基準: ~/.claude/skills/_shared/severity-rubric.md / スタック前提: project-profile.md /",
@@ -408,19 +340,17 @@ function buildRefutePrompt(f, a) {
   if (isSecurity) {
     lines.push(
       "",
-      "★【security 非対称ルール (D7、重要)】",
+      "【security 非対称ルール】",
       "この finding は domain=security のため **default を confirmed に倒す**。",
-      "security の Critical/High を refuted にするには、`security_unreachable_proof` に",
-      "**到達不可であることの積極的証拠** (source→sink が到達しない / trust boundary で遮断される /",
-      "required_user_action が成立しない 等を実コードで示す) を必ず記す。",
-      "到達不可の積極的証拠を示せない場合は refuted にせず confirmed のままにする",
-      "(security の取りこぼし = false negative は実害が大きいため、不確実なら confirmed)。"
+      "refuted にするには `security_unreachable_proof` に **到達不可であることの積極的証拠**",
+      "(source→sink が到達しない / trust boundary で遮断される / required_user_action が成立しない 等を実コードで示す) を記す。",
+      "示せない場合・不確実な場合は confirmed のままにする。"
     );
   } else {
     lines.push(
       "",
       "【skeptic default (非 security)】",
-      "confirmed にするには上記の積極的証拠が必要。不確実 / 証拠不十分なら **refuted に倒す** (default refuted)。"
+      "confirmed にするには上記の積極的証拠が必要。不確実 / 証拠不十分なら **refuted に倒す**。"
     );
   }
   lines.push(
