@@ -25,6 +25,10 @@ op scan dedup --findings-json "$DRAFTS_JSON" --json
 - 類似 (warn) → 提示して human に判断を仰ぐ。
 - dedup 自体が失敗 → 起票せず中断し、手動確認を促す。
 
+feature が `design-system` で、gap が部品の作成・変更・登録状態 (カタログ掲載・契約・部品単位トークン・`status:`) に関わるものは
+**部品 issue** として起票する (書式は `_shared/design-system.md`「部品 issue」。fingerprint の domain は `design`、
+`op-run-expert: designer-expert`、ラベルは `auto-report,pro-designer-expert`)。それ以外の gap は下記のとおり。
+
 ## 3. 起票 (1 件ずつ直列)
 
 本文は `pr-templates.md`「Issue 本文 (指示書フル版)」に従って一時ファイルに書く。marker は次の 3 つ:

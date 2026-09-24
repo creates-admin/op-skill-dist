@@ -236,8 +236,8 @@ UI issue が無ければフェーズ6 へ進む。Issue 本文に見た目の仕
 
 デザインシステム導入済みの repo では、画面は登録済み (確定) の部品だけで組む (`_shared/design-system.md`。未導入なら既存 UI を
 踏襲し、提示時に `--init` を推奨する)。モックの結果、登録済みの部品で表現できない見た目が
-要る場合は、その部品を **部品 issue** (`/op-skill:op-component` で作り込む。op-run には回さない) として分解に加え、
-画面 issue を `op-depends-on` でつなぐ。部品 issue の本文には「`/op-skill:op-component <部品名> --issue <N>` で実施」と書く。
+要る場合は、その部品を **部品 issue** (書式は `_shared/design-system.md`「部品 issue」。op-component で作り込み、op-run には回さない)
+として分解に加え、画面 issue を `op-depends-on` でつなぐ。
 
 ### 5-0. surface グルーピング
 

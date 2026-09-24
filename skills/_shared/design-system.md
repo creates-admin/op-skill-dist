@@ -46,3 +46,21 @@ Claude Design (`/design` Artifact) は作り込み中の作業台であり、正
 
 未導入の repo では、各 skill は既存 UI を踏襲して進めてよい。UI を含む計画・起票・実装の提示時に
 「デザインシステム未導入: `/op-skill:op-component --init` を推奨」と 1 行添える。登録制 (確定部品だけを使う) は導入済みの repo でだけ強制する。
+
+## 部品 issue
+
+部品の新規作成・変更・登録状態の修正は、op-run ではなく op-component で行う。そのための Issue (op-plan の分解、op-spec の派生 issue、
+op-spec-patrol の指摘から作る) は次の形にする:
+
+- タイトル: `[designer-expert] 部品: <部品名> — <内容>`
+- marker: `op-fingerprint` (domain `design`) / `op-run-expert: designer-expert`
+- 本文の 1 行目: `実施: /op-skill:op-component <部品名> --issue <N>` (`<N>` は起票後の番号。起票時は `--issue` を省いてよい)
+- 本文: 必要な variant / 状態、なぜ必要か (どの画面・どの gap から来たか)
+
+op-run は本文に `実施: /op-skill:op-component` を含む Issue を実装対象にしない。
+
+## 部品一覧と実物のずれ
+
+`.claude/rules/design-system.md` の「部品一覧」と、部品本体冒頭の `status:` (`op-config.yaml` の `design_system.status_marker`) は
+一致していなければならない。ずれ (一覧に無い部品 / 実物が無い行 / status の不一致) は op-spec-patrol が検出し、
+部品 issue として op-component に回す。一覧は op-component だけが更新する。

@@ -140,6 +140,9 @@ op issue list --label "auto-report" --state open \
   `blocked_actions[]` を守り、残る判断を PR 本文「残存リスク / follow-up」に転記する (`apply-prompt-directives.md`)。
 - `needs:boundary-decision` 単独 (参考タグで apply を止めない)。
 
+本文に `実施: /op-skill:op-component` を含む Issue (部品 issue、`_shared/design-system.md`) は apply しない。plan の「op-component で実施」節に
+列挙し、完了報告で `/op-skill:op-component <部品名> --issue <N>` を案内する。
+
 残りの Issue はフェーズ1.5 (健全性チェック) を経て 1-2 に進む。
 
 ### 1-2. クラスタリング (Plan-time)
