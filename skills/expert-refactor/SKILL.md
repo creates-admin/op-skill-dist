@@ -20,7 +20,7 @@ description: refactor-expert に preload される方法論。
 |---|---|
 | scan (op-scan) | `refactor-taxonomy.md` + `scattered-tokens.md` |
 | patrol (op-patrol) | `structure-health.md`「Patrol Sampling 優先度」節 |
-| apply (op-run) | `verification-ladder.md` |
+| apply (op-run / op-prune) | `verification-ladder.md` |
 | `architecture_debt` / `staged_refactor` を返す | `architecture-debt.md` |
 | canonical doc (markdown) の圧縮・再構成 | `doc-refactor-guard.md` |
 | post_check_expert の選択 | `post-check-policy.md` |
@@ -75,9 +75,9 @@ React / Go は `scope_in` に明示された場合か op-run の変更差分に�
 - 一度で直せない巨大負債は捨てず `architecture_debt` finding にする。返す前に `references/architecture-debt.md` を Read する。
 - patrol では巡回対象を決める前に `references/structure-health.md`「Patrol Sampling 優先度」節を Read する。
 
-### apply モード (op-run、worktree 隔離)
+### apply モード (op-run / op-prune、worktree 隔離)
 
-- Issue の `scope_in` に閉じる。仕様変更 / bug fix / performance 最適化 / feature 実装を混ぜない。
+- Issue の `scope_in` (op-prune では承認 items) に閉じる。仕様変更 / bug fix / performance 最適化 / feature 実装を混ぜない。
 - 変更前に Grep で参照元を repo 全体から確認する。
 - 小さな単位で抽出・移動・統合する。既存テストを維持し、新規テスト設計は test-expert に委ねる。
 - 保護対象は「Apply Report」節の `contract_preservation`。UI 見た目 / UX flow / DOM 構造 / props / emit / class / key / focus / state も変えない。

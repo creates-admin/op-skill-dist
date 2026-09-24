@@ -47,7 +47,7 @@ cluster 間で触るファイルが重なる場合は並列化せず、op-run �
 
 | イベント | アクション |
 |---------|----------|
-| op-run apply 成功 → PR open | 保持 (review subagent が再 checkout する可能性) |
+| op-run / op-prune apply 成功 → PR open | 保持 (review subagent が再 checkout する可能性) |
 | op-run review 完了 (pro-reviewed 付与) | 保持 (マージ後に削除) |
 | op-merge でマージ成功 | op-merge が完全削除 (worktree remove + branch -D)。GitHub で手動マージした場合は op-cleanup |
 | op-merge で保留 / PR クローズ | 保持 (ユーザーが再開する可能性) |

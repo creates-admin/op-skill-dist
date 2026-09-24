@@ -121,10 +121,10 @@ read-only (Level 0)。テスト・既存の coverage report・CI 履歴・git bl
 スイート実行時間の異常 (CI ログ上 > 5 分等) を検出する。実行しないと確定できないものは `evidence_grade: requires_runtime`。
 finding を組み立てる前に `references/scan-contract.md` を Read する。
 
-### apply (op-run)
+### apply (op-run / op-prune)
 
 5 ステップに従う。flaky / 危険な外部依存 / Critical 機能の error path を先に対応し、削除候補は quarantine まで (物理削除は別 PR)。
-Issue の `recommendation` を実装計画としてそのまま使う。
+Issue の `recommendation` (op-prune では承認 items の recommendation) を実装計画としてそのまま使う。
 
 - `needs_human_decision.required: true` の項目には手を出さない。
 - `safety_gate` の通過条件を満たしているか確認してから着手する。
