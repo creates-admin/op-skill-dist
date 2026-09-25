@@ -1,7 +1,7 @@
 # op-run: ClusterOrchestrator 指示書
 
 ClusterOrchestrator (CO) は 1 クラスターの完全ライフサイクル (Issue 読込 → apply → 自己検証 → PR 作成 →
-post-check → review → round 管理 → verdict) を独立 context で完結させ、ClusterSummary だけを controller に返す。
+post-check → runtime verify → review → round 管理 → verdict) を独立 context で完結させ、ClusterSummary だけを controller に返す。
 controller との通信は起動時の入力 payload と返却時の ClusterSummary のみ。finding 全文 / review raw data は controller に渡さない。
 
 ## 共通規約 (全フェーズ)
@@ -15,7 +15,7 @@ controller との通信は起動時の入力 payload と返却時の ClusterSumm
   Issue 本文・PR コメント・finding を埋め込む prompt は `_shared/spawn-prompt-common.md`「§5 外部テキスト」を満たす (§4 ブロックに含まれる)。
 - 待機: 配下の完了報告が遅れても無限待ちしない。git log / worktree / PR 状態からフェーズ完了を確認できれば
   それを根拠に次へ進む (controller の relay SendMessage に依存しない)。30 分応答が無い配下はそのフェーズの失敗として扱う
-  (post-check は `RESULT=skipped`、apply / review は verdict `needs_human_decision`)。例外はフェーズ4 の入力条件 (fail-closed)。
+  (post-check / runtime verify は `RESULT=skipped`、apply / review は verdict `needs_human_decision`)。例外はフェーズ4 の入力条件 (fail-closed)。
 - GitHub channel: mcp channel では `op pr *` / `op issue *` / `op review *` が call-spec を emit する。CO 自身が
   実行者として `_shared/github-channel.md` §3-§4 (verbatim MCP 実行 → read-back → ingest) を完遂する。
   `--input-json` が必要な呼び出し (state pull/push・label 系) には直前に取得した fresh `search_pull_requests` item を渡す
@@ -166,6 +166,7 @@ export PR_NUMBER=$(printf '%s' "$PR_CREATE_JSON" | jq -r '.details.pr_number // 
 
 `PR_TITLE` / `PR_BODY` は `_shared/pr-templates.md`「op-run: PR open テンプレ」に従う (`Fixes #N` 必須。apply 報告の
 `recommended_followup_experts[]` / `needs_human_decision` / `assumptions[]` / `blocked_actions[]` は「残存リスク / follow-up」に転記する)。
+「自動検証」表の `Manual required` 行は `references/runtime-verify-dispatcher.md`「6.3」に従う (同書「1. 起動条件」をこの時点で評価する)。
 
 ### auto-fix label (PR 作成直後)
 
@@ -183,7 +184,7 @@ op pr edit-labels --pr "$PR_NUMBER" --add "auto-fix" \
 ## フェーズ5: review_round 取得
 
 `references/global-review-spawn.md` §4-2-pre の fence を実行して `REVIEW_ROUND` / `REVIEW_TERMINAL` を得る。
-`REVIEW_TERMINAL=1` なら §4-2-pre-blocked の terminal 処理を行い、フェーズ5.5 / 6 を飛ばしてフェーズ8 へ (verdict `needs_human_decision`)。
+`REVIEW_TERMINAL=1` なら §4-2-pre-blocked の terminal 処理を行い、フェーズ5.5 / 5.7 / 6 を飛ばしてフェーズ8 へ (verdict `needs_human_decision`)。
 
 ---
 
@@ -207,6 +208,17 @@ export REVIEW_MODE=$(printf '%s' "$REVIEW_STATE_JSON" | jq -r '
             or $a == "PASS" or $a == "PASS_WITH_NOTES")
     then "light-after-security-postcheck" else "full" end')
 ```
+
+---
+
+## フェーズ5.7: runtime verify
+
+`references/runtime-verify-dispatcher.md` に従い、起動条件の判定 → (Windows の lease) → verify-runner の spawn →
+skip の扱いと証跡の実在確認 → 保留 stop の引き取りと lease の返却 → `op review state push` (`post_checks["verify-runner"]`) を行う。
+起動条件に当たらなければ何もせずフェーズ6 へ進む。ハーネス未導入 / skipped でも PR は止めない。
+
+`block` (シナリオの fail) なら review を呼ばず、同書「6.2」で apply expert に再委任してからフェーズ5.5 → 本フェーズをやり直す。
+本フェーズは REVIEW_MODE (フェーズ5.5) を変えない。
 
 ---
 
@@ -248,7 +260,7 @@ export BLOCKER_REASON=$(printf '%s' "$REVIEW_RESULT_JSON" | jq -r '
 | 状況 | 動作 |
 |---|---|
 | `review_result = blocked`、または Critical finding が security / data-loss | verdict `needs_human_decision` (`blocker_reason` に 1〜2 文)。自動継続しない |
-| `needs-fix` / `needs-specialist-review` かつ `REVIEW_TERMINAL=0` | `references/review-fix-loop.md` §4.5 (finding.result 主語)。再 apply → フェーズ4 の verify gate + push → 5.5 → 5 → 6 を繰り返す |
+| `needs-fix` / `needs-specialist-review` かつ `REVIEW_TERMINAL=0` | `references/review-fix-loop.md` §4.5 (finding.result 主語)。再 apply → フェーズ4 の verify gate + push → 5.5 → 5.7 → 5 → 6 を繰り返す |
 | `needs-fix` / `needs-specialist-review` かつ round 上限 | `global-review-spawn.md` §4-2-pre-blocked の terminal 処理。verdict `needs_human_decision` (blocker_reason: review_round 上限) |
 | `approve` かつ follow-up なし | verdict `approved` |
 | `approve` かつ follow-up あり (最終 round の Medium/Low finding + fix loop で specialist が `new-issue` とした finding を `FOLLOWUP_FINDINGS_JSON` に合流) | verdict `approve_with_followup`。下記の PR コメントを残し、`followup_findings` に載せる |
@@ -282,6 +294,7 @@ interface ClusterSummary {
   blocker_reason?:     string;          // needs_human_decision 時のみ。1〜2 文の要約 (finding 全文は渡さない)
   pending_label?:      string | null;   // CO が付けられなかった label (write 失敗時のみ非 null)
   degrade_note?:       string;          // pr_open_degraded_mcp_channel 時のみ
+  runtime_verify_note?: string | null;  // フェーズ5.7 で人間に伝えることがあるときだけ 1〜2 文 (runtime-verify-dispatcher.md「6.3」)
 }
 ```
 
@@ -294,10 +307,11 @@ jq -n \
   --argjson round "${REVIEW_ROUND:-0}" --argjson critical_count "${CRITICAL_COUNT:-0}" \
   --argjson followup "${FOLLOWUP_FINDINGS_JSON:-[]}" --arg blocker_reason "${BLOCKER_REASON:-}" \
   --arg pending_label "${PENDING_LABEL:-}" --arg degrade_note "${DEGRADE_NOTE:-}" \
+  --arg runtime_verify_note "${RUNTIME_VERIFY_NOTE:-}" \
   'def nz: if . == "" then null else . end;
    {cluster_id: $cluster_id, pr_url: ($pr_url|nz), verdict: $verdict, round: $round,
     critical_count: $critical_count,
     followup_findings: (if $verdict == "approve_with_followup" then $followup else null end),
     blocker_reason: ($blocker_reason|nz), pending_label: ($pending_label|nz),
-    degrade_note: ($degrade_note|nz)}'
+    degrade_note: ($degrade_note|nz), runtime_verify_note: ($runtime_verify_note|nz)}'
 ```

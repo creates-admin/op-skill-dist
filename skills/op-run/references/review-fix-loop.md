@@ -197,7 +197,8 @@ acceptance criteria に必要な不足修正 / 妥当性確認に必要な最小
 4. 再 verification: 完了報告の `self_review_result` / `self_check_blocked` をフェーズ4 の入力条件で確認し、
    `op apply verify-commit` gate を通してから push する (`cluster-orchestrator-directives.md` フェーズ3-4)。
    条件を満たさなければ以降に進まず人間 gate / 再委任。
-5. required post-check を再実行 (フェーズ5.5)。
+5. required post-check を再実行 (フェーズ5.5)。続けて runtime verify を再実行する (フェーズ5.7。起動条件は
+   `runtime-verify-dispatcher.md`「1. 起動条件」で判定し直す)。`block` なら再 review に進まず同書「6.2」に従う。
 6. `global-review-spawn.md` §4-2-pre の fence を再実行して REVIEW_ROUND / REVIEW_TERMINAL を得る。
    `REVIEW_TERMINAL=1` なら再 review せず §4-2-pre-blocked。0 なら `cluster-orchestrator-directives.md` フェーズ6 で再 review
    (Round 2+ の lens は 4.5-5)。

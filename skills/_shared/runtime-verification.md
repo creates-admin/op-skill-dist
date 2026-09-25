@@ -5,6 +5,7 @@ UI / a11y / 視覚秩序の検証で、runtime (Playwright / dev server / screen
 
 - runtime が使える範囲は runtime で検証し、不能な項目は static 代理、それも不能なら `requires_runtime` にする。
 - static 代理が成立した項目は `evidence_grade: direct` として扱ってよい (Critical 起票可)。
+- ハーネスで起動した実機の操作検証は本書の範囲外で、runtime verify 段 (verify-runner) が担う (`op-run/references/runtime-verify-dispatcher.md`)。
 
 ## 検証対象 × 手段マトリクス
 

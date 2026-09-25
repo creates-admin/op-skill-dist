@@ -82,6 +82,32 @@ block が無い PR への初回 push は空 state から作る。手編集しな
 
 aux post-check (security 起点の ux-ui-audit) は `post_checks` のキーを `<expert>@aux` にし、entry の `triggered_by` を `security-expert` にする。
 
+runtime verify (op-run CO フェーズ5.7) の結果は `post_checks["verify-runner"]` に post-check と同じ `kind: "post_check"` で書く
+(write_id も post-check の規約どおり `<session>-postcheck-verify-runner-r<N>`)。entry には次の任意 field を足せる。
+どれも省略でき、書いた値は CLI が解釈せずそのまま保持する。値の決め方は `op-run/references/runtime-verify-dispatcher.md`「5. state 記録」。
+
+| field | 型 | 内容 |
+|---|---|---|
+| `post_check_result` | string | `pass` / `pass_with_notes` / `block` / `needs_human_decision` / `skipped` (`audit_result` はその大文字) |
+| `skip_reason` | string | skipped の理由。`harness_not_installed` / `all_means_failed` / `requires_runtime` |
+| `evidence_paths` | string[] | 実在を確かめた証跡 (スクリーンショット等) の絶対パス |
+| `repro_steps` | string[] | fail したシナリオの再現手順 (`[<シナリオ名>] <手順>` の 1 行ずつ) |
+| `requires_runtime` | object[] | 検証しなかった範囲 `{scope, reason}` (`reason` は `windows unavailable` 等) |
+| `gaps` | object[] | ハーネスが自動でやらず手作業で補った工程 `{step, manual_workaround, suggestion}` |
+
+```json
+"verify-runner": {
+  "post_check_result": "pass_with_notes",
+  "audit_result": "PASS_WITH_NOTES",
+  "post_checked_head_sha": "1234567890abcdef1234567890abcdef12345678",
+  "post_check_round": 1,
+  "post_check_expert": "verify-runner",
+  "evidence_paths": ["/abs/checkout/.verify-runner/20260925-102218-a1b2/top.png"],
+  "requires_runtime": [{"scope": "installer 画面", "reason": "windows unavailable"}],
+  "gaps": []
+}
+```
+
 ### finding
 
 field の必須性・null 許可範囲は `op help payload review-finding`。`recommended_fix_expert` は提案であり、最終 apply 担当は op-run の解決ロジックが決める。
