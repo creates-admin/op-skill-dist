@@ -30,7 +30,7 @@ op scan dedup --findings-json drafts.json --json   # mcp channel では --input-
 - fingerprint と `drafts.json` の形は `dedup-policy.md` のとおり (fingerprint は CLI で生成する)。
 - 既存 Issue と重複 → 起票しない (必要なら既存 Issue にコメント)。
 - 類似 (warn) → 対話経路は人間に提示して判断を仰ぐ。`--auto` は manual_review_bucket。
-- 同一 run の draft 同士で fingerprint が一致したら 1 件に統合する。
+- 同一 run の draft 同士の重複判定は `op scan dedup --findings-json` (配列モード) 自体が行う。`results[].matched_draft` (先行 draft の index) を見て、重複した draft は起票しない。draft 同士の判定は fingerprint 完全一致のみ。file/symbol や行が近い・title が似ているだけの draft (domain を跨ぐ意図した別 Issue 等) は run 内重複扱いにしない。既存 Issue との重複判定は 4 段優先順位のまま変わらない。
 
 ## 3. 起票
 

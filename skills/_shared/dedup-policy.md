@@ -42,6 +42,16 @@ controller が計算して渡す。起票テンプレは `pr-templates.md`「op-
 fingerprint 完全一致 → file+symbol → file+行 ±5 → title 類似 の順で判定する。
 スキップした検出は op-scan / op-patrol の完了報告に「既存 Issue #N と重複」として記載する。
 
+`--findings-json` (配列モード) は既存 Issue に加え、同じ run 内で先行し block されなかった draft
+同士も比較し、`results[].matched_draft` (先行 draft の index) で返す (既存 Issue には issue 番号を
+持たない別フィールド)。既存 Issue との比較は上記の 4 段優先順位のままだが、既存 Issue の行番号は
+marker から復元できず常に無いため file+行 ±5 (priority 3) は既存 Issue には実質適用されない。
+draft 同士の比較は **fingerprint 完全一致 (priority 1) のみ** に限定する (priority 2〜4 は適用
+しない)。fingerprint には domain と正規化 title が含まれるため、priority 1 のみに絞ることで
+op-plan / op-architect が 1 配列で渡す「意図して分けた計画 draft」(同じ関数を触る feature Issue と
+test Issue 等) や domain の異なる finding を file+symbol / 行範囲 / title 類似だけで誤って run 内
+重複 block しない。
+
 ## architecture_debt 追跡キー (`op-fingerprint-bulk`)
 
 refactor の debt 系 finding (`finding_type` ∈ `architecture_debt` / `staged_refactor` / `needs_spec_decision`) は
