@@ -13,7 +13,8 @@ finding ごとに read-only の scout が隔離 context で調査・実在確認
 
 1. 人間起動専用 — `_shared/invocation-mode.md`「Direct 固定 skill に op_managed が渡った場合」
 2. context 隔離 — 調査と本文作成は scout の隔離 context で完遂する。controller は本文ファイルを Read せず `--body-file` で渡す
-3. 確認 gate — 起票前にユーザーの承認を得る (finding の確認 / Task の選択)。`confirmed` の draft の起票前に追加の確認は挟まない
+3. 確認 gate — 起票前にユーザーの承認を得る (finding の確認 / Task の選択)。`confirmed` の draft の起票前に追加の確認は挟まない。
+   例外: 3-1 で類似 (`match_priority == 4`) と判定された draft は、起票フェーズでまとめて 1 回だけ確認する (3-1b)
 
 scout の実在確認 gate が `confirmed` なら severity で絞らず起票する (`_shared/filing-gate.md` §1 の例外)。
 
@@ -96,8 +97,24 @@ op scan dedup --findings-json "<REPORT_DIR>/drafts.json" --json > "<REPORT_DIR>/
 ```
 
 - `MISSING_REQUIRED_INPUT` は `warnings` の指摘どおり drafts.json を直して再実行する (手作業の検索で代替しない)。envelope が取れなければ中断してエラーを提示する。
-- `details.results[i]` (i = drafts.json の添字) の扱いは `filing-gate.md` §2 (対話経路)。`decision == "block"` は起票せず `duplicate` (既存 Issue = `matched_existing.issue_number`)。
+- `details.results[i]` (i = drafts.json の添字) の扱いは `filing-gate.md` §2 (対話経路)。`decision == "block"` のうち `matched_existing.match_priority` が 1〜3 は起票せず `duplicate` (既存 Issue = `matched_existing.issue_number`)。`match_priority == 4` は 3-1b。
 - `details.results[i].fingerprint` が他の draft と完全一致したら、Task No. が最小のものだけを起票し、残りは `merged` にする。
+
+### 3-1b. 類似の確認 (まとめて 1 回)
+
+`match_priority == 4` の draft (`merged` のフォロワーは対象外。フォロワーは代表と同じ判定を引き継ぐ) があれば、起票前に 1 回だけまとめて確認する:
+
+```
+以下はタイトルが既存 Issue と似ていますが、内容は別の課題かもしれません。
+
+No. | タイトル案 | 類似する既存 Issue
+----|-----------|------------------
+1   | <draft.title> | #<matched_existing.issue_number> <matched_existing.existing_title>
+
+起票しますか？ (起票する番号を指定 / "全部" / "なし")
+```
+
+指定された draft は 3-2 へ進める。指定されなかった draft は起票せず `similar_skipped` とする (類似する既存 Issue = `matched_existing.issue_number`)。
 
 ### 3-2. 起票 (1 件ずつ直列)
 
@@ -122,7 +139,8 @@ test -s "$BODY" &&
 |--------|---------|-----------------|
 | `filed` | 3-2 | 「起票しました: <Issue URL>」 |
 | `duplicate` | 3-1 | 「既存 Issue と重複しています: #<matched_existing.issue_number>」 |
-| `merged` | 3-1 | 「No.<統合先> と同じ内容のため 1 件にまとめました」 |
+| `similar_skipped` | 3-1b | 「タイトルが類似する既存 Issue #<matched_existing.issue_number> (<matched_existing.existing_title>) があるため見送りました」 |
+| `merged` | 3-1 | 「No.<統合先> と同じ内容のため 1 件にまとめました。統合先の結果: <統合先 Task の応答文をそのまま埋め込む>」 |
 | `lint_blocked` / `failed` | 3-2 | 「起票できませんでした: <blocking_reasons / エラー / orphan URL を 1 行>」 |
 | `not_confirmed` | scout | 「実在確認できませんでした: <evidence を 1〜2 行に要約>」 |
 | `needs_human_decision` | scout | 「判断が必要です: <options を箇条書き>」→ ユーザーに選んでもらう |
@@ -134,6 +152,7 @@ No. | 概要 | result | URL / 補足
 ----|------|--------|----------
 1   | <Task 1> | filed | <URL>
 2   | <Task 2> | not_confirmed | <理由 1行>
+3   | <Task 3> | merged | No.1 と統合。統合先の結果: <統合先 Task の応答文>
 ```
 
 ## scout spawn テンプレート
