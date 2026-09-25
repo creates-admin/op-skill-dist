@@ -1,6 +1,6 @@
 ---
 name: op-adopt
-description: OP 未適用の既存プロジェクトを OP の運用へ移行するスキル。現状を診断し、基盤 (ラベル・op-config.yaml)、正本 (.claude/rules の書式・索引・feature 地図と骨組み)、デザインシステム (op-component --init への引き渡し) を、人間の承認を挟みながら段階的に導入する。何度実行しても未導入の分だけを進める。「op-adopt」「移行」「導入」「OP 化」「既存プロジェクトに適用」等のキーワードで起動。
+description: OP 未適用の既存プロジェクトを OP の運用へ移行するスキル。現状を診断し、基盤 (ラベル・op-config.yaml)、正本 (.claude/rules の書式・索引・feature 地図と骨組み)、デザインシステム (op-component --init への引き渡し)、実機検証ハーネス (op-verify --init への引き渡し) を、人間の承認を挟みながら段階的に導入する。何度実行しても未導入の分だけを進める。「op-adopt」「移行」「導入」「OP 化」「既存プロジェクトに適用」等のキーワードで起動。
 ---
 
 # op-adopt: 既存プロジェクトの OP 移行
@@ -23,9 +23,10 @@ op-adopt は人間が承認した feature 地図から、正本の骨組み (fro
 | 正本の土台 | `.claude/rules/_schema.md` と `00-constitution.md` | 両方あり |
 | 正本の中身 | `op spec-patrol list-specs`、主要ディレクトリ構成 | 主要 feature に正本がある (status 問わず) |
 | デザインシステム | UI の有無 (`package.json` / `pubspec.yaml` 等)、`op-config.yaml` の `design_system` | UI 無し、または設定あり |
+| 実機検証ハーネス | `op-config.yaml` の `verify_harness` 節の有無 (`_shared/op-config-schema.md` §14) | 宣言あり |
 | 環境 | test / lint / build コマンドの有無 | (情報のみ。詳細は `/op-skill:op-doctor`) |
 
-未導入の項目を、導入する順 (基盤 → 正本の土台 → 正本の骨組み → デザインシステム) に並べて提示し、
+未導入の項目を、導入する順 (基盤 → 正本の土台 → 正本の骨組み → デザインシステム → 実機検証ハーネス) に並べて提示し、
 どれを今回やるか人間に選んでもらう。
 
 ## フェーズ1: 基盤
@@ -58,10 +59,14 @@ op-adopt は人間が承認した feature 地図から、正本の骨組み (fro
 
 UI を持つ repo で `design_system` が未設定なら、`/op-skill:op-component --init` を別セッションで行うよう案内する (本 skill では実施しない)。
 
-## フェーズ5: commit と PR
+## フェーズ5: 実機検証ハーネス
+
+`verify_harness` が未宣言なら、`/op-skill:op-verify --init` を別セッションで行うよう案内する (本 skill では実施しない)。
+
+## フェーズ6: commit と PR
 
 - branch は `auto/adopt-<YYYYMMDD-HHMMSS>` (`_shared/worktree-ops.md`)。フェーズ1〜3 の変更を 1 PR にまとめる。
-- `op pr create`。本文に診断表 (前後)、作った正本の一覧と優先度、次にやること (`/op-skill:op-spec` の順番、`--init`、`/op-skill:op-doctor`) を書く。
+- `op pr create`。本文に診断表 (前後)、作った正本の一覧と優先度、次にやること (`/op-skill:op-spec` の順番、`/op-skill:op-component --init`、`/op-skill:op-verify --init`、`/op-skill:op-doctor`) を書く。
 - マージは `/op-skill:op-merge` または人間が GitHub で行う。
 
 ## 完了報告
@@ -70,5 +75,5 @@ UI を持つ repo で `design_system` が未設定なら、`/op-skill:op-compone
 ## op-adopt 完了
 | 領域 | 前 | 後 |
 - PR: #<N>
-- 次: /op-skill:op-spec (<feature1> → <feature2> …) / /op-skill:op-component --init / /op-skill:op-doctor
+- 次: /op-skill:op-spec (<feature1> → <feature2> …) / /op-skill:op-component --init / /op-skill:op-verify --init / /op-skill:op-doctor
 ```

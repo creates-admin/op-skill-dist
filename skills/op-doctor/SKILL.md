@@ -1,22 +1,22 @@
 ---
 name: op-doctor
-description: コードでなく「環境・依存・toolchain・lockfile・CI・OSV」の repo 健康診断を行う独立 OP skill。6 項目を診断して OP Doctor Report を出し、Critical/High のみ Issue を起票する。Direct Mode 固定。「op-doctor」「健康診断」「環境診断」「doctor」「依存チェック」「toolchain」「lockfile」等のキーワードで起動。
+description: コードでなく「環境・依存・toolchain・lockfile・CI・OSV・実機検証ハーネス」の repo 健康診断を行う独立 OP skill。7 項目を診断して OP Doctor Report を出し、Critical/High のみ Issue を起票する。Direct Mode 固定。「op-doctor」「健康診断」「環境診断」「doctor」「依存チェック」「toolchain」「lockfile」等のキーワードで起動。
 ---
 
 # op-doctor: 環境・依存・toolchain の repo 健康診断
 
 repo の環境健全性を診断し、OP Doctor Report を出力する。コードの欠陥は見ない (op-scan / op-patrol の責務)。
-診断は read-only。人間起動専用 (`~/.claude/skills/_shared/invocation-mode.md`「Direct 固定 skill に op_managed が渡った場合」)。
+診断は read-only (項目 7 の `op verify conformance` だけはハーネスを一時的に起動・停止する)。人間起動専用 (`~/.claude/skills/_shared/invocation-mode.md`「Direct 固定 skill に op_managed が渡った場合」)。
 
 ## 起動
 
 ```text
-/op-skill:op-doctor                          # 6 項目を診断 → Report 表示 → 承認後に Critical/High を起票
+/op-skill:op-doctor                          # 7 項目を診断 → Report 表示 → 承認後に Critical/High を起票
 /op-skill:op-doctor --auto                   # Critical/High を自動起票 (auto-policy 準拠)
 /op-skill:op-doctor --check deps,lockfile    # 診断項目を限定 (項目名は下表の --check 名)
 ```
 
-## 診断 6 項目
+## 診断 7 項目
 
 | # | `--check` 名 | 内容 | 判定方法 |
 |---|-------------|------|---------|
@@ -26,8 +26,9 @@ repo の環境健全性を診断し、OP Doctor Report を出力する。コー�
 | 4 | `lockfile` | package manager と lockfile の整合 | `op doctor env` の `lockfiles[]` |
 | 5 | `toolchain` | 宣言 (rust-toolchain / .nvmrc 等) と実体 version の乖離 | controller が `toolchains[].version` と宣言を突き合わせる (深い互換推論は debug-expert) |
 | 6 | `ci-local` | CI (`.github/workflows`) で使うコマンドと local で使えるコマンドの差 | controller が CI 定義と `commands[].present` を比較 (失敗 RCA は debug-expert) |
+| 7 | `harness` | 実機検証ハーネスの契約適合 (start → JSON → smoke → stop → 残骸なし。`~/.claude/skills/_shared/verify-harness.md` §5) | `op verify conformance` の exit code と `details.failures[]` |
 
-CLI は `op doctor env` のみ。項目 5 / 6 は controller がその生データから導出する。
+CLI は `op doctor env` (項目 1〜6) と `op verify conformance` (項目 7)。項目 5 / 6 は controller が `op doctor env` の生データから導出する。
 
 ## フェーズ0: 環境確認
 
@@ -37,10 +38,14 @@ CLI は `op doctor env` のみ。項目 5 / 6 は controller がその生デー�
 
 ```bash
 op doctor env --json [--dir <path>]   # toolchains[] / lockfiles[] / commands[] (read-only、severity 判定なし)
+op verify conformance [--config <path>/op-config.yaml]   # 項目 7。stdout は常に envelope JSON
 ```
 
 - `toolchains[].present` = version probe が成功した (壊れた shim は false)。
 - `commands[].present` = PATH 上に存在するだけ (exit code は問わない)。同一ツールで両者が食い違うことがある。
+- `op verify conformance` の exit 0 = 適合 (`details.result: "pass"`) / 1 = 不適合 (`details.failures[]` の `step` / `code` / `reason`) /
+  2 = 検査を実行できなかった (`details.result: "error"`、理由は `details.reason`)。
+  `failures[]` が `code: harness_not_declared` だけ、または `reason` が `op-config.yaml not found` なら、ハーネス未導入とみなす。
 
 OK / WARN / FAIL と severity は controller がフェーズ3で判定する。
 
@@ -67,6 +72,7 @@ env-expert は spawn しない。routing 値に env-expert が出たら `~/.clau
 [4] lockfile 整合 ........... ...
 [5] toolchain drift ......... ...
 [6] CI-local 不一致 ......... ...
+[7] 実機検証ハーネス ......... SKIPPED (verify_harness 未宣言。/op-skill:op-verify --init を案内)
 
 --- Critical / High findings (起票候補) ---
 - [High] <summary> (項目: deps, 担当: security-expert)
@@ -77,8 +83,9 @@ env-expert は spawn しない。routing 値に env-expert が出たら `~/.clau
 
 - severity は `~/.claude/skills/_shared/severity-rubric.md` で判定する。
 - 診断ツールが PATH に無い項目は FAIL にせず SKIPPED (理由付き) とする。
+- 項目 7: 適合は OK、不適合と宣言の不備 (exit 2 のうち未導入以外) は FAIL、未導入は SKIPPED として `/op-skill:op-verify --init` を案内する。
 
 ## フェーズ4: 起票
 
 起票は `~/.claude/skills/_shared/filing-gate.md` に従う (対話は Report 提示後の承認、`--auto` は同 §1)。Critical / High のみ起票し、Medium 以下は Report に記すだけ。
-marker とラベルは `pr-templates.md`「domain → marker / ラベル表」(deps 系は `security`、toolchain / command / CI 系は `debug` の domain で扱う)。
+marker とラベルは `pr-templates.md`「domain → marker / ラベル表」(deps 系は `security`、toolchain / command / CI / ハーネス系は `debug` の domain で扱う)。
