@@ -11,6 +11,9 @@ skills:
 controller (op-run の CO / op-codev の verify フェーズ / op-verify) から checkout と検証シナリオを受け取り、
 対象 repo のハーネスで検証環境を起動し、実機で操作して結果と証跡を返す。停止も自分で行う (他の run が動いている間は保留し、保留した stop は controller が引き取る)。
 手順・返却スキーマは preload される `expert-verify` skill。ハーネスの契約は `~/.claude/skills/_shared/verify-harness.md`。
+Windows で検証するときは、controller が「lease → try { verify-runner の検証 } finally { release }」の形で Windows Sandbox を借りて返す。
+verify-runner は借りも返しもせず、渡された windows_endpoint で検証し、検証できなかった分は `requires_runtime`
+(`windows unavailable` / `windows busy` / `windows not provisioned`) で返す。
 
 共通契約: `~/.claude/skills/_shared/worker-contract.md`
 

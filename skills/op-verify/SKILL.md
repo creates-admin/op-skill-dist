@@ -19,14 +19,14 @@ description: 実機検証ハーネスを導入・実行・育成するスキル�
 
 ```
 /op-skill:op-verify --init                                   # ハーネスの無い repo に導入する
-/op-skill:op-verify [--pr <N> | --branch <name> | --checkout <path>] [--scenario "<確かめること>"]...
+/op-skill:op-verify [--pr <N> | --branch <name> | --checkout <path>] [--scenario "<確かめること>"]... [--windows]
                                                               # 実機検証 (対象省略時は現在の checkout の HEAD)
 /op-skill:op-verify --grow [--pr <N> | --from <verify-runner の返却 JSON>]
                                                               # gap / regression spec 昇格候補をハーネスへ還元する
 ```
 
-- `--windows` を受けたら何もせず「未対応 (Windows 実行先は後続マイルストーン #257)」と返して終了する。
-- `verify_harness.runtime: windows` の repo も同じく未対応として終了する (通常モードは検証対象 checkout の宣言で判定する)。
+- `--windows` は通常モードで Windows 判定を明示的に当てる (ADR-0035 決定 6)。diff が `windows_paths` に当たらなくても Windows Sandbox を借りて検証する。
+  `--init` / `--grow` では使わない。
 
 ## フェーズ0: 環境確認
 
@@ -118,7 +118,7 @@ op run base-sha --base-ref "origin/$BASE_REF" | jq -r '.payload.base_sha'   # �
    | 省略 | 現在の checkout |
 
    checkout のルートの `op-config.yaml` の `verify_harness` を読む (dispatcher の起動条件の節と同じく検証対象 checkout の宣言で判定する)。
-   無ければ `--init` を案内して終了し、`runtime: windows` なら未対応として終了する (作った worktree のパスは報告する)。
+   無ければ `--init` を案内して終了する (作った worktree のパスは報告する)。
 
    `--pr` / `--branch` で作った worktree には依存が入っていないため、ハーネスを起動する前に checkout のルートで入れる。
    パッケージマネージャは lockfile で判定する (`~/.claude/skills/_shared/project-profile.md`「検証コマンド (スタック別)」):
@@ -130,8 +130,16 @@ op run base-sha --base-ref "origin/$BASE_REF" | jq -r '.payload.base_sha'   # �
    組めなければ空にする (verify-runner が diff の触れた画面の描画と主要操作だけを確かめる)。
 3. dispatcher を controller = op-verify として使う (`skills/op-run/references/runtime-verify-dispatcher.md`)。
    - 起動条件の節の diff 判定はしない (人間が明示して起動したため)。ハーネスの有無の扱いは手順 1 で済んでいる
-   - Windows の貸し借りの節は使わない。`verify_harness.windows_paths` に当たる diff があっても、windows_endpoint なし・理由 `windows unavailable` で渡す
-   - verify-runner の spawn は同 dispatcher の spawn の節どおり (`subagent_type: "op-skill:verify-runner"`、model `opus`、Fable は使わない)
+   - Windows 判定: `--windows` があるか、checkout の `verify_harness.runtime` が `windows` か、
+     `git -C <checkout> diff --name-only <BASE_SHA>...HEAD` が `verify_harness.windows_paths` に当たれば当たりとする
+   - 当たれば段全体を「lease → try { 検証 } finally { release }」の形で進める。手順と fence は同 dispatcher 1.1 と 4 章が正本で、ここでは書き直さない
+     1. lease: 同 dispatcher 1.1 を `CHECKOUT=<checkout>`、`LEASE_HOLDER=opverify-<YYYYMMDD-HHMMSS>` (手順 4 の session と同じ値) で実行する
+     2. try: `RV_LEASE_ABORT` が空なら verify-runner を spawn し、返却を下の順に処理する。空でなければ spawn せず、同 dispatcher 1.1 のとおり「結果が得られない」で記録して `RV_LEASE_ABORT` を報告に載せる
+     3. finally: try がどの経路で終わっても、同 dispatcher 4 章 (保留 stop の引き取り → Windows の返却) を実行する。release の非 0 は報告に載せる
+   - Sandbox 内で WebDriver と対象アプリを起動する手順が未配線のあいだは、借りられても windows_endpoint の WebDriver が応答しない。
+     verify-runner はその分を `requires_runtime` (`windows unavailable`、未配線と分かる `detail` 付き) で返し、正当な skip として扱う
+   - 当たらなければ lease を取らず、windows_endpoint も windows の理由も渡さない
+   - verify-runner の spawn は同 dispatcher の spawn の節どおり (`subagent_type: "op-skill:verify-runner"`、model `opus`、Fable は使わない。windows_endpoint / windows の理由 / windows_provision も同節の表どおり)
    - 返却は同 dispatcher の skip の扱いの節 → 証跡の実在確認の節 → 保留 stop の引き取りの節の順に処理する
    - 結果の値は同 dispatcher の state 記録の節の表で 1 件に確定させる
 4. 記録: `--pr` なら、同 dispatcher の op-run での結果の扱いの節の state push と同じ entry を PR の op-review-state に push する
@@ -187,5 +195,5 @@ op pr create --base "<BASE_REF>" --head "<branch>" --title "<タイトル>" --bo
 - 証跡: <実在を確かめたパス>
 - 未検証の範囲: <requires_runtime の scope と reason>
 - gap: <step / manual_workaround / suggestion> (あれば `/op-skill:op-verify --grow` を案内)
-- stop / 後片付け: <stop の exit と stderr 末尾、残した worktree のパス>
+- stop / 後片付け: <stop の exit と stderr 末尾、Windows を借りたときは release の exit と `RV_LEASE_ABORT`、残した worktree のパス>
 ```

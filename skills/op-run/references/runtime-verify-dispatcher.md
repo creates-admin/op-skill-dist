@@ -31,47 +31,67 @@ base からの diff (op-run では `git -C "$WORKTREE_PATH" diff --name-only "$O
 | 節が無い (ハーネス未導入) | spawn しない。`skipped` / `skip_reason: harness_not_installed` として 5 章で記録し、先へ進む (止めない) |
 | 節がある | 1.1 → 1.2 |
 
-### 1.1 Windows の貸し借り (windows_paths に当たったときだけ)
+### 1.1 Windows の貸し借り (Windows 判定に当たったときだけ)
 
-verify-runner は Windows を借りない (`expert-verify` §1)。controller が spawn の前に借り、2.2 の後に返す。
+Windows 判定は、diff が `verify_harness.windows_paths` に当たるか、`verify_harness.runtime` が `windows` のとき
+(op-verify は加えて `--windows` の明示指定)。当たらなければ 1.1 を飛ばして 1.2 へ進む (4 章の release は holder ファイルが無ければ何もしない)。
+
+verify-runner は Windows を借りない (`expert-verify` §1)。controller が段全体を
+「lease (1.1) → try { spawn (1.2) → 2 章 → 3 章 } finally { 4 章: stop の引き取り → release }」の形で進める。
+try の中でどの経路 (spawn 失敗・30 分応答なし・契約違反・再 spawn・`RV_LEASE_ABORT`) に抜けても、finally の 4 章は必ず通す。
 待ちの上限は CLI の既定 (待たない) で、借りられなければ PR を止めずに `requires_runtime` として扱う (ADR-0035)。
 借りた holder は 4 章の返却まで fence を跨ぐため、checkout の外のファイル (`RV_LEASE_FILE`) に書いて渡す (`_shared/bash-fence-convention.md` 不変則 1)。
 
 lease を取る前に、前の段の holder ファイルが残っていないかを見る。残るのは 4 章の返却が失敗した (lease が残った) ときで、
 Review Fix Loop で同じ checkout の段を再実行するとここに来る。期限内の lease は holder が同じでも busy になるため
 (`decide_lease`)、ファイルを消して借り直すと自分の lease で `windows busy` になり、4 章も返さなくなる。
-そのためファイルの holder で先に返し、exit 0 (返した / lease がもう無い) のときだけファイルを消して借りる。
+そのためファイルの holder で先に返し、exit 0 (返した / lease がもう無い) のときはファイルを消して借りる。
+release が exit 1 で `details.result: not_holder` を返したときは、前の段の lease は TTL 切れで回収され、いまは他の holder が持っている。
+返すものが無いので、同じくファイルを消して借りに進む (借りられなければ `windows busy`)。
+同じ exit 1 の `unavailable` とは `.details.result` で分ける。
 
 ```bash
 : "${CHECKOUT:?}" "${LEASE_HOLDER:?op-run は task_id}"
 RV_LEASE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/op-verify-runner/$(basename "$CHECKOUT")/controller-lease-holder"
-WINDOWS_ENDPOINT=""; WINDOWS_REQUIRES_RUNTIME=""; RV_LEASE_ABORT=""; LEASE_EXIT=""
+WINDOWS_ENDPOINT=""; WINDOWS_PROVISION_JSON=""; WINDOWS_REQUIRES_RUNTIME=""; RV_LEASE_ABORT=""; LEASE_EXIT=""
 if [ -e "$RV_LEASE_FILE" ]; then
   PREV_HOLDER=$(cat "$RV_LEASE_FILE" 2>/dev/null) || PREV_HOLDER=""
   if [ -z "$PREV_HOLDER" ]; then
     RV_LEASE_ABORT="前の段の holder ファイル $RV_LEASE_FILE が空か読めないため、残った lease を返せない"
   else
     PREV_JSON=$(op verify windows release --holder "$PREV_HOLDER"); PREV_EXIT=$?
-    [ "$PREV_EXIT" -eq 0 ] && rm -f "$RV_LEASE_FILE"
-    [ "$PREV_EXIT" -eq 0 ] || RV_LEASE_ABORT="前の段の lease (holder $PREV_HOLDER) を返せなかった (release exit $PREV_EXIT, result $(printf '%s' "$PREV_JSON" | jq -r '.details.result // "unknown"' 2>/dev/null))"
+    PREV_RESULT=$(printf '%s' "$PREV_JSON" | jq -r '.details.result // empty' 2>/dev/null)
+    if [ "$PREV_EXIT" -eq 0 ] || [ "$PREV_RESULT" = "not_holder" ]; then
+      rm -f "$RV_LEASE_FILE"
+    else
+      RV_LEASE_ABORT="前の段の lease (holder $PREV_HOLDER) を返せなかった (release exit $PREV_EXIT, result ${PREV_RESULT:-unknown})"
+    fi
   fi
 fi
 if [ -z "$RV_LEASE_ABORT" ]; then
   LEASE_JSON=$(op verify windows lease --holder "$LEASE_HOLDER"); LEASE_EXIT=$?
   case "$LEASE_EXIT" in
     0) WINDOWS_ENDPOINT=$(printf '%s' "$LEASE_JSON" | jq -r '.details.provision.relay.webdriver_url // empty')
+       WINDOWS_PROVISION_JSON=$(printf '%s' "$LEASE_JSON" | jq -c '.details.provision // {}')
        [ -n "$WINDOWS_ENDPOINT" ] || WINDOWS_REQUIRES_RUNTIME="windows unavailable" ;;
     1) WINDOWS_REQUIRES_RUNTIME=$(printf '%s' "$LEASE_JSON" | jq -r '.details.requires_runtime // "windows unavailable"') ;;
     *) WINDOWS_REQUIRES_RUNTIME="windows unavailable" ;;
   esac
 fi
-if [ "$LEASE_EXIT" = 0 ] && ! { mkdir -p "$(dirname "$RV_LEASE_FILE")" && printf '%s\n' "$LEASE_HOLDER" >"$RV_LEASE_FILE"; }; then
-  op verify windows release --holder "$LEASE_HOLDER"; RELEASE_EXIT=$?
-  [ "$RELEASE_EXIT" -eq 0 ] && rm -f "$RV_LEASE_FILE"   # 書きかけのファイルを次の段に残さない
-  RV_LEASE_ABORT="lease holder を $RV_LEASE_FILE に書けなかったため lease を返した (release exit $RELEASE_EXIT)"
-  WINDOWS_ENDPOINT=""
-fi
-export WINDOWS_ENDPOINT WINDOWS_REQUIRES_RUNTIME RV_LEASE_ABORT
+case "$LEASE_EXIT" in
+  0|2)
+    if ! { mkdir -p "$(dirname "$RV_LEASE_FILE")" && printf '%s\n' "$LEASE_HOLDER" >"$RV_LEASE_FILE"; }; then
+      op verify windows release --holder "$LEASE_HOLDER"; RELEASE_EXIT=$?
+      if [ "$RELEASE_EXIT" -eq 0 ]; then
+        rm -f "$RV_LEASE_FILE"   # 書きかけのファイルを次の段に残さない
+        RV_LEASE_ABORT="lease holder を $RV_LEASE_FILE に書けなかったため lease を返した"
+      else
+        RV_LEASE_ABORT="lease holder を $RV_LEASE_FILE に書けず、lease も返せなかった (release exit $RELEASE_EXIT)。lease は TTL が切れるまで残り、op verify windows sweep か次の lease が回収する"
+      fi
+      WINDOWS_ENDPOINT=""; WINDOWS_PROVISION_JSON=""
+    fi ;;
+esac
+export WINDOWS_ENDPOINT WINDOWS_PROVISION_JSON WINDOWS_REQUIRES_RUNTIME RV_LEASE_ABORT
 ```
 
 `RV_LEASE_ABORT` が空でなければ、verify-runner を spawn せず、段を 5 章の「結果が得られない」(`skipped`、`skip_reason` なし) で記録し、
@@ -80,13 +100,20 @@ export WINDOWS_ENDPOINT WINDOWS_REQUIRES_RUNTIME RV_LEASE_ABORT
 
 | 経路 | lease | holder ファイル |
 |---|---|---|
-| 前の段の lease を返せなかった (release が非 0) | この段では借りていない。前の段の lease が残る | 残す (4 章が同じ holder で返し直す) |
+| 前の段の lease を返せなかった (release が非 0。`not_holder` を除く) | この段では借りていない。前の段の lease が残る | 残す (4 章が同じ holder で返し直す) |
 | 前の段の holder ファイルが空か読めない | この段では借りていない。前の段の lease が残っている可能性がある | 残す (4 章の `:?` ガードで止まり、人間に報告する) |
-| 借りた holder をファイルに書けなかった | その場で返した (返せなければ残る) | 返せたときは消す |
+| 借りた holder をファイルに書けなかった | その場で返した。返せなければ TTL が切れるまで残り、`op verify windows sweep` か次の lease が回収する | 返せたときは消す |
 
 `requires_runtime` の語 (`windows busy` / `windows unavailable` / `windows not provisioned`) は言い換えずに verify-runner へ渡す。
 返却は lease の成否にかかわらず 4 章の後始末で必ず行う。4 章は holder ファイルがあれば返し、無ければ何もしない
 (`RV_LEASE_ABORT` で spawn しなかった段でも 4 章は通す。前の段の lease の返し直しはそこで行う)。
+lease が exit 2 (エラー) で終わった段も holder ファイルを書き、4 章で返す。CLI は Sandbox を止められなかったとき lease を残す
+(TTL 後に sweep が回収する) ため、4 章の release がもう一度 `wsb stop` を試みる。CLI が lease を消していれば release は
+`not_leased` (exit 0) で終わる。exit 1 (busy / unavailable / not provisioned) は lease を取っていないのでファイルを書かない。
+
+Sandbox 内で tauri-driver / msedgedriver と対象アプリを起動する手順は未配線のため、lease が exit 0 でも
+`WINDOWS_ENDPOINT` の WebDriver は応答しない。verify-runner はその分を `requires_runtime` (`windows unavailable`、
+`detail` に「Sandbox 内 WebDriver 起動が未配線」) で返し (`expert-verify` 3 章「Windows 実行先」)、2 章の正当な skip として扱う。PR は止めない。
 
 ### 1.2 verify-runner の spawn
 
@@ -100,6 +127,7 @@ export WINDOWS_ENDPOINT WINDOWS_REQUIRES_RUNTIME RV_LEASE_ABORT
 | scenarios | Issue の成功条件と diff から controller が組む (画面・操作・期待結果、任意で `wait_for`)。組めなければ空にし、verify-runner の既定に任せる |
 | windows_endpoint | 1.1 で借りたときの `WINDOWS_ENDPOINT` |
 | windows の理由 | 1.1 で借りられなかったときの `WINDOWS_REQUIRES_RUNTIME` |
+| windows_provision | 1.1 で借りたときの `WINDOWS_PROVISION_JSON` (lease の `details.provision`。key は `expert-verify` §1) |
 
 ```
 invocation_mode: op_managed
@@ -112,6 +140,7 @@ invocation_mode: op_managed
 - scenarios: ${SCENARIOS_JSON}
 - windows_endpoint: ${WINDOWS_ENDPOINT:-なし}
 - windows の理由: ${WINDOWS_REQUIRES_RUNTIME:-なし} (Windows の検証を requires_runtime にするときの reason)
+- windows_provision: ${WINDOWS_PROVISION_JSON:-なし}
 
 【完了条件】expert-verify §4 の JSON を返す。コード編集・commit・push・GitHub write をしない。
 ```
@@ -223,8 +252,8 @@ export STOP_EXIT STOP_STDERR_TAIL
 
 1.1 で Windows を借りていれば、stop の引き取りの後に必ず返す (spawn 失敗・契約違反・エラーの経路でも返す)。
 借りたかどうかと holder は 1.1 が書いた `RV_LEASE_FILE` で判断する (シェル変数の持ち越しに頼らない)。
-1.1 が前の段の lease を返せずに `RV_LEASE_ABORT` で止まった段 (ファイルが残っている) でも、同じ block でその lease を返し直す。
-返せなければファイルを残し、次の段の 1.1 と 4 章が再び返しにいく。
+1.1 が前の段の lease を返せずに `RV_LEASE_ABORT` で止まった段 (ファイルが残っている) と、lease が exit 2 で終わった段でも、同じ block で返す。
+返せなければファイルを残し、次の段の 1.1 と 4 章が再び返しにいく (`not_holder` なら次の段の 1.1 がファイルを消す)。
 holder が空のまま `--holder ""` で返すと他人の lease として拒否され、lease が TTL まで残って他の PR の Windows 検証が busy になる。
 そのためファイルが空なら `:?` ガードで止め、ファイルを残したまま人間に報告する (1.1 も同じ場合は借りずに `RV_LEASE_ABORT` にする)。
 

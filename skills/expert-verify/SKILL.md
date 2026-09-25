@@ -17,13 +17,21 @@ spawn prompt から受け取る。
 |---|---|
 | checkout | 検証する worktree の絶対パス。ハーネスのコマンドはここを cwd にして実行する |
 | scenarios | 確かめること (画面・操作・期待結果)。Issue の成功条件や diff から controller が組む。描画完了の目印にする要素 (`wait_for`、CSS セレクタ) を任意で持てる |
-| windows_endpoint | 任意。Windows 実行先の WebDriver endpoint (貸し借りは呼び出し元が行う) |
+| windows_endpoint | 任意。Windows 実行先 (Windows Sandbox) の WebDriver endpoint。controller が借りた lease の中継 URL (`details.provision.relay.webdriver_url`) |
+| windows の理由 | 任意。controller が Windows を借りられなかったときの reason (`windows unavailable` / `windows busy` / `windows not provisioned`) |
+| windows_provision | 任意。lease の `details.provision` の JSON。`relay.webdriver_url` (= windows_endpoint)・`relay.api_url_in_sandbox` (Sandbox 内のアプリが WSL の API に繋ぐ URL、API 中継なしなら null)・`webview2.mode` (`fixed` / `evergreen` / `none`)・`webview2.env` (アプリに渡す環境変数。`["WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", "<Sandbox 内のパス>"]` の 2 要素配列か null)・`webview2.native_driver` (tauri-driver の `--native-driver` に渡す Sandbox 内の msedgedriver のパス) |
 
 scenarios が無ければ、diff が触れた画面を開いて描画と主要操作が通るかだけを確かめる。網羅的な探索はしない。
 
+windows_endpoint か windows の理由が渡されたら、controller が Windows での検証が要ると判定したことを示す (3 章「Windows 実行先」)。
+Windows の貸し借りは controller が「lease → try { verify-runner の検証 } finally { release }」の形で持つ
+(`skills/op-run/references/runtime-verify-dispatcher.md` 1.1 と 4 章)。verify-runner は lease も release もしない。
+
 ## 2. 手順
 
-1. `op-config.yaml` の `verify_harness` を読む。節が無ければ何も起動せず `result: skipped` / `skip_reason: harness_not_installed` で返す
+1. `op-config.yaml` の `verify_harness` を読む。節が無ければ何も起動せず `result: skipped` / `skip_reason: harness_not_installed` で返す。
+   `runtime: windows` なら手順 2・4・6 (この checkout での start / probe / stop) を実行せず、全シナリオを 3 章「Windows 実行先」で扱う
+   (ハーネスを Sandbox 内で起動する手順は未配線)。証跡ディレクトリの `<run_id>` には `windows-<YYYYMMDD-HHMMSS>` を使う
 2. start を実行し、stdout の 1 行 JSON を保存する。start が非 0 なら stderr の末尾を添えて `result: fail` (`failed_stage: harness_start`) で返す
 3. 2.1 の規則で証跡ディレクトリを決めて作る。スクリーンショット・ログ・一時スクリプト・start の JSON はすべてここに置く
 4. `op verify probe` に start の JSON を渡して実行し、出力を証跡ディレクトリに保存する (引数は `op verify probe --help`)
@@ -97,7 +105,7 @@ scenarios が無ければ、diff が触れた画面を開いて描画と主要�
 |---|---|---|
 | 1 | Playwright MCP (ToolSearch で `playwright` を検索して読み込む) | ツールが無い / ブラウザを起動できない / target に届かない |
 | 2 | Playwright ライブラリのスクリプト (`browser.executable_path` を executablePath に指定) | ライブラリを用意できない / 起動・到達に失敗 |
-| 3 | WebDriver (`browser.endpoint`、または `windows_endpoint`) | endpoint が無い / セッションを作れない |
+| 3 | WebDriver (`browser.endpoint`。Windows 実行先では `windows_endpoint`) | endpoint が無い / セッションを作れない |
 
 - `driver: webdriver` (Tauri など) では 1・2 を `not_applicable` と記録し、3 から始める
 - MCP のブラウザが `auth_state` を読めないときは、手段 1 で粘らず手段 2 に進む
@@ -105,8 +113,7 @@ scenarios が無ければ、diff が触れた画面を開いて描画と主要�
   次の手段へ進まず、その時点のスクリーンショットを `evidence` に入れて fail にする (手段 2 では exit 2)
 - 操作手段の不調を理由に skipped を返せるのは全手段が失敗したときだけ (`skip_reason: all_means_failed`)。そのときは `probe` の出力と各手段のエラーを verbatim で添える。
   `harness_not_installed` / `requires_runtime` の skipped はこの条件の対象外
-- Windows 実行先が要るのに `windows_endpoint` が無ければ、その分は検証せず `requires_runtime` に 1 要素ずつ書く。
-  `reason` は ADR-0035 の語 (`windows unavailable` / `windows busy`) で、spawn prompt が理由を示していればそれ、無ければ `windows unavailable`
+- Windows 実行先の検証は下の「Windows 実行先」で扱い、ここでの手段の順序と `all_means_failed` の対象に含めない
 
 ### 手段 2: Playwright ライブラリ
 
@@ -167,7 +174,8 @@ exit 1 などそれ以外の非 0 は手段 2 の失敗として `means_attempts
 
 ### 手段 3: WebDriver
 
-capabilities はハーネスか spawn prompt の指定に従う (Tauri は `tauri:options.application`)。
+capabilities は start の JSON の `webdriver_capabilities` (`verify-harness.md` §2。Tauri は `tauri:options.application`) を
+`alwaysMatch` に入れる。無ければ spawn prompt の指定、どちらも無ければ `{}`。
 
 途中の失敗で空の png を証跡にしないよう、subshell 内で pipefail を有効にし、画像は一時ファイルに書いて中身があるときだけ置き換える。
 
@@ -176,8 +184,9 @@ capabilities はハーネスか spawn prompt の指定に従う (Tauri は `taur
   set -euo pipefail
   EP="<browser.endpoint>"
   OUT="<証跡ディレクトリ>/<シナリオ名>.png"
+  CAPS=$(jq -c '{capabilities: {alwaysMatch: (.webdriver_capabilities // {})}}' "<start の JSON>")
   SID=$(curl -sf -X POST "$EP/session" -H 'Content-Type: application/json' \
-    -d '{"capabilities":{"alwaysMatch":{}}}' | jq -er '.value.sessionId // empty')
+    -d "$CAPS" | jq -er '.value.sessionId // empty')
   : "${SID:?WebDriver session を作れなかった}"
   trap 'rm -f "$OUT.part"; curl -sf -o /dev/null -X DELETE "$EP/session/$SID" || true' EXIT
   curl -sf -o /dev/null -X POST "$EP/session/$SID/url" -H 'Content-Type: application/json' -d '{"url":"<target URL>"}'
@@ -188,6 +197,23 @@ capabilities はハーネスか spawn prompt の指定に従う (Tauri は `taur
 ```
 
 非 0 で終わったら手段 3 の失敗として `means_attempts` に stderr を verbatim で残す。
+
+### Windows 実行先
+
+windows_endpoint か windows の理由が渡されたとき、scenarios (無ければ diff が触れた画面) の Windows 分を、Linux 側の実行とは別に 1 本ずつ次の順で扱う。
+`requires_runtime` の要素の `scope` は `<シナリオ名> (Windows)` にする。`reason` は ADR-0035 の語
+(`windows unavailable` / `windows busy` / `windows not provisioned`) を言い換えずに使い、補足は `detail` に書く。
+
+| 順 | 状況 | 扱い |
+|---|---|---|
+| 1 | windows_endpoint が無い | 検証せず `requires_runtime` に書く。`reason` は windows の理由、無ければ `windows unavailable` |
+| 2 | `curl -sf --max-time 10 "<windows_endpoint>/status"` が失敗する | 検証せず `requires_runtime` に `reason: "windows unavailable"`、`detail: "Sandbox 内 WebDriver 起動が未配線: <windows_endpoint> が応答しない"` で書く |
+| 3 | `/status` が応答する | 手段 3 を windows_endpoint に向けて実行し、シナリオ `<シナリオ名> (Windows)` の pass / fail として扱う。capabilities は spawn prompt の指定に従い、無ければ `{}` (start の JSON の値は Linux 側のアプリを指すので使わない)。セッションを作れなければ検証せず `requires_runtime` に `reason: "windows unavailable"`、`detail` にエラーを verbatim で書く |
+
+- Sandbox 内で tauri-driver / msedgedriver と対象アプリを起動する手順と、Windows 用の exe を渡す手順は未配線のため、
+  いまは 2 の経路になる。これは正当な skip で、PR を止める理由にならない
+- verify-runner は Sandbox 内で何も起動しない。windows_provision は起動の配線が入るまで読むだけにし、`detail` に `webview2.mode` を添えてよい
+- Windows 分の失敗は `means_attempts` と `all_means_failed` の判断に入れない (probe は Linux 側のハーネスしか確かめられないため)
 
 ## 4. 返却スキーマ (JSON)
 
@@ -215,7 +241,7 @@ controller への要約テキストは 1 行。詳細は JSON に入れる。パ
     }
   ],
   "evidence_paths": ["/abs/.../scenario.png", "/abs/.../probe.json"],
-  "requires_runtime": [{ "scope": "検証しなかったシナリオ名", "reason": "windows unavailable | windows busy" }],
+  "requires_runtime": [{ "scope": "検証しなかったシナリオ名", "reason": "windows unavailable | windows busy | windows not provisioned", "detail": "任意の補足" }],
   "means_attempts": [{ "means": "playwright_mcp", "status": "ok | failed | not_applicable", "error": "verbatim" }],
   "probe": { "exit": 0, "output_path": "/abs/.../probe.json" },
   "gaps": [{ "step": "手作業が要った工程", "manual_workaround": "やったこと", "suggestion": "ハーネスに足すと良いこと" }],
@@ -230,7 +256,7 @@ controller への要約テキストは 1 行。詳細は JSON に入れる。パ
 | `skip_reason` | `skipped` 時 |
 | `failed_stage` | `fail` 時 |
 | `harness` | start を実行した時。`stop_exit` / `stop_stderr_tail` は `stop_status: done`、`other_live_runs` は `deferred` の時。`deferred` を受けた controller は下の「保留した stop の引き取り」に従う |
-| `requires_runtime` | 常時 (無ければ空配列)。検証しなかった範囲ごとに 1 要素 |
+| `requires_runtime` | 常時 (無ければ空配列)。検証しなかった範囲ごとに 1 要素。`detail` は任意 (3 章「Windows 実行先」) |
 | `scenarios` / `evidence_paths` | `pass` / `fail` 時。`pass` のシナリオは `evidence` にスクリーンショットを 1 枚以上 |
 | `repro_steps` | `fail` のシナリオ |
 | `probe` | start が成功した時 (`all_means_failed` では必須) |

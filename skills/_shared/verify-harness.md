@@ -35,6 +35,7 @@
 | `browser.executable_path` | string (絶対パス) \| null | yes | そのブラウザの実行ファイル。`playwright` では非 null |
 | `browser.version` | string | yes | そのブラウザ (WebDriver なら操作対象) のバージョン |
 | `browser.endpoint` | string (URL) \| null | yes | WebDriver の endpoint。`webdriver` では非 null、`playwright` では null |
+| `webdriver_capabilities` | object | no | `webdriver` で New Session に渡す capabilities (`capabilities.alwaysMatch` の中身)。Tauri なら `{"tauri:options":{"application":"<実行ファイルの絶対パス>"}}`。無ければ読み手は `{}` を渡す |
 
 - 必須列の yes は key を必ず出すことを指す。null を取れるかは型列で決まる。
 - 表にない key を足してよい (読み手は無視する)。
