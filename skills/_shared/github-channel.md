@@ -32,15 +32,36 @@ stdout に `"op_call_spec": 1` があれば §4 の protocol に入る。無け�
 
 1. verbatim 実行: `tool` の MCP tool を `args` を一切改変せず実行する。補完・別 tool への差し替え・
    payload の書き換え・値の付け足しは禁止 (本文・marker・fingerprint・labels の検証は op 側で完結済み)。
+   `args.body` は渡された文字列をそのまま tool の引数に渡す。**再入力・要約・エスケープ・
+   placeholder 化をしない** (marker が壊れると ingest の本文検査が block する、後述)。
 2. read-back で結果を組む: `mcp__github__issue_write` の返却は `{id, url}` のみで ingest の必須 field
-   (number / title) を満たさない。返却 `url` 末尾の番号に対し `mcp__github__issue_read` (method: get) を
-   実行し、その読み戻し JSON をファイルに保存する。これを ingest の result とする。
+   (number / title / body) を満たさない。返却 `url` 末尾の番号に対し `mcp__github__issue_read`
+   (method: get) を実行し、その読み戻し JSON をファイルに保存する。これを ingest の result とする。
 3. ingest を実行する: `ingest` フィールドのコマンドを read-back 結果ファイルとともに実行する
    (write の echo を渡すと `missing required field 'number'` で block される)。
 4. ingest の出力を後続処理の正とする: ingest の envelope は gh channel の
    `op issue create --ensure-labels` の成功出力と同一 shape。call-spec の emit や MCP tool 呼び出しの成功を
    「起票成功」として扱わない。ingest 完走までは未確定。
-5. VerifyFailed の扱い: ingest が `VerifyFailed` 系エラーを返したら、含まれる URL (orphan 資源) を
+5. 本文不一致 (`BODY_MISMATCH` / reason に `body mismatch` を含む block) の修復手順: kind `issue`
+   (`op issue create`) の ingest は read-back body と call-spec body を正規化して比較する。
+   実行者が `args.body` をそのまま渡さず要約・エスケープした場合などに block されるが、
+   **この時点で Issue 自体は既に GitHub 上に作成済み**なので再作成しない (二重起票になる)。
+   block envelope の `created_issue_number` / `created_url` を使い、以下の手順で 1 回だけ修復する。
+   1. 本文ファイルを用意する: create に `--body-file <path>` を渡していればそのファイルをそのまま使う。
+      本文をコード内で組み立てて渡した (元ファイルが無い) 場合は、create の call-spec の `args.body`
+      を一切改変せずファイルに書き出す。
+   2. `op issue edit-body --number <created_issue_number> --body-file <1 のファイル>` を実行する。
+      gh channel はそのまま gh へ到達する。mcp channel ではこのコマンド自体が call-spec
+      (`expect.kind = "issue_edit_body"`) を emit するので、§4-1〜4-3 の手順 (verbatim 実行 →
+      read-back → ingest) をこの call-spec に対して実行する。
+   3. edit-body (mcp channel ではその ingest) が完了したら、`mcp__github__issue_read` (get) で
+      read-back を撮り直し、元の create call-spec の `ingest` コマンド (`op issue ingest-result`)
+      を再実行する。この create の ingest は §4-4 が正とする envelope (number / title / labels /
+      body の検査) を返すので、これが pass すれば起票確定でその envelope を後続処理の正とする。
+      edit-body またはこの create の ingest が block したら再試行しない (本文の作り直し・
+      再修復はしない)。§4-6 と同様に `created_issue_number` / `created_url` を人間に報告するか
+      `needs_human_decision` として渡す。
+6. VerifyFailed の扱い: ingest が `VerifyFailed` 系エラーを返したら、含まれる URL (orphan 資源) を
    人間に報告する。自動リトライで再実行しない (二重起票になる)。人間の判断を仰ぐか
    `needs_human_decision` として次工程へ渡す。
 
