@@ -97,8 +97,11 @@ op scan dedup --findings-json "<REPORT_DIR>/drafts.json" --json > "<REPORT_DIR>/
 ```
 
 - `MISSING_REQUIRED_INPUT` は `warnings` の指摘どおり drafts.json を直して再実行する (手作業の検索で代替しない)。envelope が取れなければ中断してエラーを提示する。
-- `details.results[i]` (i = drafts.json の添字) の扱いは `filing-gate.md` §2 (対話経路)。`decision == "block"` のうち `matched_existing.match_priority` が 1〜3 は起票せず `duplicate` (既存 Issue = `matched_existing.issue_number`)。`match_priority == 4` は 3-1b。
-- `details.results[i].fingerprint` が他の draft と完全一致したら、Task No. が最小のものだけを起票し、残りは `merged` にする。
+- `details.results[i]` (i = drafts.json の添字) の扱いは `filing-gate.md` §2 (対話経路)。`decision == "block"` は次の順で振り分ける:
+  - `matched_draft` あり → run 内重複。起票せず `merged` にする。統合先は `matched_draft.draft_index` (drafts.json の添字) を添字 → Task No. の対応表で引き直した Task。
+  - `matched_existing` あり → `match_priority` が 1〜3 は起票せず `duplicate` (既存 Issue = `matched_existing.issue_number`)。`matched_existing.match_priority == 4` は 3-1b (`matched_draft.match_priority` は常に 1 で 3-1b の対象外)。
+  - どちらも無い → 想定外として fail-closed。起票せず `failed` とする (`blocking_reasons` を添える)。
+- `matched_draft` が返らず `details.results[i].fingerprint` が他の draft と完全一致する draft は、Task No. が最小のものを代表として残し、残りは `merged` にする。
 
 ### 3-1b. 類似の確認 (まとめて 1 回)
 
@@ -141,7 +144,7 @@ test -s "$BODY" &&
 | `duplicate` | 3-1 | 「既存 Issue と重複しています: #<matched_existing.issue_number>」 |
 | `similar_skipped` | 3-1b | 「タイトルが類似する既存 Issue #<matched_existing.issue_number> (<matched_existing.existing_title>) があるため見送りました」 |
 | `merged` | 3-1 | 「No.<統合先> と同じ内容のため 1 件にまとめました。統合先の結果: <統合先 Task の応答文をそのまま埋め込む>」 |
-| `lint_blocked` / `failed` | 3-2 | 「起票できませんでした: <blocking_reasons / エラー / orphan URL を 1 行>」 |
+| `lint_blocked` / `failed` | 3-1 / 3-2 | 「起票できませんでした: <blocking_reasons / エラー / orphan URL を 1 行>」 |
 | `not_confirmed` | scout | 「実在確認できませんでした: <evidence を 1〜2 行に要約>」 |
 | `needs_human_decision` | scout | 「判断が必要です: <options を箇条書き>」→ ユーザーに選んでもらう |
 

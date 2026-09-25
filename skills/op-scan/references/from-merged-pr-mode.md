@@ -58,8 +58,10 @@ draft ごとに `op core fingerprint` で fingerprint を生成し、全 draft �
 op scan dedup --findings-json drafts.json --json
 ```
 
-`.details.results[i].decision` が `pass` の draft だけ次へ進める。`block` は「既存 Issue と重複」、
-それ以外・取得失敗は fail-closed で block 扱いにする。類似 (warn) は plan file に併記して Phase 6 で人間が判断する
+`.details.results[i].decision` が `pass` の draft だけ次へ進める。`block` は `matched_existing` ありなら「既存 Issue と重複」
+(`matched_existing.issue_number`)、`matched_draft` ありなら run 内重複 (`matched_draft.draft_index` = drafts.json の添字の先行 draft と
+fingerprint 完全一致) としてスキップする。どちらも無い block・それ以外・取得失敗は fail-closed で block 扱いにする。
+類似 (warn) は plan file に併記して Phase 6 で人間が判断する
 (`_shared/filing-gate.md` §2)。draft が 0 件なら Phase 3 以降を skip する。
 
 ## Phase 4: plan file 書き出し
@@ -69,7 +71,8 @@ op scan dedup --findings-json drafts.json --json
 1. 対象 PR (番号 / タイトル / 実行日時)
 2. サマリ表: `# / タイトル / domain / severity / fingerprint / 類似 Issue`
 3. 起票予定 Issue 詳細 (各 draft を `<details>` で折りたたみ、Labels / Body 全文)
-4. スキップ (重複) 表: `fingerprint / 既存 Issue`
+4. スキップ (重複) 表: `fingerprint / 重複先`。重複先は既存 Issue なら `#<matched_existing.issue_number>`、run 内重複なら
+   `run 内 draft <matched_draft.draft_index> (<matched_draft.draft_title>)`
 
 ## Phase 5: ExitPlanMode 承認
 
@@ -92,9 +95,11 @@ op scan dedup --findings-json drafts.json --json
 - 抽出: recommended_followup_experts N / needs_human_decision N / proposed_stages N /
   review finding N / post-check Notes N / assumptions・blocked_actions N / followup_section N
 - 起票: #<M> "<タイトル>" (medium, <fingerprint>) ...
-- スキップ (重複): <fingerprint> → 既存 #<K>
+- スキップ (既存 Issue と重複): <fingerprint> → 既存 #<matched_existing.issue_number>
+- スキップ (run 内重複): <fingerprint> → run 内 draft <matched_draft.draft_index> (<matched_draft.draft_title>)
 
 次は `/op-skill:op-run` で起票した Issue を実装できます。
 ```
 
-`--no-trace` でなければ、起票した Issue 一覧とスキップ件数を一時ファイルに書き `op pr comment "$PR_NUM" --body-file <tmp>` で親 PR に投稿する。
+`--no-trace` でなければ、起票した Issue 一覧とスキップ件数 (既存 Issue と重複 / run 内重複 を分けて数える) を一時ファイルに書き
+`op pr comment "$PR_NUM" --body-file <tmp>` で親 PR に投稿する。

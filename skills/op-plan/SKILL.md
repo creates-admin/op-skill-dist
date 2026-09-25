@@ -155,8 +155,9 @@ op scan dedup --findings-json drafts.json --json   # drafts.json = [{domain, tit
 
 扱いは `_shared/filing-gate.md` §2。op-plan 固有の扱い:
 
-- `details.results[i].decision == "block"` (既存 Issue `matched_existing.issue_number` と重複) → 「続行 / 既存 Issue にコメント追加 / この issue を外す / キャンセル」をユーザーに確認する。
-- envelope が取れない / 想定外の値 → fail-closed でエラーを提示し中断する。
+- `decision == "block"` かつ `matched_draft` あり (run 内重複) → 「計画内の draft 同士が同じ fingerprint」と、先行 draft (`matched_draft.draft_title`) と draft i の title を並べて示し、「統合する (draft i を外す) / title を変えて別 issue に分ける / キャンセル」をユーザーに確認する。
+- `decision == "block"` かつ `matched_existing` あり (既存 Issue `matched_existing.issue_number` と重複) → 「続行 / 既存 Issue にコメント追加 / この issue を外す / キャンセル」をユーザーに確認する。
+- envelope が取れない / `decision == "block"` なのに `matched_existing` も `matched_draft` も無い → fail-closed でエラーを提示し中断する。
 
 ### 4-6. 分解 align gate
 

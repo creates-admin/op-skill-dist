@@ -282,7 +282,10 @@ op-scan フェーズ2-3 の 2 番目 (expert) の後に「area の patrol_score 
 |---|---|---|---|---|
 
 ### 既存 Issue 重複でスキップ
-- #<N> と fingerprint 一致: <title>
+- #<matched_existing.issue_number> と重複: <title>
+
+### run 内重複で統合
+- 先行 draft「<matched_draft.draft_title>」と fingerprint 完全一致: <title>
 
 ### 要確認 (manual_review_bucket / 類似 Issue あり)
 - evidence_grade=requires_runtime: <area> の <内容>

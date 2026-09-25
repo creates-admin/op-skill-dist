@@ -148,7 +148,11 @@ op scan bulk-group --findings-json findings.json --json   # mcp channel では -
 ### 2-2. fingerprint 生成 + 重複・衝突チェック
 
 fingerprint は `op core fingerprint` / `op core fingerprint-bulk` で生成し、`op scan dedup --findings-json drafts.json --json` で判定する
-(扱いは `filing-gate.md` §2)。重複で skip したものは最終報告に「既存 Issue #N と重複」と記録する。
+(扱いは `filing-gate.md` §2)。`decision == "block"` は次の 3 通りに分ける:
+
+- `matched_existing` あり → 既存 Issue と重複。起票せず、最終報告に「既存 Issue #<`matched_existing.issue_number`> と重複」と記録する。
+- `matched_draft` あり → run 内重複 (先行 draft と fingerprint 完全一致)。起票せず先行 draft に統合し、最終報告に「先行 draft「<`matched_draft.draft_title`>」と統合」と記録する。
+- どちらも無い → 想定外として fail-closed。起票せず `blocking_reasons` を添えて、対話はユーザーに提示、`--auto` は `manual_review_bucket` へ。
 
 ### 2-3. 並び替え
 
@@ -177,6 +181,9 @@ fingerprint は `op core fingerprint` / `op core fingerprint-bulk` で生成し�
 
 ### 既存 Issue と重複でスキップ (N 件)
 - #34 と同等: api/handler.py の null check 漏れ
+
+### run 内重複で統合 (N 件)
+- 先行 draft「<matched_draft.draft_title>」と fingerprint 完全一致: <title>
 
 ### 要確認 (manual_review_bucket / 類似 Issue あり)
 - ...
