@@ -12,7 +12,7 @@ apply 中の expert は起票しない。起票要求は完了報告で返し、
 | 対話 (op-plan / op-architect / op-scan・op-patrol 対話モード / op-spec 派生 Issue) | 人間が起票内容を承認する (ExitPlanMode / AskUserQuestion)。承認前に起票しない |
 | `--auto` (op-scan / op-patrol) | refute (`refute-contract.md`) を通過し、かつ `auto-policy.md` の 8 条件をすべて満たすもののみ。満たさないものは manual_review_bucket |
 | `--auto` (op-doctor) | `auto-policy.md` の 8 条件をすべて満たすもののみ |
-| op-report | scout の実在確認 (confirmed) のみ |
+| op-report | scout の実在確認 (confirmed) のみ。scout は起票せず、controller が §2 以降を通して起票する |
 
 起票を Critical / High に限る規則 (CLAUDE.md 不変則5) は finding の起票に適用する。op-plan / op-architect の計画 Issue は人間承認済みの作業指示で severity を持たない。finding の例外は次の 4 経路だけ。いずれも §2 以降は省略しない。
 

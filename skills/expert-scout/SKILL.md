@@ -1,11 +1,12 @@
 ---
 name: expert-scout
-description: scout に preload される方法論。実在確認 gate・起票手順・返却スキーマ。
+description: scout に preload される方法論。実在確認 gate・起票 draft (本文ファイル) の作成・返却スキーマ。
 ---
 
 # expert-scout: scout agent の知識ベース
 
-op-report controller から渡された単一 finding を、実在確認 → 起票前ゲート → 起票 or 構造化返却する手順。
+op-report controller から渡された単一 finding を実在確認し、`confirmed` なら起票 draft (dedup 入力 + 本文ファイル) を作って返す手順。
+fingerprint 生成・重複チェック・起票は controller が行う。
 
 ## 1. 実在確認 gate
 
@@ -13,38 +14,22 @@ op-report controller から渡された単一 finding を、実在確認 → 起
 
 | 値 | 条件 | 動作 |
 |---|---|---|
-| `confirmed` | finding が実在すると静的に確認できた (`evidence_grade` は `direct` か根拠が複数ある `inferred`) | 2 章の手順で起票 |
-| `not_confirmed` | 根拠が見当たらない / 実行時にしか確認できない (`requires_runtime`) / 状況証拠が 1 本のみ / 「可能性がある」レベル | 起票せず返却 |
-| `duplicate` | 2 章の重複チェックで既存 Issue と一致 | 起票せず `existing_issue` を返却 |
-| `needs_human_decision` | 既存パターンが複数で基準が定まらない / deprecated 資産が絡み可否不明 / 設計意図が静的に復元できない / 解釈が複数ある / 類似 Issue がある (warn) | 起票せず返却。`options` / `recommended_option` / `safest_default` を含める |
+| `confirmed` | finding が実在すると静的に確認できた (`evidence_grade` は `direct` か根拠が複数ある `inferred`) | 2 章の手順で draft を作る |
+| `not_confirmed` | 根拠が見当たらない / 実行時にしか確認できない (`requires_runtime`) / 状況証拠が 1 本のみ / 「可能性がある」レベル | draft を作らず返却 |
+| `needs_human_decision` | 既存パターンが複数で基準が定まらない / deprecated 資産が絡み可否不明 / 設計意図が静的に復元できない / 解釈が複数ある | draft を作らず返却。`options` / `recommended_option` / `safest_default` を含める |
 
-severity は起票可否に使わない (ラベルと本文の記述にのみ使う。判定基準は `~/.claude/skills/_shared/severity-rubric.md`)。
+severity は判定に使わない (ラベルと本文の記述にのみ使う。判定基準は `~/.claude/skills/_shared/severity-rubric.md`)。
 
-## 2. 起票手順 (`confirmed` のときのみ)
+## 2. draft 作成 (`confirmed` のときのみ)
 
-起票前ゲートの正本は `~/.claude/skills/_shared/filing-gate.md` (op-report の起票前レビュー = scout の実在確認)。1 件ずつ次の順で行う。
-
-1. fingerprint 生成: `op core fingerprint --plain --domain <domain> --title "<title>" --file <files[0]> [--symbol <symbol>]`
-2. 重複チェック: finding を 1 要素の配列で `draft.json` に書き (形は `~/.claude/skills/_shared/dedup-policy.md`)、
-   `op scan dedup --findings-json draft.json --json` を実行する。`domain` / `title` / `files[0]` / `symbols[0]` は 1 と同じ値にする。
-   `MISSING_REQUIRED_INPUT` なら `warnings` の指摘どおり入力を直して再実行する (手作業の検索で代替しない)。
-   - `details.results[0]` で判定する。重複 → `duplicate` で返す。類似 (warn) → 起票せず `needs_human_decision` で返す (既存 Issue の URL を options に含める)
-   - `OP_GITHUB_CHANNEL=mcp` では既存 Issue を `mcp__github__search_issues` で取得して保存し `--input-json <file>` で渡す
-     (`~/.claude/skills/_shared/github-channel.md` §6)
-3. 本文組立: `~/.claude/skills/_shared/pr-templates.md`「Issue 本文 (指示書フル版)」。marker は同ファイル「Issue 本文 hidden marker」、
+1. dedup 入力を決める: `domain` / `title` / `files` / `symbols` (形は `~/.claude/skills/_shared/dedup-policy.md`)。
+   `files[0]` が primary file になる。
+2. 本文組立: `~/.claude/skills/_shared/pr-templates.md`「Issue 本文 (指示書フル版)」。marker は同ファイル「Issue 本文 hidden marker」、
    `op-run-expert` / `op-post-check-expert` の値とラベルは「domain → marker / ラベル表」で決める。
+   `op-fingerprint` marker は書かない (controller が生成して差し込む)。
    severity ラベル (`severity:<critical|high>`) は severity が Critical / High のときだけ付ける。
-4. lint → 起票:
-
-   ```bash
-   op core marker-lint --body-file body.md --source-hint issue-body --strict
-   op issue create --title "<title>" --body-file body.md --label "auto-report,pro-<op-run-expert>[,severity:<critical|high>]" --ensure-labels
-   ```
-
-   mcp channel では `op issue create` が call-spec を emit する。scout 自身が `github-channel.md` §3〜§4
-   (verbatim 実行 → `issue_read` で read-back → `op issue ingest-result`) を完遂し、ingest の出力を正とする。
-   VerifyFailed は自動リトライせず、orphan URL を `needs_human_decision` に載せて返す
-5. 返却に `filed_issue_url` を含める
+3. 本文を spawn prompt の `body_file` (絶対パス) に Write する。
+4. 返却の `draft` に dedup 入力・ラベル・`body_file` を入れる。
 
 ## 3. 返却スキーマ (JSON)
 
@@ -52,12 +37,18 @@ controller への要約テキストは 1 行。詳細は JSON に入れる。
 
 ```json
 {
-  "result": "filed | not_confirmed | duplicate | needs_human_decision",
-  "filed_issue_url": "https://github.com/owner/repo/issues/N",
+  "result": "confirmed | not_confirmed | needs_human_decision",
   "finding_summary": "finding の 1〜2 文要約",
   "evidence": "静的根拠 (ファイル:行 + 観測内容)、または根拠が得られなかった旨",
   "evidence_grade": "direct | inferred | requires_runtime",
-  "existing_issue": "https://github.com/owner/repo/issues/N",
+  "draft": {
+    "domain": "debug",
+    "title": "Issue タイトル",
+    "files": ["path/to/file.ext:LINE"],
+    "symbols": ["symbol"],
+    "labels": ["auto-report", "pro-debug-expert"],
+    "body_file": "/abs/path/task-1.md"
+  },
   "needs_human_decision": { "required": true, "...": "schema は invocation-mode.md" },
   "assumptions": ["確認できなかった項目の推定"]
 }
@@ -66,8 +57,7 @@ controller への要約テキストは 1 行。詳細は JSON に入れる。
 | フィールド | 必須条件 |
 |---|---|
 | `result` | 常時 |
-| `filed_issue_url` | `filed` 時 |
-| `evidence` / `evidence_grade` | `not_confirmed` 時必須、それ以外も推奨 (`filed` 時は本文にも転記) |
-| `existing_issue` | `duplicate` 時 |
+| `draft` | `confirmed` 時 (`symbols` は無ければ空配列) |
+| `evidence` / `evidence_grade` | `not_confirmed` 時必須、それ以外も推奨 (`confirmed` 時は本文にも転記) |
 | `needs_human_decision` | `needs_human_decision` 時 (正規スキーマは `~/.claude/skills/_shared/invocation-mode.md`) |
 | `assumptions` | 推定がある時 |

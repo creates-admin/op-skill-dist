@@ -1,18 +1,19 @@
 ---
 name: op-report
-description: 単一 finding を隔離 context で調査・確認・起票する薄い委任スキル。「これ起票して」「たまったやつ整理して」等のキーワードで起動。finding mode (1件) と handoff mode (会話履歴から複数抽出) の 2 モード。
+description: finding を scout の隔離 context で実在確認し、controller がまとめて重複判定・起票する薄い委任スキル。「これ起票して」「たまったやつ整理して」等のキーワードで起動。finding mode (1件) と handoff mode (会話履歴から複数抽出) の 2 モード。
 effort: medium
 ---
 
 # op-report: 単一 finding 隔離起票スキル
 
-単一の finding を scout worker の隔離 context で調査・実在確認・起票させ、controller には 1 行の relay だけを返す。
+finding ごとに read-only の scout が隔離 context で調査・実在確認・本文ファイル作成を行い、controller は scout の返却をまとめて
+重複判定し、1 件ずつ直列に起票する。
 
 ## 3 原則
 
 1. 人間起動専用 — `_shared/invocation-mode.md`「Direct 固定 skill に op_managed が渡った場合」
-2. context 隔離 — 調査〜起票は scout の隔離 context で完遂し、main context を汚さない
-3. 確認 gate — 起票前にユーザーの承認を得る。承認なしの一括起票はしない
+2. context 隔離 — 調査と本文作成は scout の隔離 context で完遂する。controller は本文ファイルを Read せず `--body-file` で渡す
+3. 確認 gate — 起票前にユーザーの承認を得る (finding の確認 / Task の選択)。`confirmed` の draft の起票前に追加の確認は挟まない
 
 scout の実在確認 gate が `confirmed` なら severity で絞らず起票する (`_shared/filing-gate.md` §1 の例外)。
 
@@ -20,11 +21,20 @@ scout の実在確認 gate が `confirmed` なら severity で絞らず起票す
 |-|-------------|-------------|
 | 起動きっかけ | 「これ起票しといて」など単一の課題 | 「たまったやつ起票して」「未対応を整理して」など複数 |
 | Task 源泉 | ユーザーが渡した finding | controller が会話履歴から抽出 |
-| scout spawn 数 | 1 体 | 承認 Task ごとに 1 体 (直列) |
+| scout spawn 数 | 1 体 | 承認 Task ごとに 1 体 (1 メッセージで並列) |
 
 ## フェーズ 0: 環境確認
 
-`_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」に従う (gh channel で未認証なら中断)。mcp channel では scout が call-spec を完遂する。
+`_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」に従う (gh channel で未認証なら中断)。
+
+scout との受け渡しディレクトリを作る:
+
+```bash
+REPORT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/op-report-XXXXXX")" || { echo "REPORT_DIR を作れない"; exit 1; }
+echo "REPORT_DIR=$REPORT_DIR"
+```
+
+以降の fence と spawn prompt には REPORT_DIR の実パスを直書きする。本文ファイルは Task ごとに `<REPORT_DIR>/task-<No>.md` (絶対パス) とする。
 
 ## フェーズ 1: mode 判定
 
@@ -49,7 +59,7 @@ scout の実在確認 gate が `confirmed` なら severity で絞らず起票す
 起票しますか？ (y/n または修正を教えてください)
 ```
 
-2. 承認されたら scout を 1 体 spawn し、返却をフェーズ 3 へ渡す。
+2. 承認されたら scout を 1 体 spawn し (Task No. は 1)、返却をフェーズ 3 へ渡す。
 
 ## フェーズ 2b: handoff mode
 
@@ -69,20 +79,53 @@ No. | 概要 | 検出根拠
 ```
 
    「なし」なら終了。10 件を超える場合はユーザーに優先度付けを依頼して絞る。
-3. 承認された Task ごとに scout を直列で spawn する (並列 fan-out 禁止)。返却を集めてフェーズ 3 へ渡す。
+3. 承認された Task ごとの scout を 1 メッセージに全 Agent 呼び出しを並べて並列 spawn する。全返却を集めてフェーズ 3 へ渡す。
 
 起票先リポジトリが複数ありうる場合は、spawn 前にどのリポジトリかを確認する。
 
-## フェーズ 3: 結果 relay
+## フェーズ 3: 起票と結果 relay
 
-scout の返却 `result` (gate が `confirmed` のとき `filed`) を relay する:
+起票前ゲートは `_shared/filing-gate.md` §2〜§3。対象は scout の `result` が `confirmed` の Task だけ。
 
-| result | controller の応答 |
-|----------|-----------------|
-| `filed` | 「起票しました: <Issue URL>」 |
-| `not_confirmed` | 「実在確認できませんでした: <evidence を 1〜2 行に要約>」 |
-| `duplicate` | 「既存 Issue と重複しています: <existing_issue URL>」 |
-| `needs_human_decision` | 「判断が必要です: <options を箇条書き>」→ ユーザーに選んでもらう |
+### 3-1. 重複チェック (全 draft を 1 回)
+
+`confirmed` の各返却の `draft` から `{domain, title, files, symbols}` を Task No. 順に並べた配列を `<REPORT_DIR>/drafts.json` に書き、1 回だけ判定する:
+
+```bash
+op scan dedup --findings-json "<REPORT_DIR>/drafts.json" --json > "<REPORT_DIR>/dedup.json"   # mcp channel では --input-json で既存 Issue 素材を注入 (github-channel.md §6)
+```
+
+- `MISSING_REQUIRED_INPUT` は `warnings` の指摘どおり drafts.json を直して再実行する (手作業の検索で代替しない)。envelope が取れなければ中断してエラーを提示する。
+- `details.results[i]` (i = drafts.json の添字) の扱いは `filing-gate.md` §2 (対話経路)。`decision == "block"` は起票せず `duplicate` (既存 Issue = `matched_existing.issue_number`)。
+- `details.results[i].fingerprint` が他の draft と完全一致したら、Task No. が最小のものだけを起票し、残りは `merged` にする。
+
+### 3-2. 起票 (1 件ずつ直列)
+
+残った draft ごとに、dedup envelope の fingerprint を本文ファイルの先頭に差し込み、lint してから起票する:
+
+```bash
+BODY="<REPORT_DIR>/task-<No>.md"
+FINAL="<REPORT_DIR>/task-<No>.final.md"
+test -s "$BODY" &&
+  { printf '<!-- op-fingerprint: %s -->\n' "<details.results[i].fingerprint>"; cat "$BODY"; } > "$FINAL" &&
+  op core marker-lint --body-file "$FINAL" --source-hint issue-body --strict &&
+  op issue create --title "<draft.title>" --body-file "$FINAL" --label "<draft.labels を , で連結>" --ensure-labels
+```
+
+- 本文ファイルが無い・空、または marker-lint が `pass` 以外なら起票せず `lint_blocked` とし、次の draft へ進む。
+- Issue 番号と URL は envelope の `details.issue_number` / `details.url` から取る。起票失敗は `failed` として記録し次へ進む。
+- mcp channel では `op issue create` が call-spec を emit する。controller が `github-channel.md` §3〜§4 を完遂し、ingest の envelope を正とする。VerifyFailed は `failed` とし、orphan URL を添えて報告する。
+
+### 3-3. 結果 relay
+
+| result | 出どころ | controller の応答 |
+|--------|---------|-----------------|
+| `filed` | 3-2 | 「起票しました: <Issue URL>」 |
+| `duplicate` | 3-1 | 「既存 Issue と重複しています: #<matched_existing.issue_number>」 |
+| `merged` | 3-1 | 「No.<統合先> と同じ内容のため 1 件にまとめました」 |
+| `lint_blocked` / `failed` | 3-2 | 「起票できませんでした: <blocking_reasons / エラー / orphan URL を 1 行>」 |
+| `not_confirmed` | scout | 「実在確認できませんでした: <evidence を 1〜2 行に要約>」 |
+| `needs_human_decision` | scout | 「判断が必要です: <options を箇条書き>」→ ユーザーに選んでもらう |
 
 handoff mode は集約表で出す:
 
@@ -101,12 +144,12 @@ No. | 概要 | result | URL / 補足
 Agent({
   subagent_type: "op-skill:scout",
   model: "sonnet",
-  description: "op-report finding 調査起票: <finding タイトル 1行>",
+  description: "op-report finding 調査: <finding タイトル 1行>",
   prompt: `
 invocation_mode: op_managed
 
 【必読】Read \`~/.claude/skills/_shared/apply-completion-checklist.md\` — 完了手順の正本。
-本フェーズは finding 調査起票 (exploration-only) のため commits_added: [] が正解 (commit は行わない。Issue 起票は行う)。
+本フェーズは finding 調査 (exploration-only) のため commits_added: [] が正解 (commit も Issue 起票も行わない)。
 
 # finding データ
 
@@ -119,9 +162,14 @@ severity_hint: <low / medium / high / critical — ユーザーが明示した�
 
 repo_root: <git rev-parse --show-toplevel の結果>
 
+# 本文ファイル
+
+body_file: <REPORT_DIR>/task-<No>.md   # 絶対パス。書き込んでよいのはこのファイルだけ
+
 # 指示
 
-expert-scout の手順で実在確認 gate を通し、confirmed なら起票して、構造化返却スキーマで result を返す。
+expert-scout の手順で実在確認 gate を通し、confirmed なら body_file に本文を書き、構造化返却スキーマで result と draft を返す。
+GitHub への書き込み (起票・コメント) はしない。
 
 You must not ask interactive questions.
 You must not ask the commander or user for clarification.

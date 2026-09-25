@@ -27,8 +27,8 @@ stdout に `"op_call_spec": 1` があれば §4 の protocol に入る。無け�
 
 ## 4. 司令官 (main Claude / controller) の義務
 
-実行者は call-spec を受け取った op 実行主体の LLM context。OP-managed worker (例: op-report の scout、
-ClusterOrchestrator) が op を実行した場合は、その worker 自身が隔離 context 内で本節を完遂する。
+実行者は call-spec を受け取った op 実行主体の LLM context。OP-managed worker (例: ClusterOrchestrator)
+が op を実行した場合は、その worker 自身が隔離 context 内で本節を完遂する。
 
 1. verbatim 実行: `tool` の MCP tool を `args` を一切改変せず実行する。補完・別 tool への差し替え・
    payload の書き換え・値の付け足しは禁止 (本文・marker・fingerprint・labels の検証は op 側で完結済み)。
