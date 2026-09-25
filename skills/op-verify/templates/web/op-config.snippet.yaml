@@ -1,0 +1,7 @@
+verify_harness:
+  start: node scripts/verify/verify-harness.mjs start
+  stop: node scripts/verify/verify-harness.mjs stop
+  smoke: node scripts/verify/verify-harness.mjs smoke
+  targets: [site]
+  runtime: linux
+  driver: playwright
