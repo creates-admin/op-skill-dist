@@ -98,3 +98,30 @@ op-plan フェーズ2.5 の前段 discovery (`op-skill:op-survey` workflow)。co
 - `enabled: false` なら `--survey` を渡しても起動しない。
 - `--no-survey` は常に skip する。
 - Workflow ツール自体が無いときは `workflow-calling.md` §1 に従い停止する。workflow の実行失敗時は survey 無しで続行する。
+
+## §14 `verify_harness`
+
+対象 repo の実機検証ハーネスの宣言。契約 (コマンドの役割・start の stdout JSON・並列安全の規則) は `verify-harness.md`。
+節が無ければハーネス未導入として扱う。
+
+```yaml
+verify_harness:
+  start: npm run verify:env
+  stop: npm run verify:env:stop
+  smoke: npm run verify:smoke
+  targets: [site, cms]
+  runtime: linux
+  driver: playwright
+  windows_paths:
+    - "src-tauri/src/platform/windows/**"
+```
+
+| key | 型 | 必須 / default | 意味 |
+|---|---|---|---|
+| `start` | string | yes | 検証環境を起動し、stdout に 1 行 JSON を出すコマンド |
+| `stop` | string | yes | この checkout で start した全 run を停止するコマンド |
+| `smoke` | string | yes | start 済みの run に対してハーネスの健全性を確かめるテスト 1 本のコマンド |
+| `targets` | list[string] | yes | start の JSON の `targets` に非 null の URL を必ず含める target 名 |
+| `runtime` | enum | `linux` | ハーネスを動かす実行先。`linux` / `windows` |
+| `driver` | enum | `playwright` | 操作手段。`playwright` / `webdriver`。start の JSON の `driver` と一致する |
+| `windows_paths` | list[string (glob)] | `[]` | diff がかかったら `runtime` に関わらず Windows で検証する path |
