@@ -97,7 +97,7 @@ op spec-patrol list-specs --rules-dir .claude/rules | jq -r --arg t "<対象 pat
 
 ## フェーズ 3: 監督実装ループ
 
-IU ごとに Step A → CHECKPOINT A → 3-B-gate → Step B → B-1 → B-2 → CHECKPOINT B → Step C → CHECKPOINT C を順次実行し、
+IU ごとに Step A → CHECKPOINT A → 3-B-gate → Step B → B-1 → B-2 → CHECKPOINT B → Step C → C-2 → CHECKPOINT C を順次実行し、
 全 IU 完了後に Step D。
 
 開始時に branch を作る (全 IU が同じ branch に順次 commit する。`auto/` prefix 必須):
@@ -282,10 +282,51 @@ Agent({
 })
 ```
 
+### Step C-2: 実機検証 spawn (runtime verify、controller 実行)
+
+Step C の後に、op-run の runtime verify 段と同じ段を実施する (ADR-0034 決定 4)。これは Step B (implement = apply) とは別の段であり、
+Level 5 を apply で実施しない規約 (`_shared/project-profile.md`「Verification Ladder」) は変えない。
+起動条件・結果の扱い・skipped を受け取ったときの `op verify probe` による確認と再 spawn・pass の証跡の実在確認は、
+op-run skill の `references/runtime-verify-dispatcher.md` に従う (op-codev 独自の規則は持たない)。起動条件に当たらない IU は spawn しない。
+
+```javascript
+Agent({
+  subagent_type: "op-skill:verify-runner",
+  model: "opus",                   // Opus が上限 (ADR-0034 決定 1)。fable 禁止
+  description: "op-codev runtime verify: <IU名>",
+  prompt: `
+    invocation_mode: op_managed
+    【実機検証フェーズ — コード・tracked ファイルを変更しないでください】
+    checkout: <controller の作業ディレクトリの絶対パス (branch: <BRANCH_NAME>)>
+    scenarios: <IU の goal とフェーズ 1 の期待挙動から組んだ確認項目 (画面・操作・期待結果、任意で wait_for)>
+    windows_endpoint: <Windows 実行先が要る場合のみ。貸し借りは runtime-verify-dispatcher.md に従う>
+    対象 diff: <IU_BASE_SHA>...HEAD
+
+    手順は preload された expert-verify skill に従い、同 skill「4. 返却スキーマ (JSON)」で返してください。
+
+    <§4>
+  `
+})
+```
+
+- skipped のうち probe → 1 回だけ再 spawn の対象は `skip_reason: all_means_failed` だけ。
+  `requires_runtime` / `harness_not_installed` は正当な skip として CHECKPOINT C に提示する (規則の本文は dispatcher)。
+- 返却の `harness.stop_status` が `deferred` なら、この IU の verify-runner (再 spawn を含む) がすべて返ったあと、
+  CHECKPOINT C の前に controller が expert-verify skill「保留した stop の引き取り」に従って stop を実行する。
+
 ### [CHECKPOINT C] 検証結果
 
-lint / typecheck / unit test の PASS・FAIL を提示する。全 PASS なら次 IU の Step A (残りが無ければ Step D) へ。
-失敗があれば「修正して」(Step B へ) / 「このまま進めて」(残存リスクとして記録) を選ばせる。
+lint / typecheck / unit test の PASS・FAIL と、Step C-2 の実機検証の結果を提示する:
+
+- 実機検証: `result` と `summary`、シナリオごとの pass / fail と `evidence` のパス、fail のシナリオは `repro_steps`。起動条件に当たらず spawn しなかった IU は「対象外」
+- `requires_runtime` (空でなければ、pass は検証した範囲だけの pass と明記) / `gaps`
+- ハーネス未導入 (`skip_reason: harness_not_installed`、または dispatcher の判定で未導入として spawn しなかった) なら
+  `Manual: skipped (ハーネス未導入)` と、`/op-skill:op-verify --init` でハーネスを導入できる旨
+- 保留した stop を引き取った場合は、その exit code と stderr の末尾 (非 0 はプロセスや state が残ったことを示す)
+
+全 PASS (実機検証は pass / 対象外 / 正当な skip) なら次 IU の Step A (残りが無ければ Step D) へ。
+失敗 (実機検証の fail を含む) があれば「修正して」(Step B へ。実機検証の fail は `repro_steps` を親フィードバックに入れる) /
+「このまま進めて」(残存リスクとして記録) を選ばせる。
 
 ### Step D: PR 作成
 
@@ -301,10 +342,11 @@ op pr create --base "<BASE_BRANCH>" --head "<BRANCH_NAME>" --title "<goal の要
 <IU 一覧と各 IU の変更概要>
 
 ## 検証結果
-<全 IU の Checkpoint C 結果の集約>
+<全 IU の Checkpoint C 結果の集約。実機検証は IU ごとに `Manual: pass | fail | skipped (<skip_reason>)` と証跡のパス>
 
 ## 残存リスク
 <未検証パス / 許容した検証失敗・review finding / 設計判断保留 / grooming gate で続行した前提>
+<実機検証の requires_runtime (検証しなかった範囲と理由) と skipped>
 <Fable 昇格した IU があれば「<IU名>: Fable (承認済、D<n>/D<n>)」>
 <デザインモック: <URL> (UI 変更の場合)>
 
@@ -335,7 +377,8 @@ review-expert は read-only のため fable 禁止。
 以下を提示する:
 
 - PR URL
-- IU 表 (# / Unit / commit / 検証結果) と Step B 再実行回数
-- model: Step A / C / B-2 は Sonnet (重い IU の B-2 は Opus)、Step B は IU ごとの model (Fable 昇格・degrade があれば明記、なければ「全 IU Opus 天井」)
-- 残存リスク (grooming gate で続行した前提 / 許容した失敗。なければ「なし」)
-- 次のアクション: `/op-skill:op-merge` または GitHub で PR をマージする (`Fixes #N` の Issue はマージで close される)
+- IU 表 (# / Unit / commit / 検証結果 / 実機検証) と Step B 再実行回数
+- model: Step A / C / B-2 は Sonnet (重い IU の B-2 は Opus)、Step C-2 は Opus、Step B は IU ごとの model (Fable 昇格・degrade があれば明記、なければ「全 IU Opus 天井」)
+- 残存リスク (grooming gate で続行した前提 / 許容した失敗 / 実機検証の requires_runtime・skipped。なければ「なし」)
+- 次のアクション: `/op-skill:op-merge` または GitHub で PR をマージする (`Fixes #N` の Issue はマージで close される)。
+  実機検証が `Manual: skipped (ハーネス未導入)` だった場合は `/op-skill:op-verify --init` でハーネスを導入するよう案内する
