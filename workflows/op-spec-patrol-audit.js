@@ -203,7 +203,7 @@ function buildAuditPrompt(f, a) {
       : "- 紐づく issue: なし",
     "",
     "検出するのは domain drift (spec_stale / code_deviation / premise_mismatch。定義と示し方は expert-spec「1-2. 差分検出」) だけ。premise_mismatch は紐づく issue がある時のみ。",
-    "機械 drift (broken-link / paths-overlap / cite / index) は CLI (op spec-patrol) が検出するので報告しない。",
+    "機械 drift (broken-link / paths-overlap / cite / index / size) は CLI (op spec-patrol) が検出するので報告しない。",
     "正本も code も変更しない。正本 write は op-spec が human align 後に行う。",
     "報告ルール: `~/.claude/skills/_shared/severity-rubric.md`「scan 報告ルール (共通)」。",
     "spec と code のどちらが正か決められない finding は suggested_direction に「人間判断」と書く。全体が判断不能なら needs_human_decision を返す。",

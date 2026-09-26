@@ -32,3 +32,12 @@ LEDGER_ISSUE="$(op issue list --label op-spec-patrol --label op-state --state op
 [ -n "$LEDGER_ISSUE" ] && op spec-patrol ledger pull --issue "$LEDGER_ISSUE" \
   | jq -r '.details.area_state // {} | to_entries[] | select((.value.drift_counts // {}) | length > 0) | .key'
 ```
+
+## trim
+
+seed は大きさの warning が出ている正本。1 正本ずつ `references/spec-trim.md` の手順で細くする (1-2 には合流しない)。
+
+```bash
+op spec-patrol list-specs --json \
+  | jq -r '.details.findings[] | select(.lens == "size" and .severity == "warn" and .feature != null) | "\(.feature)\t\(.rule_id)\t\(.message)"'
+```

@@ -1,13 +1,13 @@
 ---
 name: expert-spec
-description: spec-expert に preload される方法論。3 者照合・provenance タグ・返却スキーマ・lazy 構築。
+description: spec-expert に preload される方法論。3 者照合・provenance タグ・返却スキーマ・lazy 構築・trim。
 ---
 
 # expert-spec: spec-expert agent の知識ベース
 
 spec-expert は正本 (あるべき姿)・code (実態)・human (domain 知識) の 3 者を照合し、前提ズレを根拠付きで顕在化させる。
 照合は read-only。正本 write は op-spec controller が human align を経た後にだけ行う。
-正本 schema の正規定義は対象 repo の `.claude/rules/_schema.md` (本ファイルは運用ガイド)。
+正本 schema の正規定義は対象 repo の `.claude/rules/_schema.md` (本ファイルは運用ガイド)。区分 A〜F は同ファイル「書くもの・書かないもの」節。
 
 ## 1. 3 者照合の核
 
@@ -39,23 +39,24 @@ staleness は `git log` で正本ファイルと対象 code の更新時系列�
 
 | タグ | 意味 | binding | 付ける条件 |
 |---|---|---|---|
-| `[code]` | code から証明できる事実 | yes | 該当ソースを Read して実在・正確性を確認した上でのみ |
+| `[code]` | code で確かめた業務ルール | yes | 該当ソースを Read して実在・正確性を確認した上でのみ。実装箇所は 1 か所 |
 | `[human]` | 人間が authoritative に確定した事実 | yes | 出典 (会話日付 / 根拠) 必須。read-back 確認を経たときのみ |
 | `[?]` | unverified。`TODO: needs-human` 併記 | no | code に無い why / domain / intent はすべてこれ |
 
 捏造禁止: 自動抽出は code から証明できることだけ。domain / intent / why は書かず `[?] TODO: needs-human` とし、
 人間が埋めるまで binding にしない。
 
-- entity / API シグネチャ / 既定値 / 分岐ロジック → Read 確認の上 `[code]`
-- 「なぜそうなっているか」「業務ルール」「将来の意図」 → `[?] TODO: needs-human`
+- 業務ルールを表している定数・分岐・制約だけを Read 確認の上 `[code]` にする。entity・API シグネチャ・ファイル名は列挙しない (D)
+- A か D か迷うものは削らず `needs_human_decision` で返す
+- code に無い「なぜそうなっているか」「業務ルール」「将来の意図」 → `[?] TODO: needs-human`
 - `[human]` を詐称しない (機械は `[code]` しか照合できない)。出典の無い human 主張は巡回が `[?]` へ降格する
-- spec-expert は `[human]` を確定できない。align で確定すべき素材は `domain_gaps[]` に列挙する
+- spec-expert は `[human]` を確定できない。align で確定すべき素材は `domain_questions[]` に人への質問として列挙する
 
 ## 3. present → align → decide フロー
 
 spec-expert の担当は gather (正本 + code を読み、差分を根拠付きで返す) まで。present / align / decide は controller と human が行う。
 discrepancy は human が判断できる粒度で返し、どちらが正かは決めない (判断不能な `code_deviation` は `needs_human_decision`、
-domain 知識で埋まる空欄は `domain_gaps[]` に `[?]` で残す)。
+domain 知識で埋まる空欄は `domain_questions[]` に `[?]` で残す)。
 
 ## 4. 返却契約スキーマ (JSON)
 
@@ -74,11 +75,16 @@ controller への要約テキストは短く、詳細は JSON に入れる。
     { "diff_type": "spec_stale | code_deviation | premise_mismatch", "spec_says": "...", "code_reality": "...",
       "source": "src/billing/charge.rs::calculate_total", "evidence_grade": "direct | inferred | requires_runtime" }
   ],
-  "domain_gaps": [ { "question": "code に無い why / 業務ルール", "provenance": "?", "todo": "needs-human" } ],
+  "domain_questions": [ { "question": "人に聞く業務ルール / 理由 / 例外の扱い", "section": "不変則 | 決定 | 用語 | 落とし穴 | ドメイン",
+    "why_needed": "答えが無いと正本のどこが埋まらないか", "provenance": "?" } ],
   "premise_check": { "issue_ref": "#NN", "premise": "issue が前提とする挙動",
     "result": "premise_ok | premise_violated | unverifiable", "evidence": "ファイル + シンボルでの観測" },
   "proposed_spec_update": { "section": "決定 | 不変則 | 用語 | 落とし穴 | ドメイン",
     "draft": "align 前の候補テキスト", "provenance_of_draft": "code | ?" },
+  "trim_plan": [
+    { "section": "正本の節", "excerpt": "段落の抜粋", "class": "A | B | C | D | E | F",
+      "action": "keep | reshape | delete | move | ask", "move_to": "E の移し先 (skill / doc/ のパス)" }
+  ],
   "cross_feature_link_candidates": [
     { "from_feature": "<feature>", "to_feature": "<依存先 feature>", "evidence": "file + symbol", "provenance": "code | ?" }
   ],
@@ -92,9 +98,10 @@ controller への要約テキストは短く、詳細は JSON に入れる。
 | `spec_state` | 常時 | |
 | `code_facts[]` | 推奨 | `[code]` + ファイル + シンボル名 |
 | `diff_summary[]` | 差分がある時 | |
-| `domain_gaps[]` | code に無い why がある時 | align の素材 |
+| `domain_questions[]` | code に無い why がある時。lazy 構築時は必須 | align で人に聞く質問 |
 | `premise_check` | 対象 issue がある時 | |
 | `proposed_spec_update` | 更新候補がある時 | 候補にすぎない。確定は controller + human |
+| `trim_plan[]` | mode: trim の時 | 6 章 |
 | `cross_feature_link_candidates[]` | 他 feature への依存に気づいた時 (任意) | 候補提示まで。`[[]]` を張るかは controller + human |
 | `needs_human_decision` | 判断不能時 | 正規スキーマは `~/.claude/skills/_shared/invocation-mode.md`。options は「正本を code に合わせる」/「code を正本に合わせる (derived issue 発行)」が基本 |
 | `assumptions[]` | 推定がある時 | |
@@ -102,10 +109,25 @@ controller への要約テキストは短く、詳細は JSON に入れる。
 ## 5. lazy 構築 (正本 missing 時)
 
 1. 議題範囲だけ: controller が指定した issue / feature が触れる code 範囲だけを抽出する (feature 全体を網羅しない)
-2. code 由来は `[code]`: entity / API シグネチャ / 既定値 / 分岐ロジックを Read 確認の上で抽出する
-3. domain / why は `[?] TODO: needs-human`: 埋まらない節を捏造で埋めない
+2. code 由来は `[code]`: 業務ルールを表している定数・分岐・制約だけを Read 確認の上で抽出する。entity・API シグネチャ・ファイル名は列挙しない。A か D か迷うものは削らず `needs_human_decision`
+3. domain / why は `[?] TODO: needs-human`: 埋まらない節を捏造で埋めず、`domain_questions[]` に人への質問として返す
 4. 派生要約を作らない: source は正本 1 ファイルのみ
+5. kind は spawn prompt の `kind:` に従う (layer は層の共通の作り方だけ、feature は業務機能の全層の決まり)
 
 結果は `proposed_spec_update` に `.claude/rules/_schema.md` の skeleton に沿った候補として返す
-(`## 不変則 (MUST)` / `## 決定 (Decisions)` / `## 用語 (Glossary)` は `[code]` で、`## ドメイン (なぜ/背景)` は多くが `[?]`)。
+(`[code]` は業務ルールを表す定数・分岐・制約だけ。業務の理由・用語・例外は `[?]` で置き、`domain_questions[]` と対にする)。
 正本ファイルは write しない。
+
+## 6. trim (正本を細くする)
+
+spawn prompt が `mode: trim` のとき、正本を段落ごとに `_schema.md`「書くもの・書かないもの」の A〜F へ分類し、`trim_plan[]` で返す。
+
+| class | 許す action |
+|---|---|
+| A・B | `keep` / `reshape` (6 節へ並べ直すだけ。文言は変えない) |
+| C | `keep` / `reshape` / `delete` (実装箇所を 1 か所に絞る) |
+| D | `delete` |
+| E | `move` (`move_to` 必須) |
+| F | `delete` / `move` (残す価値がある判断は `move_to` に決定の行か DECISIONS / ADR) |
+
+分類に迷う段落は `ask` にする。正本ファイルは write しない。

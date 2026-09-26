@@ -25,6 +25,7 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 | `references/worklist-entry-modes.md` | entry mode 別の worklist 種取得。1-0 でモードを選んだ直後に読む |
 | `references/spec-expert-spawn-template.md` | spec-expert spawn の literal prompt。2-1 で読む |
 | `references/derived-issue-procedure.md` | derived issue 起票手順。3-1b で起票すると決めた時のみ読む |
+| `references/spec-trim.md` | trim mode の手順。1-0 で trim を選んだ時に読む |
 
 ---
 
@@ -33,6 +34,7 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 `_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」を実行する (gh channel で未認証なら中断)。
 `.claude/rules/_schema.md` か `00-constitution.md` が無い repo は OP 未移行。先に `/op-skill:op-adopt` (正本の土台と feature 地図) を案内して終了する。
 土台があり個別 feature の正本が無いだけなら 2-4 の lazy 構築で作る。
+`_schema.md` に「書くもの・書かないもの」「大きさ」節が無ければ、`~/.claude/skills/_shared/templates/rules-schema.md` との差分を示し、承認後に追記する。
 
 ---
 
@@ -40,13 +42,14 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 
 ### 1-0. entry mode 選択
 
-ユーザーが明示しなければ issue-driven。どの mode でも seed 後は 1-2 の feature 主役構造化に合流する。
+ユーザーが明示しなければ issue-driven。trim 以外の mode は seed 後に 1-2 の feature 主役構造化に合流する。
 
 | mode | 起点 | 主用途 |
 |------|------|--------|
 | **issue-driven** (既定) | pending issue → 属す feature を推定して畳む | 散らかった issue 群の整理 |
 | **feature-driven** | `.claude/rules/*.md` の正本一覧 + 紐づく issue | feature 単位で正本を見直す |
 | **drift-driven** | code が正本より新しい feature / `status: draft・unverified` / Spec Patrol Ledger の confirmed drift | 腐った・未 cultivated な正本から育てる |
+| **trim** | 大きさの上限を超えている正本 | 実装の詳細・手順・経緯を削って細くする (`references/spec-trim.md`) |
 
 正本を俯瞰したいときは `/op-skill:op-rules` (read-only ビューア) を案内してよい。
 
@@ -94,7 +97,7 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 
 ### 2-2. present (human に提示)
 
-返却 (`diff_summary` / `domain_gaps` / `premise_check` / `proposed_spec_update`) を根拠付きで提示する:
+返却 (`diff_summary` / `domain_questions` / `premise_check` / `proposed_spec_update`) を根拠付きで提示する:
 
 ```
 feature: billing の 3 者照合結果です。
@@ -103,7 +106,7 @@ feature: billing の 3 者照合結果です。
 - spec_stale: 正本「既定値 7 日」⟷ code は 14 日 (src/billing/charge.rs::default_grace)
 - code_deviation: 正本「auto/* のみ」⟷ code が release/* も対象
 
-[domain gap — あなたの判断が必要]
+[domain question — あなたの判断が必要]
 - ? なぜ grace を 14 日に延ばしたか (code に理由なし)
 
 [premise check]
@@ -115,11 +118,14 @@ feature: billing の 3 者照合結果です。
 ### 2-3. align (human の domain 知識で解消)
 
 human と対話して食い違いを解消する。align できた fact のみ出典付きで `[human]` にする (出典なき主張は `[?]` のまま)。
+`domain_questions` は 1 問ずつ聞き取り、答えを出典 (会話日付) つきの `[human]` で書く。
 どちらが正か決められない `code_deviation` は選択肢を示して human に委ねる。
 
 ### 2-4. lazy 構築 (正本 missing 時)
 
-spec-expert に code から正本 skeleton 候補を抽出させ、align しながら構築する。手順は `expert-spec/SKILL.md`「lazy 構築」節。
+最初に kind (`layer` / `feature`) を人に聞き、spawn prompt の `kind:` に渡す。
+spec-expert に code から正本 skeleton 候補を抽出させ、2-3 の align (`domain_questions` の聞き取りを含む) を経て構築する。
+手順は `expert-spec/SKILL.md`「lazy 構築」節。
 
 ---
 
@@ -134,6 +140,7 @@ align が済んだ feature/issue について、正本と issue の 2 箇所に�
 - 核 (不変則 / 決定 / 用語) の update + narrative 追記
 - 各 fact に provenance タグ (`[code]` / `[human]` / `[?]`) を付ける。align していない domain / why は `[?] TODO: needs-human` のまま残す (捏造禁止、`expert-spec/SKILL.md`「2. provenance タグ規約」)
 - 決定行に実現した issue/PR を `realizes #NN` で追記する (issue 側の `op-spec-ref` と対、3-2)
+- write の前に `op spec-patrol list-specs --json` で対象正本の `chars` / `limit_chars` を確かめる。書き足すと上限を超えるなら、削る候補を D → E → F → C の順 (区分は `_schema.md`「書くもの・書かないもの」) に示して承認後に write する。A は候補にしない
 
 #### 3-1-a. linkage A (正本 ⟷ 正本、cross-feature) を張る
 
@@ -206,3 +213,4 @@ grep -rlE "\[\[${F}(/|\]\])" .claude/rules/*.md 2>/dev/null | grep -v "/${F}\.md
 
 op-spec は正本 (`.claude/rules/<feature>.md`) を write する mutation 責務を持つ (CLAUDE.md 不変則9 の例外)。
 write は human align gate 通過後のみ。spec-expert worker は read-only で、write は op-spec controller のみ。
+write には trim の削除 (消える文言の一覧を人が承認した後) と `_schema.md` の追従 (フェーズ0、承認後の追記) を含む。

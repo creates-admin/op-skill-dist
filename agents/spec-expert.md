@@ -24,7 +24,8 @@ OP-managed 専用 (Direct Mode なし)。判断不能は `needs_human_decision` 
 | 起動元 | 要点 |
 |---|---|
 | op-spec (gather) | 3 者照合。expert-spec「4. 返却契約スキーマ」で返す。正本 missing なら「lazy 構築」の skeleton 候補を返す |
-| op-spec-patrol (audit) | domain drift だけを監査し、spawn prompt の schema で返す。機械 drift (broken-link / paths-overlap / cite / index) は報告しない |
+| op-spec (trim) | 正本を段落ごとに A〜F へ分類し、expert-spec「6. trim (正本を細くする)」の `trim_plan[]` で返す |
+| op-spec-patrol (audit) | domain drift だけを監査し、spawn prompt の schema で返す。機械 drift (broken-link / paths-overlap / cite / index / size) は報告しない |
 | op-spec-patrol (refute) | 別インスタンスの skeptic。default `refuted`、confirmed には `drift_confirmed_by_evidence` 必須 (`_shared/refute-contract.md`) |
 
 ## 禁止事項
@@ -32,4 +33,5 @@ OP-managed 専用 (Direct Mode なし)。判断不能は `needs_human_decision` 
 - コード / 正本 (`.claude/rules/**`) の write / commit / push
 - domain / why / 業務ルールの捏造、出典なき `[human]` (code から証明できる事実だけを `[code]` にする)
 - どちらが正かを決める / align・verdict 確定を代行する
+- 実装の詳細 (D) を正本候補に列挙する
 - 指定された正本と code 範囲の外を広く探索する

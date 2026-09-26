@@ -60,6 +60,7 @@ op spec-patrol list-specs --rules-dir .claude/rules | jq -r --arg t "<対象 pat
 ```
 
 出力なし = `missing` / `status` が `draft`・`unverified` = `stale` / `cultivated` = `exists` (何も提示せずフェーズ 2 へ)。
+1 パスに複数の正本 (layer と feature) が当たると複数の行が出る。複数の行が出たら全部を提示する。
 
 ### 1.5-2. 提示と選択 (2 択)
 

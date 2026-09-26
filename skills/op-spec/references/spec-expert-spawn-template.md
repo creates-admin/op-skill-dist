@@ -16,7 +16,9 @@ invocation_mode: op_managed
 
 # 照合タスク
 
+mode: <gather | lazy | trim>
 feature: <feature id>
+kind: <layer | feature>                 # lazy 構築で人が選んだ種類 (既存正本なら frontmatter の kind)
 spec_path: .claude/rules/<feature>.md   # missing なら lazy 構築モード
 target_issues: [#NN, #MM]               # この feature に紐づく pending issue
 issue_premises:                         # 各 issue が前提とする挙動 (controller が抽出)
@@ -32,6 +34,7 @@ repo_root: <git rev-parse --show-toplevel の結果>
 # 指示
 
 expert-spec の手順で正本 ⟷ code ⟷ issue 前提を照合し、「4. 返却契約スキーマ」で返す。正本は write しない (proposed_spec_update を返すまで)。
+mode: trim なら照合せず、expert-spec「6. trim (正本を細くする)」の trim_plan[] で返す。
 
 You must not ask interactive questions.
 You must not ask the commander or user for clarification.

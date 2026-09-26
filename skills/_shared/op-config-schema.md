@@ -125,3 +125,25 @@ verify_harness:
 | `runtime` | enum | `linux` | ハーネスを動かす実行先。`linux` / `windows` |
 | `driver` | enum | `playwright` | 操作手段。`playwright` / `webdriver`。start の JSON の `driver` と一致する |
 | `windows_paths` | list[string (glob)] | `[]` | diff がかかったら `runtime` に関わらず Windows で検証する path |
+
+## §15 `spec_budget`
+
+正本 (`.claude/rules/`) の大きさの上限。`op spec-patrol list-specs` が読み、超えたら warning を出す (block しない)。
+字数は frontmatter を含むファイル全体の文字数。超えたときの分け方は `_schema.md`「大きさ」節。
+
+```yaml
+spec_budget:
+  feature_max_chars: 15000
+  layer_max_chars: 8000
+  line_max_chars: 300
+  load_max_chars: 25000
+```
+
+| key | 型 | default | 意味 |
+|---|---|---|---|
+| `feature_max_chars` | int | `15000` | `kind: feature` と kind 未指定の正本 1 本の上限。目安は 1.2 万字 |
+| `layer_max_chars` | int | `8000` | `kind: layer` の正本 1 本の上限。目安は 6 千字 |
+| `line_max_chars` | int | `300` | 1 行 (1 項目) の上限 |
+| `load_max_chars` | int | `25000` | 1 つのファイルに paths が当たる正本の字数の合計の上限 (`00-` / `_` で始まる meta は数えない) |
+
+- 正本の frontmatter に `budget_override: <理由>` があれば、その正本の `R-SPEC-SIZE` は info に下がる。

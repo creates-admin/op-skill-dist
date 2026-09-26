@@ -1,6 +1,6 @@
 ---
 name: op-spec-patrol
-description: canonical spec (.claude/rules/) を警備員的に巡回するスキル。機械 drift (broken-link / paths-overlap / cite / index) は CLI で検出し、索引再生成と cite 降格だけを auto-fix する。domain drift (正本⟷code の意味的乖離) は spec-expert で監査 + refute し、Spec Patrol Ledger に記録して op-spec へ回す (起票しない)。「op-spec-patrol」「正本巡回」「spec patrol」「canonical spec 監査」等のキーワードで起動。
+description: canonical spec (.claude/rules/) を警備員的に巡回するスキル。機械 drift (broken-link / paths-overlap / cite / index / size) は CLI で検出し、索引再生成と cite 降格だけを auto-fix する。domain drift (正本⟷code の意味的乖離) は spec-expert で監査 + refute し、Spec Patrol Ledger に記録して op-spec へ回す (起票しない)。「op-spec-patrol」「正本巡回」「spec patrol」「canonical spec 監査」等のキーワードで起動。
 ---
 
 # op-spec-patrol: canonical spec の警備員的巡回
@@ -19,7 +19,7 @@ description: canonical spec (.claude/rules/) を警備員的に巡回するス�
 
 op-spec-patrol は機械 drift のうち fix が決定論的に確定するもの (`rebuild-index` / `cite-downgrade`) だけを
 auto-fix する mutation 責務を持つ (CLAUDE.md 不変則9 の例外)。
-broken-link / paths-overlap は検出のみ (修正先は人間判断)。domain drift は auto-fix も起票もせず、正本も書き換えない
+broken-link / paths-overlap / 大きさは検出のみ (修正先は人間判断)。domain drift は auto-fix も起票もせず、正本も書き換えない
 (正本 write は op-spec が human align 後に行う)。
 
 ---
@@ -50,7 +50,7 @@ op spec-patrol score --last-patrolled-at <feature>=<RFC3339> ...   # area_state 
 ### Phase 2: 機械 drift 検出 (read-only)
 
 ```bash
-op spec-patrol list-specs --json       # paths overlap
+op spec-patrol list-specs --json       # paths overlap / 大きさ (warning)
 op spec-patrol check-links --json      # dead feature / dead section / dangling op-spec-ref
 op spec-patrol cite-downgrade --json   # dry-run: 出典欠落 [human] の降格予定
 op spec-patrol rebuild-index --json    # dry-run: 索引表の再生成差分
@@ -91,6 +91,7 @@ args 規約と `.result` の unwrap は `_shared/workflow-calling.md`。
 ### Phase 5: route
 
 - 機械 drift: Phase 3 で適用済み。残り (paths-overlap / broken-link) は報告に残す。
+- 大きさの警告 (lens: size) は auto-fix も起票もしない。op-spec の trim へ回す。
 - domain confirmed drift: 起票せず、Phase 6 で Ledger に記録する。op-spec の drift-driven entry がそれを拾って cultivation する。
 
 ### Phase 6: Spec Patrol Ledger 更新
@@ -109,6 +110,7 @@ op spec-patrol ledger push --issue "$LEDGER_ISSUE" --checkpoint-id <id> --previo
 - 機械 drift: 検出件数と auto-fix 適用結果
 - domain drift: confirmed / refuted の内訳と、op-spec で拾う候補一覧
 - 自動 fix しなかった機械 finding (paths-overlap / broken-link) と人間判断が要る点
+- 大きさの超過 (`R-SPEC-SIZE` / `R-SPEC-LINE-LENGTH` / `R-SPEC-LOAD-BUDGET`) と、op-spec の trim で細くする候補
 - Ledger checkpoint id、未巡回 feature
 
 正本を俯瞰したいときは `/op-skill:op-rules` を案内してよい。

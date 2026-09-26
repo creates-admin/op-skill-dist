@@ -50,7 +50,7 @@ op-adopt は人間が承認した feature 地図から、正本の骨組み (fro
 2. 地図を表で提示し、人間が feature の分け方・名前・paths を直して承認する。
 3. 承認された feature ごとに `_schema.md` の skeleton で `.claude/rules/<feature>.md` を作る
    (`status: unverified`、各節は空。概要は scope 行だけに書く)。
-4. `op spec-patrol list-specs` で paths の重複が無いことを確認し、`op spec-patrol rebuild-index --apply --yes` で索引を作る。
+4. `op spec-patrol list-specs` で block (同じ kind 同士の paths の重なり) が無いことを確認し、`op spec-patrol rebuild-index --apply --yes` で索引を作る。
    索引の 概要 列の placeholder を承認された 1 行概要に置き換える。
 5. デザインシステム (UI 部品・トークン・カタログ) は feature 地図に含めない (フェーズ4 の `design-system` 正本が持つ)。
 6. 優先度の高い feature から `/op-skill:op-spec` (feature-driven) で 1 つずつ育てる、と案内する (本 skill では育てない)。

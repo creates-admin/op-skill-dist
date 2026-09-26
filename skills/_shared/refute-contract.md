@@ -40,7 +40,7 @@ verdict schema が本ファイルと食い違った場合は workflow 実装が�
 - severity: `_shared/severity-rubric.md`。スタック前提: `_shared/project-profile.md`。
 - 対象 repo の CLAUDE.md 規約に準拠したコードは refuted 方向の材料 (`project-profile.md`「対象 repo 規約への準拠 (worker 共通)」節)。
 - op-patrol では Patrol Finding Policy (好み / 将来不安のみ / 未読推測 / 根拠の薄い security は起票不適格) も refuted 方向の材料。
-- op-spec-patrol の機械 drift (broken-link / paths-overlap / cite / index) は CLI 担当ゆえ `refuted`。
+- op-spec-patrol の機械 drift (broken-link / paths-overlap / cite / index / size) は CLI 担当ゆえ `refuted`。
 
 ## 5. default の向き (非対称)
 
