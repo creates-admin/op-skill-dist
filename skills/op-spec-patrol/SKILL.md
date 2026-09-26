@@ -1,12 +1,12 @@
 ---
 name: op-spec-patrol
-description: canonical spec (.claude/rules/) を警備員的に巡回するスキル。機械 drift (broken-link / paths-overlap / cite / index / size) は CLI で検出し、索引再生成と cite 降格だけを auto-fix する。domain drift (正本⟷code の意味的乖離) は spec-expert で監査 + refute し、Spec Patrol Ledger に記録して op-spec へ回す (起票しない)。「op-spec-patrol」「正本巡回」「spec patrol」「canonical spec 監査」等のキーワードで起動。
+description: canonical spec (.claude/rules/) を警備員的に巡回するスキル。機械 drift は CLI で検出し、索引再生成と cite 降格だけを auto-fix する。domain drift (正本⟷code の意味的乖離) は spec-expert で監査 + refute し、Spec Patrol Ledger に記録して op-spec へ回す (起票しない)。「op-spec-patrol」「正本巡回」「spec patrol」「canonical spec 監査」等のキーワードで起動。
 ---
 
 # op-spec-patrol: canonical spec の警備員的巡回
 
 正本 (`.claude/rules/<feature>.md`) を op-patrol と同じ要領で巡回し、code に追従できていない正本を見つける。
-機械 drift は CLI で決定論検出し、LLM 判断が要る domain drift だけを workflow に回す。
+機械 drift は CLI で決定論検出し、LLM 判断が要る domain drift と正本をまたぐ重複・食い違いだけを workflow に回す。
 
 ## 実行モード
 
@@ -19,7 +19,7 @@ description: canonical spec (.claude/rules/) を警備員的に巡回するス�
 
 op-spec-patrol は機械 drift のうち fix が決定論的に確定するもの (`rebuild-index` / `cite-downgrade`) だけを
 auto-fix する mutation 責務を持つ (CLAUDE.md 不変則9 の例外)。
-broken-link / paths-overlap / 大きさは検出のみ (修正先は人間判断)。domain drift は auto-fix も起票もせず、正本も書き換えない
+それ以外の機械 drift は検出のみ (修正先は人間判断)。domain drift は auto-fix も起票もせず、正本も書き換えない
 (正本 write は op-spec が human align 後に行う)。
 
 ---
@@ -50,11 +50,28 @@ op spec-patrol score --last-patrolled-at <feature>=<RFC3339> ...   # area_state 
 ### Phase 2: 機械 drift 検出 (read-only)
 
 ```bash
-op spec-patrol list-specs --json       # paths overlap / 大きさ (warning)
-op spec-patrol check-links --json      # dead feature / dead section / dangling op-spec-ref
+op spec-patrol list-specs --json       # paths overlap / kind / 大きさ
+op spec-patrol check-links --json      # [[]] link・本文中のパスと節・op-spec-ref の参照切れ
+op spec-patrol coverage --json         # 読み込み量の上位 / 覆われていないパス / 機能地図 (constitution Part 3)
+op spec-patrol health --previous-state "$PREV_STATE_JSON" --json > "$HEALTH_JSON"   # 健康状態の要約と前回比 (delta)
 op spec-patrol cite-downgrade --json   # dry-run: 出典欠落 [human] の降格予定
 op spec-patrol rebuild-index --json    # dry-run: 索引表の再生成差分
 ```
+
+機械 drift の種類 (一覧の正本はこの表):
+
+| rule_id | CLI | severity | 行き先 |
+|---|---|---|---|
+| `R-SPEC-PATHS-OVERLAP` | list-specs | error | 報告 (人間判断) |
+| `R-SPEC-PATHS-OVERLAP-CROSS-KIND` | list-specs | info | なし (layer × feature の重なりは意図したもの) |
+| `R-SPEC-KIND-INVALID` | list-specs | warn | 報告 |
+| `R-SPEC-SIZE` / `R-SPEC-LINE-LENGTH` / `R-SPEC-LOAD-BUDGET` | list-specs | warn | op-spec の trim |
+| `R-SPEC-LINK-DEAD-FEATURE` / `R-SPEC-LINK-DEAD-SECTION` | check-links | error | 報告 (人間判断) |
+| `R-SPEC-LINK-DEAD-PATH` / `R-SPEC-LINK-DEAD-DOC-SECTION` / `R-SPEC-REF-DEAD` | check-links | warn | 報告 (人間判断) |
+| `R-SPEC-UNCOVERED-PATH` | coverage | info | 報告 |
+| `R-SPEC-FEATURE-MISSING` / `R-SPEC-FEATURE-LAYER-ONLY` | coverage | info | op-spec の lazy 構築 |
+| `R-SPEC-CITE-HUMAN-NO-SOURCE` / `R-SPEC-CITE-NEEDS-HUMAN` | cite-downgrade | warn / info | Phase 3 で auto-fix |
+| `R-SPEC-INDEX-NEW-FEATURE` / `R-SPEC-INDEX-STALE-FEATURE` | rebuild-index | info / warn | Phase 3 で auto-fix |
 
 `.claude/rules/design-system.md` がある repo では、部品一覧と実物のずれも調べる (`_shared/design-system.md`「部品一覧と実物のずれ」):
 
@@ -74,43 +91,55 @@ op spec-patrol rebuild-index --apply --yes    # constitution Part 2 索引を再
 op spec-patrol cite-downgrade --apply --yes   # 出典欠落 [human] → [?] TODO: needs-human
 ```
 
-broken-link / paths-overlap は fix を生成せず、Phase 7 の報告に残す。
+Phase 2 の表で行き先が auto-fix でないものは fix を生成せず、Phase 5 で振り分ける。
 
 ### Phase 4: domain drift 監査
 
 ```
 Workflow({ name: "op-skill:op-spec-patrol-audit", args: {
   today: "<YYYY-MM-DD>", run_id: "<run id>",
-  features: [{ feature, spec_path, paths:[...], code_scope:[...], status, target_issues:[...] }]  // = Phase 1 選定
+  features: [{ feature, spec_path, paths:[...], code_scope:[...], status, target_issues:[...] }],  // = Phase 1 選定
+  health: true,
+  specs: [{ feature, spec_path }]  // 全正本 = list-specs の details.specs[] の feature と path
 } })
 ```
 
 args 規約と `.result` の unwrap は `_shared/workflow-calling.md`。
 戻り `.result.features[].findings` / `.verdicts` のうち verdict=confirmed のみ採用する (refuted / downgrade は報告で可視化)。
+`.result.health` は巡回した feature の中身の内訳 (`content_mix`)、confirmed の重複・食い違い (refute 済み) とその `drift_counts`、散らばり (`scatter`)、refute の `verdicts`。
+返却の中身は expert-spec「7. health」。
 
 ### Phase 5: route
 
-- 機械 drift: Phase 3 で適用済み。残り (paths-overlap / broken-link) は報告に残す。
-- 大きさの警告 (lens: size) は auto-fix も起票もしない。op-spec の trim へ回す。
+- 機械 drift: Phase 2 の表の行き先に従う。auto-fix 以外は起票しない。
+- 消す候補 (大きさの警告と、中身の内訳の D・E・F): op-spec の trim へ回す。上限内の正本の D・E・F は報告だけにする。
+- 正本の無い機能 (`R-SPEC-FEATURE-MISSING` / `R-SPEC-FEATURE-LAYER-ONLY`): op-spec の lazy 構築へ回す。
+- 重複・食い違い (confirmed): `.result.health.drift_counts` を Phase 6 の `--drift-count <feature>=duplicate:<N>` / `=conflict:<N>` で Ledger に記録し、op-spec の drift-driven に乗せる。
+- 散らばり (`scatter`): 報告だけにする。
 - domain confirmed drift: 起票せず、Phase 6 で Ledger に記録する。op-spec の drift-driven entry がそれを拾って cultivation する。
 
 ### Phase 6: Spec Patrol Ledger 更新
 
 ```bash
+jq --argjson mix "$CONTENT_MIX_JSON" '. + {content_mix: $mix}' "$HEALTH_JSON" > "$HEALTH_FILE"   # CONTENT_MIX_JSON = .result.health.content_mix
 op spec-patrol ledger push --issue "$LEDGER_ISSUE" --checkpoint-id <id> --previous-state "$PREV_STATE_JSON" \
   --updated-feature <feature>=<RFC3339> ... \
-  --drift-count <feature>=<drift_type>:<count> ...   # confirmed drift (機械 + domain) があった feature のみ。例: op-sweep=error:2
+  --drift-count <feature>=<drift_type>:<count> ... \
+  --health-file "$HEALTH_FILE"   # drift_count は confirmed drift (機械 + domain + duplicate / conflict) があった feature のみ。例: op-sweep=error:2
 ```
 
 `--drift-count` を渡さないと drift 実績が Ledger に残らず、op-spec の drift-driven entry が拾えない。
+push の出力の `health_delta` を Phase 7 の前回比に使う (dry-run でも出る)。
 
 ### Phase 7: 完了報告
 
 - 巡回した feature と score 内訳
 - 機械 drift: 検出件数と auto-fix 適用結果
 - domain drift: confirmed / refuted の内訳と、op-spec で拾う候補一覧
-- 自動 fix しなかった機械 finding (paths-overlap / broken-link) と人間判断が要る点
-- 大きさの超過 (`R-SPEC-SIZE` / `R-SPEC-LINE-LENGTH` / `R-SPEC-LOAD-BUDGET`) と、op-spec の trim で細くする候補
+- 自動 fix しなかった機械 finding と人間判断が要る点
+- 健康状態: 上限超えの本数、読み込み量の上位 5、正本の無い機能の数、覆われていないパスの数、A〜F の割合 (未巡回の feature は古い値)、
+  前回比 (`health_delta`。数値はそのまま載せ、自分で引き算しない)
+- op-spec へ回す候補: trim で細くする正本、lazy 構築する機能、重複・食い違い
 - Ledger checkpoint id、未巡回 feature
 
 正本を俯瞰したいときは `/op-skill:op-rules` を案内してよい。

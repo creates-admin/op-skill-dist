@@ -21,3 +21,10 @@ status: draft
 
 | feature | paths | status | 概要 |
 |---|---|---|---|
+
+## Part 3: 機能地図
+
+<!-- 機能地図: op-spec が書く。正本列は feature キー (複数はカンマ区切り) か (未作成)。op spec-patrol coverage が網羅を調べる。 -->
+
+| 機能 | 正本 | 備考 |
+|---|---|---|

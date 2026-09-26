@@ -20,6 +20,11 @@ const fns = loadPureFns("op-spec-patrol-audit.js", {
 
 const na = loadNormalizeArgs("op-spec-patrol-audit.js");
 
+const hf = loadPureFns("op-spec-patrol-audit.js", {
+  consts: ["CONTENT_CLASSES"],
+  functions: ["contentMix", "normalizeHealthItems", "featureOfFile", "buildHealth"],
+});
+
 // ---- regroupByFeature: feature 単位に集約、detected_by/feature/finding_ref 付与 ----
 test("regroupByFeature は feature 単位で findings を集約し finding_ref を <feature>#<idx> 形で付与する", () => {
   const featureDefs = [
@@ -159,4 +164,77 @@ test("normalizeArgs は JSON 文字列 args も parse する (Workflow tool の�
   );
   assert.equal(out.features.length, 1);
   assert.equal(out.run_id, "run-z");
+});
+
+// ---- health: 中身の内訳と、confirmed の重複・食い違いだけを drift_counts に数える ----
+test("buildHealth は trim_plan を区分ごとの字数に集計し、confirmed の重複・食い違いだけを feature ごとに数える", () => {
+  const a = {
+    features: [
+      { feature: "op-scan", spec_path: ".claude/rules/op-scan.md" },
+      { feature: "op-sweep", spec_path: ".claude/rules/op-sweep.md" },
+    ],
+    specs: [
+      { feature: "op-scan", spec_path: ".claude/rules/op-scan.md" },
+      { feature: "op-sweep", spec_path: ".claude/rules/op-sweep.md" },
+      { feature: "op-patrol", spec_path: ".claude/rules/op-patrol.md" },
+    ],
+  };
+  const auditResults = [
+    {
+      findings: [],
+      trim_plan: [
+        { class: "A", chars: 500 },
+        { class: "D", chars: 120 },
+        { class: "A", chars: 30 },
+      ],
+    },
+    { findings: [] },
+  ];
+  const items = hf.normalizeHealthItems({
+    duplicates: [
+      {
+        fact: "grace は 7 日",
+        locations: [
+          { file: ".claude/rules/op-sweep.md", section: "決定" },
+          { file: ".claude/rules/op-scan.md", section: "決定" },
+        ],
+      },
+      { fact: "偽陽性", locations: [{ file: ".claude/rules/op-scan.md" }, { file: "CLAUDE.md" }] },
+    ],
+    conflicts: [
+      {
+        subject: "起票の閾値",
+        statements: [
+          { file: ".claude/rules/op-patrol.md", says: "High 以上" },
+          { file: "CLAUDE.md", says: "Critical のみ" },
+        ],
+      },
+    ],
+    scatter: [],
+  });
+  const verdicts = [
+    { finding_ref: "health:duplicate#0", verdict: "confirmed" },
+    { finding_ref: "health:duplicate#1", verdict: "refuted" },
+    { finding_ref: "health:conflict#0", verdict: "confirmed" },
+  ];
+
+  const out = hf.buildHealth(a, auditResults, items, verdicts);
+
+  assert.deepEqual(out.content_mix, { "op-scan": { A: 530, B: 0, C: 0, D: 120, E: 0, F: 0 } });
+  assert.deepEqual(
+    out.duplicates.map((d) => d.finding_ref),
+    ["health:duplicate#0"]
+  );
+  assert.deepEqual(out.drift_counts, {
+    "op-sweep": { duplicate: 1 },
+    "op-scan": { duplicate: 1 },
+    "op-patrol": { conflict: 1 },
+  });
+  assert.equal(out.verdicts.length, 3);
+});
+
+test("normalizeArgs は args.health のとき args.specs を必須にする", () => {
+  const base = { features: [{ feature: "x", spec_path: "x.md" }], today: "2026-09-26", run_id: "r" };
+  assert.throws(() => na.run({ ...base, health: true }), /args.specs/);
+  assert.equal(na.run({ ...base, health: true, specs: [{ feature: "x", spec_path: "x.md" }] }).health, true);
 });

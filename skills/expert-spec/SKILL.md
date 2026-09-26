@@ -1,6 +1,6 @@
 ---
 name: expert-spec
-description: spec-expert に preload される方法論。3 者照合・provenance タグ・返却スキーマ・lazy 構築・trim。
+description: spec-expert に preload される方法論。3 者照合・provenance タグ・返却スキーマ・lazy 構築・trim・health。
 ---
 
 # expert-spec: spec-expert agent の知識ベース
@@ -83,7 +83,7 @@ controller への要約テキストは短く、詳細は JSON に入れる。
     "draft": "align 前の候補テキスト", "provenance_of_draft": "code | ?" },
   "trim_plan": [
     { "section": "正本の節", "excerpt": "段落の抜粋", "class": "A | B | C | D | E | F",
-      "action": "keep | reshape | delete | move | ask", "move_to": "E の移し先 (skill / doc/ のパス)" }
+      "action": "keep | reshape | delete | move | ask", "move_to": "E の移し先 (skill / doc/ のパス)", "chars": 0 }
   ],
   "cross_feature_link_candidates": [
     { "from_feature": "<feature>", "to_feature": "<依存先 feature>", "evidence": "file + symbol", "provenance": "code | ?" }
@@ -101,7 +101,7 @@ controller への要約テキストは短く、詳細は JSON に入れる。
 | `domain_questions[]` | code に無い why がある時。lazy 構築時は必須 | align で人に聞く質問 |
 | `premise_check` | 対象 issue がある時 | |
 | `proposed_spec_update` | 更新候補がある時 | 候補にすぎない。確定は controller + human |
-| `trim_plan[]` | mode: trim の時 | 6 章 |
+| `trim_plan[]` | mode: trim の時 / op-spec-patrol の audit で指示された時 | 6 章 |
 | `cross_feature_link_candidates[]` | 他 feature への依存に気づいた時 (任意) | 候補提示まで。`[[]]` を張るかは controller + human |
 | `needs_human_decision` | 判断不能時 | 正規スキーマは `~/.claude/skills/_shared/invocation-mode.md`。options は「正本を code に合わせる」/「code を正本に合わせる (derived issue 発行)」が基本 |
 | `assumptions[]` | 推定がある時 | |
@@ -130,4 +130,23 @@ spawn prompt が `mode: trim` のとき、正本を段落ごとに `_schema.md`�
 | E | `move` (`move_to` 必須) |
 | F | `delete` / `move` (残す価値がある判断は `move_to` に決定の行か DECISIONS / ADR) |
 
-分類に迷う段落は `ask` にする。正本ファイルは write しない。
+分類に迷う段落は `ask` にする。`chars` はその段落の字数 (`chars().count()` 相当)。正本ファイルは write しない。
+
+## 7. health (正本をまたぐ重複・食い違い・散らばり)
+
+spawn prompt が `mode: health` のとき、全正本・constitution (Part 3 は機能地図)・CLAUDE.md を読み、次の JSON で返す。
+
+```json
+{
+  "duplicates": [ { "fact": "同じ事実", "locations": [ { "file": ".claude/rules/<feature>.md", "section": "節" } ],
+    "proposed_canonical": "残す 1 か所 (file + 節)" } ],
+  "conflicts": [ { "subject": "食い違う対象", "statements": [ { "file": "...", "section": "節", "says": "その箇所の主張" } ] } ],
+  "scatter": [ { "business_feature": "機能地図の機能", "specs": [ { "feature": "<feature>", "chars": 0 } ],
+    "proposed_target": "まとめ先の feature キーか (新設)" } ]
+}
+```
+
+- duplicates: 同じ事実が 2 か所以上に書かれているもの。`locations` は 2 件以上
+- conflicts: 同じ対象について両立しないことが書かれているもの。どちらが正かは決めない
+- scatter: 1 つの業務機能の決まりが 3 本以上の正本に散っているもの。`chars` はその正本のうちその機能に当たる字数
+- 実装の詳細 (D) の重なりは挙げない。見つからなければ空配列で返す

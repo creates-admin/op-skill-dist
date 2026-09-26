@@ -126,6 +126,7 @@ human と対話して食い違いを解消する。align できた fact のみ�
 最初に kind (`layer` / `feature`) を人に聞き、spawn prompt の `kind:` に渡す。
 spec-expert に code から正本 skeleton 候補を抽出させ、2-3 の align (`domain_questions` の聞き取りを含む) を経て構築する。
 手順は `expert-spec/SKILL.md`「lazy 構築」節。
+正本を write したら、constitution Part 3 (機能地図) の該当行の正本列を `(未作成)` から feature キーに更新する。
 
 ---
 
@@ -213,4 +214,5 @@ grep -rlE "\[\[${F}(/|\]\])" .claude/rules/*.md 2>/dev/null | grep -v "/${F}\.md
 
 op-spec は正本 (`.claude/rules/<feature>.md`) を write する mutation 責務を持つ (CLAUDE.md 不変則9 の例外)。
 write は human align gate 通過後のみ。spec-expert worker は read-only で、write は op-spec controller のみ。
-write には trim の削除 (消える文言の一覧を人が承認した後) と `_schema.md` の追従 (フェーズ0、承認後の追記) を含む。
+write には trim の削除 (消える文言の一覧を人が承認した後)、`_schema.md` の追従 (フェーズ0、承認後の追記)、
+constitution Part 3 (機能地図) の行の更新を含む。

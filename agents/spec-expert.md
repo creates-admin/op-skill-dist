@@ -25,7 +25,8 @@ OP-managed 専用 (Direct Mode なし)。判断不能は `needs_human_decision` 
 |---|---|
 | op-spec (gather) | 3 者照合。expert-spec「4. 返却契約スキーマ」で返す。正本 missing なら「lazy 構築」の skeleton 候補を返す |
 | op-spec (trim) | 正本を段落ごとに A〜F へ分類し、expert-spec「6. trim (正本を細くする)」の `trim_plan[]` で返す |
-| op-spec-patrol (audit) | domain drift だけを監査し、spawn prompt の schema で返す。機械 drift (broken-link / paths-overlap / cite / index / size) は報告しない |
+| op-spec-patrol (audit) | domain drift だけを監査し、spawn prompt の schema で返す。機械 drift (op-spec-patrol SKILL.md「Phase 2: 機械 drift 検出 (read-only)」) は報告しない |
+| op-spec-patrol (health) | 全正本を読み、正本をまたぐ重複・食い違い・散らばりを expert-spec「7. health」で返す |
 | op-spec-patrol (refute) | 別インスタンスの skeptic。default `refuted`、confirmed には `drift_confirmed_by_evidence` 必須 (`_shared/refute-contract.md`) |
 
 ## 禁止事項
