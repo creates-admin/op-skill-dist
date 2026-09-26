@@ -160,7 +160,7 @@ op-scan / op-patrol / op-plan / op-architect / op-report / op-spec 派生 Issue 
 | `feature` (UI 影響あり) | feature-expert | ux-ui-audit-expert | `pro-feature-expert` + `pro-ux-ui-audit-expert` |
 | `env` (planned) | env-expert | env-expert | `pro-env-expert` (routing metadata only) |
 
-finding Issue のラベルは上表の `pro-*-expert` (完全形。`pro-review-expert` は付与禁止) + `auto-report` + `severity:<critical|high>`。バッチ Issue は `batch` を足す。op-plan / op-architect の計画 Issue は `severity:*` と `auto-report` を付けない。op-report 等 severity で絞らない経路 (`filing-gate.md` §1) は Critical / High のときだけ `severity:*` を付ける。
+finding Issue のラベルは上表の `pro-*-expert` (完全形。`pro-review-expert` は付与禁止) + `auto-report` + `severity:<critical|high>`。バッチ Issue は `batch` を足す。op-plan / op-architect の計画 Issue は `severity:*` を付けない (`auto-report` は付ける)。op-report 等 severity で絞らない経路 (`filing-gate.md` §1) は Critical / High のときだけ `severity:*` を付ける。
 `op issue create --label "auto-report,severity:high,..."` とカンマ区切りで渡す。refactor 固有の追加ラベルは op-scan の
 「domain=refactor 固有のラベル付与ルール」。
 
