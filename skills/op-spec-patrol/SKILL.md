@@ -71,6 +71,7 @@ op spec-patrol rebuild-index --json    # dry-run: 索引表の再生成差分
 | `R-SPEC-LINK-DEAD-PATH` / `R-SPEC-LINK-DEAD-DOC-SECTION` / `R-SPEC-REF-DEAD` | check-links | warn | 報告 (人間判断) |
 | `R-SPEC-UNCOVERED-PATH` | coverage | info | 報告 |
 | `R-SPEC-FEATURE-MISSING` | coverage | info | op-spec の missing |
+| `R-SPEC-FEATURE-DEAD-KEY` | coverage | warn | 報告: Part 3 の行を実在する正本キーに直す (op-spec、人がキーを決める) |
 | `R-SPEC-FEATURE-LAYER-ONLY` | coverage | info | op-spec の consolidate |
 | `R-SPEC-CITE-HUMAN-NO-SOURCE` / `R-SPEC-CITE-NEEDS-HUMAN` | cite-downgrade | warn / info | Phase 3 で auto-fix |
 | `R-SPEC-INDEX-NEW-FEATURE` / `R-SPEC-INDEX-STALE-FEATURE` | rebuild-index | info / warn | Phase 3 で auto-fix |
@@ -116,6 +117,7 @@ args 規約と `.result` の unwrap は `_shared/workflow-calling.md`。
 - 機械 drift: Phase 2 の表の行き先に従う。auto-fix 以外は起票しない。
 - 消す候補 (大きさの警告と、中身の内訳の D・E・F): op-spec の trim へ回す。上限内の正本の D・E・F は報告だけにする。
 - 正本の無い機能 (`R-SPEC-FEATURE-MISSING`): op-spec の missing へ回す。
+- 正本列に実在しないキーがある機能 (`R-SPEC-FEATURE-DEAD-KEY`): Part 3 の行を実在する正本キーに直す (op-spec、人がキーを決める) として報告する。
 - 層の正本にしか覆われていない機能 (`R-SPEC-FEATURE-LAYER-ONLY`): op-spec の consolidate へ回す。
 - 重複・食い違い (confirmed): `.result.health.drift_counts` を Phase 6 の `--drift-count <feature>=duplicate:<N>` / `=conflict:<N>` で Ledger に記録し、op-spec の drift-driven に乗せる。
 - 散らばり (`scatter`): 報告だけにする。

@@ -124,7 +124,7 @@ verify_harness:
 | `targets` | list[string] | yes | start の JSON の `targets` に非 null の URL を必ず含める target 名 |
 | `runtime` | enum | `linux` | ハーネスを動かす実行先。`linux` / `windows` |
 | `driver` | enum | `playwright` | 操作手段。`playwright` / `webdriver`。start の JSON の `driver` と一致する |
-| `windows_paths` | list[string (glob)] | `[]` | diff がかかったら `runtime` に関わらず Windows で検証する path |
+| `windows_paths` | list[string (glob)] | `[]` | diff がかかったら `runtime` に関わらず Windows で検証する path。`runtime: windows` で非空なら runtime verify 段はこの path に当たる diff でだけ起動する (正本は `skills/op-run/references/runtime-verify-dispatcher.md` 1 章) |
 | `windows` | object | `runtime: windows` なら yes | Windows Sandbox で検証するときの宣言 (下表)。`op verify windows lease` のオプションはここから組む |
 
 ```yaml

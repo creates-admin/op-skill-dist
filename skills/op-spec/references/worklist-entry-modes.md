@@ -53,7 +53,7 @@ op spec-patrol coverage --json \
 
 ## missing
 
-seed は機能地図で正本が `(未作成)` の機能。人が機能を指定してもよい (機能地図に行が無い機能も含む)。1 機能ずつ SKILL.md 2-4 の lazy 構築へ渡す (1-2 には合流しない。1 機能 1 PR)。
+seed は機能地図で正本が `(未作成)` の機能。人が機能を指定してもよい (機能地図に行が無い機能も含む)。正本列のキーが実在しない行 (`dead_key`) は含めない。1 機能ずつ SKILL.md 2-4 の lazy 構築へ渡す (1-2 には合流しない。1 機能 1 PR)。
 
 ```bash
 op spec-patrol coverage --json | jq -r '.details.feature_map.features[] | select(.state == "missing") | .name'

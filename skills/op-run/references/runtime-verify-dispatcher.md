@@ -24,7 +24,8 @@ base からの diff (op-run では `git -C "$WORKTREE_PATH" diff --name-only "$O
 - `_shared/project-profile.md`「UI 影響判定 path パターン」(除外パスの優先・単語単独マッチの禁止・title / rationale での補完を含む)
 - `verify_harness.windows_paths` (`_shared/op-config-schema.md` §14) の glob
 
-どちらにも当たらなければ段を実行しない (spawn も記録もしない)。以下の `HARNESS_START` / `HARNESS_STOP` は `verify_harness.start` / `stop` の値
+ただし `verify_harness.runtime` が `windows` で `windows_paths` が非空の repo は、diff が `windows_paths` の glob に当たるときだけ段を実行する
+(UI 影響判定と title / rationale の語では起動しない)。当たらなければ段を実行しない (spawn も記録もしない)。以下の `HARNESS_START` / `HARNESS_STOP` は `verify_harness.start` / `stop` の値
 (`runtime: windows` で宣言が無ければ 2.1 と 4 章の stop は実行しない。4 章の Windows の返却は行う)。
 
 | `verify_harness` | 動作 |
