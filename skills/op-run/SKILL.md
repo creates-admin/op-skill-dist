@@ -442,7 +442,7 @@ controller は直接実行せず ClusterSummary を受け取るだけ。review /
 - <cluster>: <blocker_reason / degrade_note>。方針決定後に PR を更新または close する
 
 ### runtime verify
-- <cluster / PR>: <runtime_verify_note>。ハーネス未導入なら `/op-skill:op-verify --init` でハーネスを導入できる
+- <cluster / PR>: <runtime_verify_note>。ハーネス未導入なら `/op-skill:op-verify --init` でハーネスを導入できる。`windows not provisioned` なら `/op-skill:op-verify --provision-windows` で Windows 検証の環境を準備できる
   (該当が無ければ本節ごと省略)
 
 ### follow-up 候補 (自動起票しない)

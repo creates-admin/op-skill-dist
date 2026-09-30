@@ -1,6 +1,6 @@
 ---
 name: op-verify
-description: 実機検証ハーネスを導入・実行・育成するスキル。--init は stack (Web / Tauri) を診断し、テンプレートからハーネスを expert に作らせ、op verify conformance が通るまで仕上げて PR。通常モードは対象 branch / PR でハーネスを起動し、verify-runner が実機で操作して証跡を残し、停止して結果を記録する。--grow は記録された gap と regression spec 昇格候補を人間が選び、expert がハーネスへ還元して PR。起票はしない。「op-verify」「実機検証」「ハーネス導入」「verify harness」「動作確認」等のキーワードで起動。
+description: 実機検証ハーネスを導入・実行・育成するスキル。--init は stack (Web / Tauri) を診断し、テンプレートからハーネスを expert に作らせ、op verify conformance が通るまで仕上げて PR。通常モードは対象 branch / PR でハーネスを起動し、verify-runner が実機で操作して証跡を残し、停止して結果を記録する。--grow は記録された gap と regression spec 昇格候補を人間が選び、expert がハーネスへ還元して PR。--provision-windows は Windows 検証の環境の不足を見つけて準備を提案し、人間の承認後にスクリプトで行う。起票はしない。「op-verify」「実機検証」「ハーネス導入」「verify harness」「動作確認」等のキーワードで起動。
 ---
 
 # op-verify: 実機検証ハーネスの導入 / 実機検証 / 育成
@@ -23,6 +23,8 @@ description: 実機検証ハーネスを導入・実行・育成するスキル�
                                                               # 実機検証 (対象省略時は現在の checkout の HEAD)
 /op-skill:op-verify --grow [--pr <N> | --from <verify-runner の返却 JSON>]
                                                               # gap / regression spec 昇格候補をハーネスへ還元する
+/op-skill:op-verify --provision-windows [--windows-cache <C:\op-verify>] [--webview2-version <ver>]
+                                                              # Windows 検証の環境を準備する (提案 → 承認 → スクリプト)
 ```
 
 - `--windows` は通常モードで Windows 判定を明示的に当てる (ADR-0035 決定 6)。diff が `windows_paths` に当たらなくても Windows Sandbox を借りて検証する。
@@ -41,6 +43,7 @@ git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
 op run base-sha --base-ref "origin/$BASE_REF" | jq -r '.payload.base_sha'   # → BASE_SHA
 ```
 
+`--provision-windows` は `op-config.yaml` を読まず、フェーズ0 の後に「`--provision-windows`: Windows 検証の環境の準備」へ進む。
 `--init` / `--grow` は repo ルートの `op-config.yaml` の `verify_harness` を読む。
 通常モードはここでは読まず、手順 1 で決めた checkout のルートで判定する (`--pr` の head にだけハーネスがある場合を取りこぼさないため)。
 
@@ -171,6 +174,10 @@ op run base-sha --base-ref "origin/$BASE_REF" | jq -r '.payload.base_sha'   # �
    (既存 E2E の置き場所に置き、start 済みの run に対して通ることを確かめる)。conformance が exit 0 であることは同じく必須。
 4. PR: タイトルは `verify(grow): <要約>`。
 
+## `--provision-windows`: Windows 検証の環境の準備
+
+手順は `references/provision-windows.md` が正本。worktree・PR・expert の spawn は使わず、司令官が検出 → 提案 → AskUserQuestion → スクリプト実行 → lease / release の確認を行う。
+
 ## PR
 
 ```bash
@@ -187,12 +194,12 @@ op pr create --base "<BASE_REF>" --head "<branch>" --title "<タイトル>" --bo
 ## 完了報告
 
 ```
-## op-verify <init | 実機検証 | grow>
+## op-verify <init | 実機検証 | grow> (provision-windows の報告は references/provision-windows.md)
 - 対象: <repo / PR #N / branch / checkout>
 - 結果: <PR URL と conformance の結果 | pass / pass_with_notes / block / needs_human_decision / skipped (skip_reason)>
 - シナリオ: <name: pass / fail (expected / actual / repro_steps)>
 - 証跡: <実在を確かめたパス>
-- 未検証の範囲: <requires_runtime の scope と reason>
+- 未検証の範囲: <requires_runtime の scope と reason> (`windows not provisioned` なら `/op-skill:op-verify --provision-windows` を案内)
 - gap: <step / manual_workaround / suggestion> (あれば `/op-skill:op-verify --grow` を案内)
 - stop / 後片付け: <stop の exit と stderr 末尾、Windows を借りたときは release の exit と `RV_LEASE_ABORT`、残した worktree のパス>
 ```
