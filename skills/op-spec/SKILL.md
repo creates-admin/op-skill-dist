@@ -26,6 +26,7 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 | `references/spec-expert-spawn-template.md` | spec-expert spawn の literal prompt。2-1 で読む |
 | `references/derived-issue-procedure.md` | derived issue 起票手順。3-1b で起票すると決めた時のみ読む |
 | `references/spec-trim.md` | trim mode の手順。1-0 で trim を選んだ時に読む |
+| `references/spec-pr.md` | 正本を write した後の PR 手順。write したら読む |
 
 ---
 
@@ -123,7 +124,7 @@ human と対話して食い違いを解消する。align できた fact のみ�
 
 ### 2-4. lazy 構築 (正本 missing 時)
 
-最初に kind (`layer` / `feature`) を人に聞き、spawn prompt の `kind:` に渡す。
+最初に kind (`layer` / `domain` / `feature`) を人に聞き、spawn prompt の `kind:` に渡す。
 spec-expert に code から正本 skeleton 候補を抽出させ、2-3 の align (`domain_questions` の聞き取りを含む) を経て構築する。
 手順は `expert-spec/SKILL.md`「lazy 構築」節。
 正本を write したら、constitution Part 3 (機能地図) の該当行の正本列を `(未作成)` から feature キーに更新する。
@@ -138,10 +139,15 @@ align が済んだ feature/issue について、正本と issue の 2 箇所に�
 
 `_schema.md` の 6 節 / 決定行書式に従い、align 済みの fact のみ write する。
 
+- 書き込む決まりを `_schema.md`「段と置き場所」で振り分ける。業務の決まりの書き先 (業務領域・機能の正本) が無ければ、層の正本には書かず 2-4 の lazy 構築で先に作ってから書く
+- 機能の正本の有無は `op spec-patrol coverage --json` の `details.feature_map.features` (その機能の行の `specs` / `kinds`) で判定する
+- kind 未指定の正本に書くときは、先に kind を人に聞いて frontmatter に足す
+- write の前に、各更新の書き先 (`proposed_spec_update` の `target_kind` / `target_feature`) と `placement` を人に見せて確認する
 - 核 (不変則 / 決定 / 用語) の update + narrative 追記
 - 各 fact に provenance タグ (`[code]` / `[human]` / `[?]`) を付ける。align していない domain / why は `[?] TODO: needs-human` のまま残す (捏造禁止、`expert-spec/SKILL.md`「2. provenance タグ規約」)
 - 決定行に実現した issue/PR を `realizes #NN` で追記する (issue 側の `op-spec-ref` と対、3-2)
 - write の前に `op spec-patrol list-specs --json` で対象正本の `chars` / `limit_chars` を確かめる。書き足すと上限を超えるなら、削る候補を D → E → F → C の順 (区分は `_schema.md`「書くもの・書かないもの」) に示して承認後に write する。A は候補にしない
+- write したら `references/spec-pr.md` で PR にする
 
 #### 3-1-a. linkage A (正本 ⟷ 正本、cross-feature) を張る
 

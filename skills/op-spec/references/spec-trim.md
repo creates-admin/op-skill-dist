@@ -12,6 +12,4 @@
 
 ## PR
 
-- branch は `auto/spec-trim-<feature>-<YYYYMMDD-HHMMSS>` (`_shared/worktree-ops.md`)。1 正本の変更だけを 1 PR にまとめる。
-- `op pr create`。本文に前後の字数、消える文言の一覧 (原文・区分・移し先)、人に聞いて決めた段落を書く。
-- マージは `/op-skill:op-merge` または人間が GitHub で行う。
+`references/spec-pr.md` (mode `trim`)。

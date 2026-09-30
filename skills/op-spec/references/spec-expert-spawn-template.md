@@ -18,7 +18,7 @@ invocation_mode: op_managed
 
 mode: <gather | lazy | trim>
 feature: <feature id>
-kind: <layer | feature>                 # lazy 構築で人が選んだ種類 (既存正本なら frontmatter の kind)
+kind: <layer | domain | feature>        # lazy 構築で人が選んだ種類 (既存正本なら frontmatter の kind)
 spec_path: .claude/rules/<feature>.md   # missing なら lazy 構築モード
 target_issues: [#NN, #MM]               # この feature に紐づく pending issue
 issue_premises:                         # 各 issue が前提とする挙動 (controller が抽出)

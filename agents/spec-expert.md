@@ -35,4 +35,5 @@ OP-managed 専用 (Direct Mode なし)。判断不能は `needs_human_decision` 
 - domain / why / 業務ルールの捏造、出典なき `[human]` (code から証明できる事実だけを `[code]` にする)
 - どちらが正かを決める / align・verdict 確定を代行する
 - 実装の詳細 (D) を正本候補に列挙する
+- 業務の決まりを層の正本の書き先として返す
 - 指定された正本と code 範囲の外を広く探索する

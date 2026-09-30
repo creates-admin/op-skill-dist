@@ -80,7 +80,9 @@ controller への要約テキストは短く、詳細は JSON に入れる。
   "premise_check": { "issue_ref": "#NN", "premise": "issue が前提とする挙動",
     "result": "premise_ok | premise_violated | unverifiable", "evidence": "ファイル + シンボルでの観測" },
   "proposed_spec_update": { "section": "決定 | 不変則 | 用語 | 落とし穴 | ドメイン",
-    "draft": "align 前の候補テキスト", "provenance_of_draft": "code | ?" },
+    "draft": "align 前の候補テキスト", "provenance_of_draft": "code | ?",
+    "target_kind": "layer | domain | feature", "target_feature": "<書き先の正本キー> | null", "needs_lazy_build": false,
+    "placement": "_schema.md「段と置き場所」の判定手順のどの問いにどう答えて段を決めたか (1〜3 行)" },
   "trim_plan": [
     { "section": "正本の節", "excerpt": "段落の抜粋", "class": "A | B | C | D | E | F",
       "action": "keep | reshape | delete | move | ask", "move_to": "E の移し先 (skill / doc/ のパス)", "chars": 0 }
@@ -100,7 +102,7 @@ controller への要約テキストは短く、詳細は JSON に入れる。
 | `diff_summary[]` | 差分がある時 | |
 | `domain_questions[]` | code に無い why がある時。lazy 構築時は必須 | align で人に聞く質問 |
 | `premise_check` | 対象 issue がある時 | |
-| `proposed_spec_update` | 更新候補がある時 | 候補にすぎない。確定は controller + human |
+| `proposed_spec_update` | 更新候補がある時 | 候補にすぎない。確定は controller + human。書き先の正本が無ければ `target_feature: null` と `needs_lazy_build: true` |
 | `trim_plan[]` | mode: trim の時 / op-spec-patrol の audit で指示された時 | 6 章 |
 | `cross_feature_link_candidates[]` | 他 feature への依存に気づいた時 (任意) | 候補提示まで。`[[]]` を張るかは controller + human |
 | `needs_human_decision` | 判断不能時 | 正規スキーマは `~/.claude/skills/_shared/invocation-mode.md`。options は「正本を code に合わせる」/「code を正本に合わせる (derived issue 発行)」が基本 |
@@ -112,7 +114,7 @@ controller への要約テキストは短く、詳細は JSON に入れる。
 2. code 由来は `[code]`: 業務ルールを表している定数・分岐・制約だけを Read 確認の上で抽出する。entity・API シグネチャ・ファイル名は列挙しない。A か D か迷うものは削らず `needs_human_decision`
 3. domain / why は `[?] TODO: needs-human`: 埋まらない節を捏造で埋めず、`domain_questions[]` に人への質問として返す
 4. 派生要約を作らない: source は正本 1 ファイルのみ
-5. kind は spawn prompt の `kind:` に従う (layer は層の共通の作り方だけ、feature は業務機能の全層の決まり)
+5. kind は spawn prompt の `kind:` (`layer` / `domain` / `feature`) に従う。kind ごとに書くものは `_schema.md`「段と置き場所」
 
 結果は `proposed_spec_update` に `.claude/rules/_schema.md` の skeleton に沿った候補として返す
 (`[code]` は業務ルールを表す定数・分岐・制約だけ。業務の理由・用語・例外は `[?]` で置き、`domain_questions[]` と対にする)。
