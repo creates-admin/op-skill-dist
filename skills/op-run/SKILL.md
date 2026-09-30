@@ -135,6 +135,9 @@ op issue list --label "auto-report" --state open \
 本文に `実施: /op-skill:op-component` を含む Issue (部品 issue、`_shared/design-system.md`) は apply しない。plan の「op-component で実施」節に
 列挙し、完了報告で `/op-skill:op-component <部品名> --issue <N>` を案内する。
 
+本文に `実施: /op-skill:op-spec` を含む Issue (正本作成 issue、op-plan フェーズ4-1) は apply しない。plan の「op-spec で実施」節に
+列挙し、完了報告で `/op-skill:op-spec` (mode `missing`) を案内する。
+
 残りの Issue はフェーズ1.5 (健全性チェック) を経て 1-2 に進む。
 
 ### 1-2. クラスタリング (Plan-time)

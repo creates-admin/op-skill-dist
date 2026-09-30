@@ -46,6 +46,8 @@ model: 全 cluster Opus 天井 (Fable 昇格なし) | <id_short> のみ Fable �
 | Issue | label | 理由 |
 ### op-component で実施 (apply しない)
 | Issue | 部品名 |
+### op-spec で実施 (apply しない)
+| Issue | 機能名 |
 
 ---
 

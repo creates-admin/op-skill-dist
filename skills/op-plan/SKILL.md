@@ -138,6 +138,13 @@ risk が high なら 2 を推奨する。結果はメモに追加し、フェー
   `_shared/project-profile.md`「UI 影響判定 path パターン」で判定する
 - depends_on (先に完了が必要な issue の index)
 
+計画に新しい業務機能 (`op spec-patrol coverage --json` の `details.feature_map.features` に無い機能) があれば、
+その機能の正本を作る Issue (正本作成 issue) を分解に加える。op-run はこの Issue を apply しない。
+
+- タイトル: `[spec-expert] 正本: <機能名>`。marker は `op-fingerprint` (domain `feature`) だけ、ラベルは `auto-report` だけ
+- 本文の 1 行目: `実施: /op-skill:op-spec`。本文: 機能名、paths の案、どの実装 issue の機能か
+- 実装 issue はこの Issue に `op-depends-on` でつながない (正本は実装後に作ってよい)
+
 ### 4-2. Issue draft の骨格
 
 `_shared/pr-templates.md`「Issue 本文 (指示書フル版)」を骨格にし、各節の中身は自然文で書く。
