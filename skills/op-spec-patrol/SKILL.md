@@ -63,9 +63,10 @@ op spec-patrol rebuild-index --json    # dry-run: 索引表の再生成差分
 | rule_id | CLI | severity | 行き先 |
 |---|---|---|---|
 | `R-SPEC-PATHS-OVERLAP` | list-specs | error | 報告 (人間判断) |
-| `R-SPEC-PATHS-OVERLAP-CROSS-KIND` | list-specs | info | なし (layer × feature の重なりは意図したもの) |
+| `R-SPEC-PATHS-OVERLAP-CROSS-KIND` | list-specs | info | なし (layer / domain / feature のうち kind が違う重なりは意図したもの) |
 | `R-SPEC-KIND-INVALID` | list-specs | warn | 報告 |
 | `R-SPEC-SIZE` / `R-SPEC-LINE-LENGTH` / `R-SPEC-LOAD-BUDGET` | list-specs | warn | op-spec の trim |
+| `R-SPEC-SIZE-UNDER` | list-specs | info | 報告 |
 | `R-SPEC-LINK-DEAD-FEATURE` / `R-SPEC-LINK-DEAD-SECTION` | check-links | error | 報告 (人間判断) |
 | `R-SPEC-LINK-DEAD-PATH` / `R-SPEC-LINK-DEAD-DOC-SECTION` / `R-SPEC-REF-DEAD` | check-links | warn | 報告 (人間判断) |
 | `R-SPEC-UNCOVERED-PATH` | coverage | info | 報告 |

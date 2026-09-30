@@ -128,22 +128,34 @@ verify_harness:
 
 ## §15 `spec_budget`
 
-正本 (`.claude/rules/`) の大きさの上限。`op spec-patrol list-specs` が読み、超えたら warning を出す (block しない)。
+正本 (`.claude/rules/`) の大きさの上限と下限。`op spec-patrol list-specs` が読み、上限を超えたら warning (`R-SPEC-SIZE`)、
+下限を下回ったら info (`R-SPEC-SIZE-UNDER`) を出す (どちらも block しない)。
 字数は frontmatter を含むファイル全体の文字数。超えたときの分け方は `_schema.md`「大きさ」節。
 
 ```yaml
 spec_budget:
-  feature_max_chars: 15000
-  layer_max_chars: 8000
+  constitution_max_chars: 4000
+  layer_max_chars: 5000
+  domain_max_chars: 6000
+  feature_max_chars: 12000
+  layer_min_chars: 1000
+  domain_min_chars: 1500
+  feature_min_chars: 2000
   line_max_chars: 300
   load_max_chars: 25000
 ```
 
 | key | 型 | default | 意味 |
 |---|---|---|---|
-| `feature_max_chars` | int | `15000` | `kind: feature` と kind 未指定の正本 1 本の上限。目安は 1.2 万字 |
-| `layer_max_chars` | int | `8000` | `kind: layer` の正本 1 本の上限。目安は 6 千字 |
+| `constitution_max_chars` | int | `4000` | constitution (`list-specs --constitution`、既定 `<rules-dir>/00-constitution.md`) の上限 |
+| `layer_max_chars` | int | `5000` | `kind: layer` の正本 1 本の上限 |
+| `domain_max_chars` | int | `6000` | `kind: domain` の正本 1 本の上限 |
+| `feature_max_chars` | int | `12000` | `kind: feature` と kind 未指定の正本 1 本の上限 |
+| `layer_min_chars` | int | `1000` | `kind: layer` の正本 1 本の下限 |
+| `domain_min_chars` | int | `1500` | `kind: domain` の正本 1 本の下限 |
+| `feature_min_chars` | int | `2000` | `kind: feature` の正本 1 本の下限 |
 | `line_max_chars` | int | `300` | 1 行 (1 項目) の上限 |
 | `load_max_chars` | int | `25000` | 1 つのファイルに paths が当たる正本の字数の合計の上限 (`00-` / `_` で始まる meta は数えない) |
 
 - 正本の frontmatter に `budget_override: <理由>` があれば、その正本の `R-SPEC-SIZE` は info に下がる。
+- kind 未指定の正本は下限を検査しない。

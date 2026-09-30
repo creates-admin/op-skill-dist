@@ -25,6 +25,7 @@ status: draft
 ## Part 3: 機能地図
 
 <!-- 機能地図: op-spec が書く。正本列は feature キー (複数はカンマ区切り) か (未作成)。op spec-patrol coverage が網羅を調べる。 -->
+<!-- 正本列には kind: domain の正本のキーも書ける (業務の正本として数える)。 -->
 
 | 機能 | 正本 | 備考 |
 |---|---|---|
