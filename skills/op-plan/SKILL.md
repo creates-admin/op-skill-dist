@@ -144,6 +144,7 @@ risk が high なら 2 を推奨する。結果はメモに追加し、フェー
 - タイトル: `[spec-expert] 正本: <機能名>`。marker は `op-fingerprint` (domain `feature`) だけ、ラベルは `auto-report` だけ
 - 本文の 1 行目: `実施: /op-skill:op-spec`。本文: 機能名、paths の案、どの実装 issue の機能か
 - 実装 issue はこの Issue に `op-depends-on` でつながない (正本は実装後に作ってよい)
+- 機能地図が無い repo (`details.feature_map.found` が false) では判定せず正本作成 issue を作らない。終了時に「機能地図が無い → `/op-skill:op-adopt` で地図を承認」を案内する
 
 ### 4-2. Issue draft の骨格
 

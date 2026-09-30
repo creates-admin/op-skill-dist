@@ -21,7 +21,7 @@ op-adopt は人間が承認した地図から、層の正本 (`kind: layer`) の
 |---|---|---|
 | 基盤 | `op-config.yaml` の有無 (ラベルは判定しない。フェーズ1 の `op repo init` は冪等) | ファイルあり |
 | 正本の土台 | `.claude/rules/_schema.md` と `00-constitution.md` | 両方あり |
-| 正本の中身 | `op spec-patrol list-specs`、主要ディレクトリ構成 | 主要な層に `kind: layer` の正本がある (status 問わず) |
+| 正本の中身 | `op spec-patrol list-specs`、主要ディレクトリ構成 | 主要な層に `kind: layer` の正本がある (status 問わず。kind 未指定の正本は済に数えず、フェーズ3 の地図で「済 (kind 未指定)」として扱う) |
 | デザインシステム | UI の有無 (`package.json` / `pubspec.yaml` 等)、`op-config.yaml` の `design_system` | UI 無し、または設定あり |
 | 実機検証ハーネス | `op-config.yaml` の `verify_harness` 節の有無 (`_shared/op-config-schema.md` §14) | 宣言あり |
 | 環境 | test / lint / build コマンドの有無 | (情報のみ。詳細は `/op-skill:op-doctor`) |
@@ -51,11 +51,13 @@ op-adopt は人間が承認した地図から、層の正本 (`kind: layer`) の
    - 共有ファイル (複数の機能から使われるファイル) は層の paths にだけ入れる
    - 優先度: 変更頻度 (`git log --since=6.months --name-only` の集計) と影響の大きさ (認証・課金・データ永続化など)
    - 生成物・依存・テスト fixture は地図に含めない
-   - 既にある正本 (`op spec-patrol list-specs`) は地図に「済」として載せる
+   - 既にある正本 (`op spec-patrol list-specs`) は地図に「済」、kind 未指定のものは「済 (kind 未指定)」として載せる
 2. 地図を kind つきの表で提示し、人間が分け方・kind・キー・paths を直して承認する。
 3. 承認された層のうち正本が無いものだけ、`_schema.md` の skeleton で `.claude/rules/<key>.md` を作る
    (`kind: layer`、`status: unverified`、各節は空。概要は scope 行だけに書く)。業務領域と機能の正本は作らない。
-4. `op spec-patrol list-specs` で block (同じ kind 同士の paths の重なり) が無いことを確認し、`op spec-patrol rebuild-index --apply --yes` で索引を作る。
+   kind 未指定の正本と paths が重なる層は作らず、その正本の kind は `/op-skill:op-spec` (フェーズ3-1) で足すよう案内する。
+4. `op spec-patrol list-specs` で block (同じ kind 同士、または kind 未指定の正本との paths の重なり) が無いことを確認し、`op spec-patrol rebuild-index --apply --yes` で索引を作る。
+   kind 未指定の正本との重なりで block したら、手順3 で作ったその層の正本を消して再確認する。
    索引の 概要 列の placeholder を承認された 1 行概要に置き換える。
 5. デザインシステム (UI 部品・トークン・カタログ) は地図に含めない (フェーズ4 の `design-system` 正本が持つ)。
 6. 承認した地図の業務領域と機能を `/op-skill:op-spec` (mode `missing`) で優先度順に作る。constitution の Part 3 (機能地図) の行も op-spec が書く、と案内する (本 skill では作らない)。
