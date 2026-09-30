@@ -18,8 +18,9 @@ spawn prompt から受け取る。
 | checkout | 検証する worktree の絶対パス。ハーネスのコマンドはここを cwd にして実行する |
 | scenarios | 確かめること (画面・操作・期待結果)。Issue の成功条件や diff から controller が組む。描画完了の目印にする要素 (`wait_for`、CSS セレクタ) を任意で持てる |
 | windows_endpoint | 任意。Windows 実行先 (Windows Sandbox) の WebDriver endpoint。controller が借りた lease の中継 URL (`details.provision.relay.webdriver_url`) |
-| windows の理由 | 任意。controller が Windows を借りられなかったときの reason (`windows unavailable` / `windows busy` / `windows not provisioned`) |
-| windows_provision | 任意。lease の `details.provision` の JSON。`relay.webdriver_url` (= windows_endpoint)・`relay.api_url_in_sandbox` (Sandbox 内のアプリが WSL の API に繋ぐ URL、API 中継なしなら null)・`webview2.mode` (`fixed` / `evergreen` / `none`)・`webview2.env` (アプリに渡す環境変数。`["WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", "<Sandbox 内のパス>"]` の 2 要素配列か null)・`webview2.native_driver` (tauri-driver の `--native-driver` に渡す Sandbox 内の msedgedriver のパス) |
+| windows_capabilities | 任意。windows_endpoint で New Session に渡す capabilities (`capabilities.alwaysMatch` の中身。lease の `details.provision.driver.capabilities`) |
+| windows の理由 | 任意。controller が Windows を借りられなかったときの reason (`windows unavailable` / `windows busy` / `windows not provisioned`) と detail |
+| windows_provision | 任意。lease の `details.provision` の JSON。`relay.webdriver_url` (= windows_endpoint)・`relay.api_url_in_sandbox` (Sandbox 内のアプリが WSL の API に繋ぐ URL、API 中継なしなら null)・`webview2.mode` (`fixed` / `evergreen` / `none`)・`webview2.env` (アプリに渡す環境変数。`["WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", "<Sandbox 内のパス>"]` の 2 要素配列か null)・`driver.capabilities` (= windows_capabilities)・`driver.app` (Sandbox 内の exe のパス)・`driver.log` (Sandbox 内の driver のログのパス) |
 
 scenarios が無ければ、diff が触れた画面を開いて描画と主要操作が通るかだけを確かめる。網羅的な探索はしない。
 
@@ -31,7 +32,7 @@ Windows の貸し借りは controller が「lease → try { verify-runner の検
 
 1. `op-config.yaml` の `verify_harness` を読む。節が無ければ何も起動せず `result: skipped` / `skip_reason: harness_not_installed` で返す。
    `runtime: windows` なら手順 2・4・6 (この checkout での start / probe / stop) を実行せず、全シナリオを 3 章「Windows 実行先」で扱う
-   (ハーネスを Sandbox 内で起動する手順は未配線)。証跡ディレクトリの `<run_id>` には `windows-<YYYYMMDD-HHMMSS>` を使う
+   (Windows 分は controller が借りた Sandbox の WebDriver で検証する)。証跡ディレクトリの `<run_id>` には `windows-<YYYYMMDD-HHMMSS>` を使う
 2. start を実行し、stdout の 1 行 JSON を保存する。start が非 0 なら stderr の末尾を添えて `result: fail` (`failed_stage: harness_start`) で返す
 3. 2.1 の規則で証跡ディレクトリを決めて作る。スクリーンショット・ログ・一時スクリプト・start の JSON はすべてここに置く
 4. `op verify probe` に start の JSON を渡して実行し、出力を証跡ディレクトリに保存する (引数は `op verify probe --help`)
@@ -206,13 +207,12 @@ windows_endpoint か windows の理由が渡されたとき、scenarios (無け�
 
 | 順 | 状況 | 扱い |
 |---|---|---|
-| 1 | windows_endpoint が無い | 検証せず `requires_runtime` に書く。`reason` は windows の理由、無ければ `windows unavailable` |
-| 2 | `curl -sf --max-time 10 "<windows_endpoint>/status"` が失敗する | 検証せず `requires_runtime` に `reason: "windows unavailable"`、`detail: "Sandbox 内 WebDriver 起動が未配線: <windows_endpoint> が応答しない"` で書く |
-| 3 | `/status` が応答する | 手段 3 を windows_endpoint に向けて実行し、シナリオ `<シナリオ名> (Windows)` の pass / fail として扱う。capabilities は spawn prompt の指定に従い、無ければ `{}` (start の JSON の値は Linux 側のアプリを指すので使わない)。セッションを作れなければ検証せず `requires_runtime` に `reason: "windows unavailable"`、`detail` にエラーを verbatim で書く |
+| 1 | windows_endpoint か windows_capabilities が無い | 検証せず `requires_runtime` に書く。`reason` は windows の理由 (無ければ `windows unavailable`)、`detail` は windows の理由の detail |
+| 2 | `curl -sf --max-time 10 "<windows_endpoint>/status"` が失敗する | 検証せず `requires_runtime` に `reason: "windows unavailable"`、`detail: "<windows_endpoint> の /status が応答しない"` で書く |
+| 3 | `/status` が応答する | 手段 3 の fence を、`EP` = windows_endpoint、`CAPS` = `{"capabilities":{"alwaysMatch":<windows_capabilities>}}` にして実行し、シナリオ `<シナリオ名> (Windows)` の pass / fail として扱う。`/url` は送らない (driver が起動したアプリは自分の画面を開く)。セッションを作れなければ検証せず `requires_runtime` に `reason: "windows unavailable"`、`detail` にエラーを verbatim で書く |
 
-- Sandbox 内で tauri-driver / msedgedriver と対象アプリを起動する手順と、Windows 用の exe を渡す手順は未配線のため、
-  いまは 2 の経路になる。これは正当な skip で、PR を止める理由にならない
-- verify-runner は Sandbox 内で何も起動しない。windows_provision は起動の配線が入るまで読むだけにし、`detail` に `webview2.mode` を添えてよい
+- セッション作成が即座に失敗するのは Windows 用 exe が Sandbox で起動しないとき (静的 CRT でない等) が多い。`detail` に windows_provision の `driver.log` のパスを添える
+- verify-runner は Sandbox 内で何も起動しない (driver は lease が、アプリは New Session で driver が起動する)
 - Windows 分の失敗は `means_attempts` と `all_means_failed` の判断に入れない (probe は Linux 側のハーネスしか確かめられないため)
 
 ## 4. 返却スキーマ (JSON)

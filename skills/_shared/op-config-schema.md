@@ -118,13 +118,35 @@ verify_harness:
 
 | key | 型 | 必須 / default | 意味 |
 |---|---|---|---|
-| `start` | string | yes | 検証環境を起動し、stdout に 1 行 JSON を出すコマンド |
-| `stop` | string | yes | この checkout で start した全 run を停止するコマンド |
-| `smoke` | string | yes | start 済みの run に対してハーネスの健全性を確かめるテスト 1 本のコマンド |
+| `start` | string | yes (`runtime: windows` では 3 つとも省略可) | 検証環境を起動し、stdout に 1 行 JSON を出すコマンド |
+| `stop` | string | yes (同上) | この checkout で start した全 run を停止するコマンド |
+| `smoke` | string | yes (同上) | start 済みの run に対してハーネスの健全性を確かめるテスト 1 本のコマンド |
 | `targets` | list[string] | yes | start の JSON の `targets` に非 null の URL を必ず含める target 名 |
 | `runtime` | enum | `linux` | ハーネスを動かす実行先。`linux` / `windows` |
 | `driver` | enum | `playwright` | 操作手段。`playwright` / `webdriver`。start の JSON の `driver` と一致する |
 | `windows_paths` | list[string (glob)] | `[]` | diff がかかったら `runtime` に関わらず Windows で検証する path |
+| `windows` | object | `runtime: windows` なら yes | Windows Sandbox で検証するときの宣言 (下表)。`op verify windows lease` のオプションはここから組む |
+
+```yaml
+verify_harness:
+  runtime: windows
+  targets: []
+  windows:
+    driver: tauri-driver
+    build: cd op-gui/frontend && npm ci && npm run build && cd ../src-tauri && CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS=-Ctarget-feature=+crt-static cargo xwin build --release --target x86_64-pc-windows-msvc
+    app: op-gui/target/x86_64-pc-windows-msvc/release/op-gui.exe
+    webview2: fixed
+```
+
+| key | 型 | 必須 / default | 意味 |
+|---|---|---|---|
+| `windows.driver` | enum | yes | Sandbox 内で起動する WebDriver サーバー。`tauri-driver` / `msedgedriver` (`msedgedriver` は lease が未対応のエラーにする) |
+| `windows.build` | string | yes | checkout のルートを cwd に、WSL 側で Windows 用 exe を作るコマンド。exe は静的 CRT にし、`CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS=-Ctarget-feature=+crt-static` をコマンドの env で明示する |
+| `windows.app` | string | yes | build 後の exe の repo 相対パス (lease の `--app`) |
+| `windows.api_port` | int | 省略時は API 中継なし | Sandbox 内のアプリに見せる WSL の API サーバーのポート (lease の `--api-port`) |
+| `windows.webview2` | enum | `fixed` | `fixed` / `evergreen` (lease の `--webview2`) |
+
+`windows.build` が cargo-xwin を使う repo の WSL 側の準備: `cargo-xwin`・rustup target `x86_64-pc-windows-msvc`・`llvm-rc` (Ubuntu は llvm パッケージ) が PATH に見えること。
 
 ## §15 `spec_budget`
 

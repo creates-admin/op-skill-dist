@@ -300,8 +300,9 @@ Agent({
     【実機検証フェーズ — コード・tracked ファイルを変更しないでください】
     checkout: <controller の作業ディレクトリの絶対パス (branch: <BRANCH_NAME>)>
     scenarios: <IU の goal とフェーズ 1 の期待挙動から組んだ確認項目 (画面・操作・期待結果、任意で wait_for)>
-    windows_endpoint: <Windows 実行先が要る場合のみ。貸し借りは runtime-verify-dispatcher.md に従う>
-    windows の理由: <Windows を借りられなかったときの WINDOWS_REQUIRES_RUNTIME。無ければ「なし」>
+    windows_endpoint: <Windows 実行先が要る場合のみ。build と貸し借りは runtime-verify-dispatcher.md に従う>
+    windows_capabilities: <借りたときの WINDOWS_CAPABILITIES。無ければ「なし」>
+    windows の理由: <Windows を借りられなかったときの WINDOWS_REQUIRES_RUNTIME と WINDOWS_DETAIL。無ければ「なし」>
     windows_provision: <借りたときの WINDOWS_PROVISION_JSON。無ければ「なし」>
     対象 diff: <IU_BASE_SHA>...HEAD
 

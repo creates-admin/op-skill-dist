@@ -17,6 +17,8 @@
 - stdout に出すのは start の JSON 1 行だけ。進行ログ・警告はすべて stderr に出す。
 - start 前に smoke を実行したら非 0 で終わる。
 - smoke は、この checkout の run のうち `pid_file` の PID が生きている run から `startedAt` が最も新しいものを対象にする。
+- `runtime: windows` の repo では 3 コマンドとも任意 (書くなら 3 つとも)。Windows 分は Windows Sandbox 内で op が WebDriver を起動し、driver が exe を起動する。
+  repo は Windows 版のハーネスを作らず、exe の作り方と場所を `verify_harness.windows` に宣言する (`op-config-schema.md` §14)。
 
 ## 2. start の stdout JSON
 

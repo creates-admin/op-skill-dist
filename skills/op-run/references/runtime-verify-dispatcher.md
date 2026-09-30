@@ -24,7 +24,8 @@ base からの diff (op-run では `git -C "$WORKTREE_PATH" diff --name-only "$O
 - `_shared/project-profile.md`「UI 影響判定 path パターン」(除外パスの優先・単語単独マッチの禁止・title / rationale での補完を含む)
 - `verify_harness.windows_paths` (`_shared/op-config-schema.md` §14) の glob
 
-どちらにも当たらなければ段を実行しない (spawn も記録もしない)。以下の `HARNESS_START` / `HARNESS_STOP` は `verify_harness.start` / `stop` の値。
+どちらにも当たらなければ段を実行しない (spawn も記録もしない)。以下の `HARNESS_START` / `HARNESS_STOP` は `verify_harness.start` / `stop` の値
+(`runtime: windows` で宣言が無ければ 2.1 と 4 章の stop は実行しない。4 章の Windows の返却は行う)。
 
 | `verify_harness` | 動作 |
 |---|---|
@@ -34,13 +35,28 @@ base からの diff (op-run では `git -C "$WORKTREE_PATH" diff --name-only "$O
 ### 1.1 Windows の貸し借り (Windows 判定に当たったときだけ)
 
 Windows 判定は、diff が `verify_harness.windows_paths` に当たるか、`verify_harness.runtime` が `windows` のとき
-(op-verify は加えて `--windows` の明示指定)。当たらなければ 1.1 を飛ばして 1.2 へ進む (4 章の release は holder ファイルが無ければ何もしない)。
+(op-verify は加えて `--windows` の明示指定)。`runtime: windows` の repo は段が起動したら常に Windows で検証する。
+当たらなければ 1.1 を飛ばして 1.2 へ進む (4 章の release は holder ファイルが無ければ何もしない)。
 
 verify-runner は Windows を借りない (`expert-verify` §1)。controller が段全体を
-「lease (1.1) → try { spawn (1.2) → 2 章 → 3 章 } finally { 4 章: stop の引き取り → release }」の形で進める。
+「build → lease (1.1) → try { spawn (1.2) → 2 章 → 3 章 } finally { 4 章: stop の引き取り → release }」の形で進める。
 try の中でどの経路 (spawn 失敗・30 分応答なし・契約違反・再 spawn・`RV_LEASE_ABORT`) に抜けても、finally の 4 章は必ず通す。
 待ちの上限は CLI の既定 (待たない) で、借りられなければ PR を止めずに `requires_runtime` として扱う (ADR-0035)。
 借りた holder は 4 章の返却まで fence を跨ぐため、checkout の外のファイル (`RV_LEASE_FILE`) に書いて渡す (`_shared/bash-fence-convention.md` 不変則 1)。
+
+lease のオプションは `verify_harness.windows` (`_shared/op-config-schema.md` §14) の宣言だけから組む。下の fence の `WIN_DRIVER` / `WIN_BUILD` / `WIN_APP` /
+`WIN_API_PORT` / `WIN_WEBVIEW2` は `windows.driver` / `build` / `app` / `api_port` / `webview2` の値 (任意の 2 つは宣言が無ければ空)。
+`windows` 節が無ければ fence を実行せず、`WINDOWS_REQUIRES_RUNTIME=windows unavailable`、`WINDOWS_DETAIL=verify_harness.windows が宣言されていない` で 1.2 へ進む。
+
+Windows 用 exe は lease の前に checkout で `windows.build` を実行して作る (Sandbox を build の間借りたままにしない)。
+build 前に tracked ファイルの変更が無かった checkout では、build が書き換えた tracked ファイルを戻す (checkout を汚すと op-run の `op apply verify-commit` gate で止まる)。
+
+| 状況 | `WINDOWS_REQUIRES_RUNTIME` | `WINDOWS_DETAIL` |
+|---|---|---|
+| `windows.build` が cargo-xwin を使い、WSL に `cargo-xwin` か `llvm-rc` が無い | `windows not provisioned` | 無い道具の名前 |
+| build が非 0 か、build 後に `windows.app` が無い | `windows unavailable` | `Windows build 失敗` とログのパス |
+| lease が exit 1 | lease の `details.requires_runtime` | lease の `details.reason` |
+| lease が exit 2、または exit 0 で endpoint か capabilities が無い | `windows unavailable` | lease の `details.reason` |
 
 lease を取る前に、前の段の holder ファイルが残っていないかを見る。残るのは 4 章の返却が失敗した (lease が残った) ときで、
 Review Fix Loop で同じ checkout の段を再実行するとここに来る。期限内の lease は holder が同じでも busy になるため
@@ -52,8 +68,12 @@ release が exit 1 で `details.result: not_holder` を返したときは、前�
 
 ```bash
 : "${CHECKOUT:?}" "${LEASE_HOLDER:?op-run は task_id}"
-RV_LEASE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/op-verify-runner/$(basename "$CHECKOUT")/controller-lease-holder"
-WINDOWS_ENDPOINT=""; WINDOWS_PROVISION_JSON=""; WINDOWS_REQUIRES_RUNTIME=""; RV_LEASE_ABORT=""; LEASE_EXIT=""
+: "${WIN_DRIVER:?verify_harness.windows.driver}" "${WIN_BUILD:?verify_harness.windows.build}" "${WIN_APP:?verify_harness.windows.app}"
+RV_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/op-verify-runner/$(basename "$CHECKOUT")"
+RV_LEASE_FILE="$RV_DIR/controller-lease-holder"
+RV_BUILD_LOG="$RV_DIR/windows-build-$(date +%Y%m%d-%H%M%S).log"
+WINDOWS_ENDPOINT=""; WINDOWS_CAPABILITIES=""; WINDOWS_PROVISION_JSON=""; WINDOWS_REQUIRES_RUNTIME=""; WINDOWS_DETAIL=""
+RV_LEASE_ABORT=""; LEASE_EXIT=""
 if [ -e "$RV_LEASE_FILE" ]; then
   PREV_HOLDER=$(cat "$RV_LEASE_FILE" 2>/dev/null) || PREV_HOLDER=""
   if [ -z "$PREV_HOLDER" ]; then
@@ -69,13 +89,39 @@ if [ -e "$RV_LEASE_FILE" ]; then
   fi
 fi
 if [ -z "$RV_LEASE_ABORT" ]; then
-  LEASE_JSON=$(op verify windows lease --holder "$LEASE_HOLDER"); LEASE_EXIT=$?
+  mkdir -p "$RV_DIR"
+  case "$WIN_BUILD" in
+    *cargo-xwin*|*"cargo xwin"*)
+      for TOOL in cargo-xwin llvm-rc; do
+        if ! command -v "$TOOL" >/dev/null 2>&1; then
+          WINDOWS_REQUIRES_RUNTIME="windows not provisioned"; WINDOWS_DETAIL="WSL の PATH に $TOOL が無い"
+        fi
+      done ;;
+  esac
+  if [ -z "$WINDOWS_REQUIRES_RUNTIME" ]; then
+    TRACKED_BEFORE=$(git -C "$CHECKOUT" status --porcelain --untracked-files=no)
+    if ! (cd "$CHECKOUT" && bash -c "$WIN_BUILD") >"$RV_BUILD_LOG" 2>&1; then
+      WINDOWS_REQUIRES_RUNTIME="windows unavailable"; WINDOWS_DETAIL="Windows build 失敗 (ログ: $RV_BUILD_LOG)"
+    elif [ ! -f "$CHECKOUT/$WIN_APP" ]; then
+      WINDOWS_REQUIRES_RUNTIME="windows unavailable"; WINDOWS_DETAIL="Windows build 失敗: $WIN_APP が無い (ログ: $RV_BUILD_LOG)"
+    fi
+    [ -n "$TRACKED_BEFORE" ] || git -C "$CHECKOUT" checkout -- .   # build が書き換えた tracked ファイル (lockfile 等) を戻す
+  fi
+fi
+if [ -z "$RV_LEASE_ABORT" ] && [ -z "$WINDOWS_REQUIRES_RUNTIME" ]; then
+  LEASE_JSON=$(op verify windows lease --holder "$LEASE_HOLDER" --driver "$WIN_DRIVER" --app "$CHECKOUT/$WIN_APP" \
+    ${WIN_API_PORT:+--api-port "$WIN_API_PORT"} ${WIN_WEBVIEW2:+--webview2 "$WIN_WEBVIEW2"}); LEASE_EXIT=$?
+  LEASE_REASON=$(printf '%s' "$LEASE_JSON" | jq -r '.details.reason // empty' 2>/dev/null)
   case "$LEASE_EXIT" in
     0) WINDOWS_ENDPOINT=$(printf '%s' "$LEASE_JSON" | jq -r '.details.provision.relay.webdriver_url // empty')
+       WINDOWS_CAPABILITIES=$(printf '%s' "$LEASE_JSON" | jq -c '.details.provision.driver.capabilities // empty')
        WINDOWS_PROVISION_JSON=$(printf '%s' "$LEASE_JSON" | jq -c '.details.provision // {}')
-       [ -n "$WINDOWS_ENDPOINT" ] || WINDOWS_REQUIRES_RUNTIME="windows unavailable" ;;
-    1) WINDOWS_REQUIRES_RUNTIME=$(printf '%s' "$LEASE_JSON" | jq -r '.details.requires_runtime // "windows unavailable"') ;;
-    *) WINDOWS_REQUIRES_RUNTIME="windows unavailable" ;;
+       if [ -z "$WINDOWS_ENDPOINT" ] || [ -z "$WINDOWS_CAPABILITIES" ]; then
+         WINDOWS_REQUIRES_RUNTIME="windows unavailable"; WINDOWS_DETAIL="lease が endpoint か capabilities を返さなかった"
+       fi ;;
+    1) WINDOWS_REQUIRES_RUNTIME=$(printf '%s' "$LEASE_JSON" | jq -r '.details.requires_runtime // "windows unavailable"')
+       WINDOWS_DETAIL="$LEASE_REASON" ;;
+    *) WINDOWS_REQUIRES_RUNTIME="windows unavailable"; WINDOWS_DETAIL="lease exit $LEASE_EXIT: $LEASE_REASON" ;;
   esac
 fi
 case "$LEASE_EXIT" in
@@ -88,10 +134,10 @@ case "$LEASE_EXIT" in
       else
         RV_LEASE_ABORT="lease holder を $RV_LEASE_FILE に書けず、lease も返せなかった (release exit $RELEASE_EXIT)。lease は TTL が切れるまで残り、op verify windows sweep か次の lease が回収する"
       fi
-      WINDOWS_ENDPOINT=""; WINDOWS_PROVISION_JSON=""
+      WINDOWS_ENDPOINT=""; WINDOWS_CAPABILITIES=""; WINDOWS_PROVISION_JSON=""
     fi ;;
 esac
-export WINDOWS_ENDPOINT WINDOWS_PROVISION_JSON WINDOWS_REQUIRES_RUNTIME RV_LEASE_ABORT
+export WINDOWS_ENDPOINT WINDOWS_CAPABILITIES WINDOWS_PROVISION_JSON WINDOWS_REQUIRES_RUNTIME WINDOWS_DETAIL RV_LEASE_ABORT
 ```
 
 `RV_LEASE_ABORT` が空でなければ、verify-runner を spawn せず、段を 5 章の「結果が得られない」(`skipped`、`skip_reason` なし) で記録し、
@@ -104,16 +150,13 @@ export WINDOWS_ENDPOINT WINDOWS_PROVISION_JSON WINDOWS_REQUIRES_RUNTIME RV_LEASE
 | 前の段の holder ファイルが空か読めない | この段では借りていない。前の段の lease が残っている可能性がある | 残す (4 章の `:?` ガードで止まり、人間に報告する) |
 | 借りた holder をファイルに書けなかった | その場で返した。返せなければ TTL が切れるまで残り、`op verify windows sweep` か次の lease が回収する | 返せたときは消す |
 
-`requires_runtime` の語 (`windows busy` / `windows unavailable` / `windows not provisioned`) は言い換えずに verify-runner へ渡す。
+`requires_runtime` の語 (`windows busy` / `windows unavailable` / `windows not provisioned`) は言い換えずに verify-runner へ渡し、補足は `WINDOWS_DETAIL` で渡す。
+Windows 側の失敗 (道具が無い・build 失敗・lease の exit 1 / 2・セッション作成失敗) はすべて `requires_runtime` になり、PR を止めない。
 返却は lease の成否にかかわらず 4 章の後始末で必ず行う。4 章は holder ファイルがあれば返し、無ければ何もしない
 (`RV_LEASE_ABORT` で spawn しなかった段でも 4 章は通す。前の段の lease の返し直しはそこで行う)。
 lease が exit 2 (エラー) で終わった段も holder ファイルを書き、4 章で返す。CLI は Sandbox を止められなかったとき lease を残す
 (TTL 後に sweep が回収する) ため、4 章の release がもう一度 `wsb stop` を試みる。CLI が lease を消していれば release は
-`not_leased` (exit 0) で終わる。exit 1 (busy / unavailable / not provisioned) は lease を取っていないのでファイルを書かない。
-
-Sandbox 内で tauri-driver / msedgedriver と対象アプリを起動する手順は未配線のため、lease が exit 0 でも
-`WINDOWS_ENDPOINT` の WebDriver は応答しない。verify-runner はその分を `requires_runtime` (`windows unavailable`、
-`detail` に「Sandbox 内 WebDriver 起動が未配線」) で返し (`expert-verify` 3 章「Windows 実行先」)、2 章の正当な skip として扱う。PR は止めない。
+`not_leased` (exit 0) で終わる。exit 1 (busy / unavailable / not provisioned) と、build の段で止まった (lease を呼んでいない) 段は lease を取っていないのでファイルを書かない。
 
 ### 1.2 verify-runner の spawn
 
@@ -125,8 +168,9 @@ Sandbox 内で tauri-driver / msedgedriver と対象アプリを起動する手�
 | checkout | 検証する worktree の絶対パス (op-run は apply worktree を再利用し、新規 worktree を作らない) |
 | head_sha | checkout の HEAD (op-run は push 済みの PR head) |
 | scenarios | Issue の成功条件と diff から controller が組む (画面・操作・期待結果、任意で `wait_for`)。組めなければ空にし、verify-runner の既定に任せる |
-| windows_endpoint | 1.1 で借りたときの `WINDOWS_ENDPOINT` |
-| windows の理由 | 1.1 で借りられなかったときの `WINDOWS_REQUIRES_RUNTIME` |
+| windows_endpoint | 1.1 で借りたときの `WINDOWS_ENDPOINT` (lease の `details.provision.relay.webdriver_url`) |
+| windows_capabilities | 1.1 で借りたときの `WINDOWS_CAPABILITIES` (lease の `details.provision.driver.capabilities`。New Session の `capabilities.alwaysMatch` の中身) |
+| windows の理由 | 1.1 で借りられなかったときの `WINDOWS_REQUIRES_RUNTIME` と `WINDOWS_DETAIL` |
 | windows_provision | 1.1 で借りたときの `WINDOWS_PROVISION_JSON` (lease の `details.provision`。key は `expert-verify` §1) |
 
 ```
@@ -139,7 +183,8 @@ invocation_mode: op_managed
 - head_sha: ${HEAD_SHA} (checkout の HEAD と一致することを確かめてから始める)
 - scenarios: ${SCENARIOS_JSON}
 - windows_endpoint: ${WINDOWS_ENDPOINT:-なし}
-- windows の理由: ${WINDOWS_REQUIRES_RUNTIME:-なし} (Windows の検証を requires_runtime にするときの reason)
+- windows_capabilities: ${WINDOWS_CAPABILITIES:-なし}
+- windows の理由: ${WINDOWS_REQUIRES_RUNTIME:-なし} (Windows の検証を requires_runtime にするときの reason。detail: ${WINDOWS_DETAIL:-なし})
 - windows_provision: ${WINDOWS_PROVISION_JSON:-なし}
 
 【完了条件】expert-verify §4 の JSON を返す。コード編集・commit・push・GitHub write をしない。
@@ -350,5 +395,5 @@ block からの再実装は PR ごとに 2 回まで。3 回目の `block` は v
 - PR コメント (段を実行したとき 1 件、自然文、HTML marker を付けない): 結果、検証したシナリオ、証跡のパス、
   `requires_runtime` の範囲と理由、`gaps`、stop / release の非 0、`RV_LEASE_ABORT`、2.1 の確認結果
 - ClusterSummary の `runtime_verify_note` (`cluster-orchestrator-directives.md` フェーズ8): 人間に伝えることがあるときだけ 1〜2 文。
-  ハーネス未導入 (`/op-skill:op-verify --init` を案内) / `requires_runtime` で未検証の範囲 / `all_means_failed` を受け入れた経緯 /
+  ハーネス未導入 (`/op-skill:op-verify --init` を案内) / `requires_runtime` で未検証の範囲 (`Windows build 失敗` はログのパスを添えて必ず書く) / `all_means_failed` を受け入れた経緯 /
   ハーネスの起動失敗 / stop・release の非 0 / `RV_LEASE_ABORT`。`pass` だけなら書かない

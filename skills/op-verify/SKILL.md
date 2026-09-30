@@ -136,10 +136,9 @@ op run base-sha --base-ref "origin/$BASE_REF" | jq -r '.payload.base_sha'   # �
      1. lease: 同 dispatcher 1.1 を `CHECKOUT=<checkout>`、`LEASE_HOLDER=opverify-<YYYYMMDD-HHMMSS>` (手順 4 の session と同じ値) で実行する
      2. try: `RV_LEASE_ABORT` が空なら verify-runner を spawn し、返却を下の順に処理する。空でなければ spawn せず、同 dispatcher 1.1 のとおり「結果が得られない」で記録して `RV_LEASE_ABORT` を報告に載せる
      3. finally: try がどの経路で終わっても、同 dispatcher 4 章 (保留 stop の引き取り → Windows の返却) を実行する。release の非 0 は報告に載せる
-   - Sandbox 内で WebDriver と対象アプリを起動する手順が未配線のあいだは、借りられても windows_endpoint の WebDriver が応答しない。
-     verify-runner はその分を `requires_runtime` (`windows unavailable`、未配線と分かる `detail` 付き) で返し、正当な skip として扱う
+   - Windows 用 exe の build と lease のオプションは、checkout の `verify_harness.windows` の宣言から同 dispatcher 1.1 が組む。Windows 側の失敗は `requires_runtime` の正当な skip として扱う
    - 当たらなければ lease を取らず、windows_endpoint も windows の理由も渡さない
-   - verify-runner の spawn は同 dispatcher の spawn の節どおり (`subagent_type: "op-skill:verify-runner"`、model `opus`、Fable は使わない。windows_endpoint / windows の理由 / windows_provision も同節の表どおり)
+   - verify-runner の spawn は同 dispatcher の spawn の節どおり (`subagent_type: "op-skill:verify-runner"`、model `opus`、Fable は使わない。windows_endpoint / windows_capabilities / windows の理由 / windows_provision も同節の表どおり)
    - 返却は同 dispatcher の skip の扱いの節 → 証跡の実在確認の節 → 保留 stop の引き取りの節の順に処理する
    - 結果の値は同 dispatcher の state 記録の節の表で 1 件に確定させる
 4. 記録: `--pr` なら、同 dispatcher の op-run での結果の扱いの節の state push と同じ entry を PR の op-review-state に push する
