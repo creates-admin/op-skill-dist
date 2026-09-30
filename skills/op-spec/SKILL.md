@@ -34,9 +34,9 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 ## フェーズ0: 環境確認
 
 `_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」を実行する (gh channel で未認証なら中断)。
-`.claude/rules/_schema.md` か `00-constitution.md` が無い repo は OP 未移行。先に `/op-skill:op-adopt` (正本の土台と feature 地図) を案内して終了する。
+`.claude/rules/_schema.md` か `00-constitution.md` が無い repo は OP 未移行。先に `/op-skill:op-adopt` (正本の書式・索引・層 / 業務領域 / 機能の地図の承認・層の骨組み) を案内して終了する。
 土台があり個別 feature の正本が無いだけなら 2-4 の lazy 構築で作る。
-`_schema.md` に「書くもの・書かないもの」「大きさ」節が無ければ、`~/.claude/skills/_shared/templates/rules-schema.md` との差分を示し、承認後に追記する。
+`_schema.md` に「書くもの・書かないもの」「段と置き場所」「大きさ」節が無ければ、`~/.claude/skills/_shared/templates/rules-schema.md` との差分を示し、承認後に追記する。
 
 ---
 
@@ -101,7 +101,7 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 
 ### 2-2. present (human に提示)
 
-返却 (`diff_summary` / `domain_questions` / `premise_check` / `proposed_spec_update`) を根拠付きで提示する:
+返却 (`diff_summary` / `domain_questions` / `premise_check` / `proposed_spec_update[]`) を根拠付きで提示する:
 
 ```
 feature: billing の 3 者照合結果です。
@@ -145,8 +145,9 @@ align が済んだ feature/issue について、正本と issue の 2 箇所に�
 
 - 書き込む決まりを `_schema.md`「段と置き場所」で振り分ける。業務の決まりの書き先 (業務領域・機能の正本) が無ければ、層の正本には書かず 2-4 の lazy 構築で先に作ってから書く
 - 機能の正本の有無は `op spec-patrol coverage --json` の `details.feature_map.features` (その機能の行の `specs` / `kinds`) で判定する
+- `details.feature_map.found` が false (機能地図が無い) なら機能の正本の有無を判定せず、書き先の正本を人に聞き、完了報告で `/op-skill:op-adopt` による地図の承認を案内する
 - kind 未指定の正本に書くときは、先に kind を人に聞いて frontmatter に足す
-- write の前に、各更新の書き先 (`proposed_spec_update` の `target_kind` / `target_feature`) と `placement` を人に見せて確認する
+- write の前に、`proposed_spec_update[]` の要素ごとに書き先 (`target_kind` / `target_feature`) と `placement` を人に見せて確認する。`needs_human_decision` で返った決まり (constitution に効くもの) は書かずに扱いを人に聞く
 - 核 (不変則 / 決定 / 用語) の update + narrative 追記
 - 各 fact に provenance タグ (`[code]` / `[human]` / `[?]`) を付ける。align していない domain / why は `[?] TODO: needs-human` のまま残す (捏造禁止、`expert-spec/SKILL.md`「2. provenance タグ規約」)
 - 決定行に実現した issue/PR を `realizes #NN` で追記する (issue 側の `op-spec-ref` と対、3-2)

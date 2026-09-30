@@ -37,7 +37,7 @@ repo_root: <git rev-parse --show-toplevel の結果>
 
 # 指示
 
-expert-spec の手順で正本 ⟷ code ⟷ issue 前提を照合し、「4. 返却契約スキーマ」で返す。正本は write しない (proposed_spec_update を返すまで)。
+expert-spec の手順で正本 ⟷ code ⟷ issue 前提を照合し、「4. 返却契約スキーマ」で返す。正本は write しない (proposed_spec_update[] を返すまで)。
 mode: trim / consolidate なら照合せず、expert-spec「6. trim (正本を細くする)」の trim_plan[] で返す。
 
 You must not ask interactive questions.
