@@ -26,6 +26,7 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 | `references/spec-expert-spawn-template.md` | spec-expert spawn の literal prompt。2-1 で読む |
 | `references/derived-issue-procedure.md` | derived issue 起票手順。3-1b で起票すると決めた時のみ読む |
 | `references/spec-trim.md` | trim mode の手順。1-0 で trim を選んだ時に読む |
+| `references/spec-consolidate.md` | consolidate mode の手順。1-0 で consolidate を選んだ時に読む |
 | `references/spec-pr.md` | 正本を write した後の PR 手順。write したら読む |
 
 ---
@@ -43,7 +44,7 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 
 ### 1-0. entry mode 選択
 
-ユーザーが明示しなければ issue-driven。trim 以外の mode は seed 後に 1-2 の feature 主役構造化に合流する。
+ユーザーが明示しなければ issue-driven。issue-driven / feature-driven / drift-driven は seed 後に 1-2 の feature 主役構造化に合流する。trim / consolidate / missing は合流せず、各 mode の手順で 1 つずつ進める。
 
 | mode | 起点 | 主用途 |
 |------|------|--------|
@@ -51,6 +52,8 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 | **feature-driven** | `.claude/rules/*.md` の正本一覧 + 紐づく issue | feature 単位で正本を見直す |
 | **drift-driven** | code が正本より新しい feature / `status: draft・unverified` / Spec Patrol Ledger の confirmed drift | 腐った・未 cultivated な正本から育てる |
 | **trim** | 大きさの上限を超えている正本 | 実装の詳細・手順・経緯を削って細くする (`references/spec-trim.md`) |
+| **consolidate** | 機能地図で層の正本にしか覆われていない機能 (`layer_only`) | 層の正本に散った業務の決まりを文言を変えずに機能の正本へ移す (`references/spec-consolidate.md`) |
+| **missing** | 機能地図で正本が `(未作成)` の機能 | 正本の無い機能を人と決めた優先順に 2-4 の lazy 構築で作る |
 
 正本を俯瞰したいときは `/op-skill:op-rules` (read-only ビューア) を案内してよい。
 
@@ -125,9 +128,10 @@ human と対話して食い違いを解消する。align できた fact のみ�
 ### 2-4. lazy 構築 (正本 missing 時)
 
 最初に kind (`layer` / `domain` / `feature`) を人に聞き、spawn prompt の `kind:` に渡す。
+feature キーが決まっていなければ、機能地図の表示名から op-adopt SKILL.md フェーズ3 手順1 のキーの書き方で人と決め、`feature:` と `spec_path` に使う。
 spec-expert に code から正本 skeleton 候補を抽出させ、2-3 の align (`domain_questions` の聞き取りを含む) を経て構築する。
 手順は `expert-spec/SKILL.md`「lazy 構築」節。
-正本を write したら、constitution Part 3 (機能地図) の該当行の正本列を `(未作成)` から feature キーに更新する。
+正本を write したら、constitution Part 3 (機能地図) の該当行の正本列を `(未作成)` から feature キーに更新する (行が無ければ機能名と feature キーの行を足す)。
 
 ---
 
@@ -220,5 +224,5 @@ grep -rlE "\[\[${F}(/|\]\])" .claude/rules/*.md 2>/dev/null | grep -v "/${F}\.md
 
 op-spec は正本 (`.claude/rules/<feature>.md`) を write する mutation 責務を持つ (CLAUDE.md 不変則9 の例外)。
 write は human align gate 通過後のみ。spec-expert worker は read-only で、write は op-spec controller のみ。
-write には trim の削除 (消える文言の一覧を人が承認した後)、`_schema.md` の追従 (フェーズ0、承認後の追記)、
-constitution Part 3 (機能地図) の行の更新を含む。
+write には trim の削除 (消える文言の一覧を人が承認した後)、集約の移動 (移し先への追記と層の正本からの削除。移す文言の一覧を人が承認した後)、`_schema.md` の追従 (フェーズ0、承認後の追記)、
+constitution Part 3 (機能地図) の行の更新と追加を含む。

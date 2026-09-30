@@ -70,7 +70,8 @@ op spec-patrol rebuild-index --json    # dry-run: 索引表の再生成差分
 | `R-SPEC-LINK-DEAD-FEATURE` / `R-SPEC-LINK-DEAD-SECTION` | check-links | error | 報告 (人間判断) |
 | `R-SPEC-LINK-DEAD-PATH` / `R-SPEC-LINK-DEAD-DOC-SECTION` / `R-SPEC-REF-DEAD` | check-links | warn | 報告 (人間判断) |
 | `R-SPEC-UNCOVERED-PATH` | coverage | info | 報告 |
-| `R-SPEC-FEATURE-MISSING` / `R-SPEC-FEATURE-LAYER-ONLY` | coverage | info | op-spec の lazy 構築 |
+| `R-SPEC-FEATURE-MISSING` | coverage | info | op-spec の missing |
+| `R-SPEC-FEATURE-LAYER-ONLY` | coverage | info | op-spec の consolidate |
 | `R-SPEC-CITE-HUMAN-NO-SOURCE` / `R-SPEC-CITE-NEEDS-HUMAN` | cite-downgrade | warn / info | Phase 3 で auto-fix |
 | `R-SPEC-INDEX-NEW-FEATURE` / `R-SPEC-INDEX-STALE-FEATURE` | rebuild-index | info / warn | Phase 3 で auto-fix |
 
@@ -114,7 +115,8 @@ args 規約と `.result` の unwrap は `_shared/workflow-calling.md`。
 
 - 機械 drift: Phase 2 の表の行き先に従う。auto-fix 以外は起票しない。
 - 消す候補 (大きさの警告と、中身の内訳の D・E・F): op-spec の trim へ回す。上限内の正本の D・E・F は報告だけにする。
-- 正本の無い機能 (`R-SPEC-FEATURE-MISSING` / `R-SPEC-FEATURE-LAYER-ONLY`): op-spec の lazy 構築へ回す。
+- 正本の無い機能 (`R-SPEC-FEATURE-MISSING`): op-spec の missing へ回す。
+- 層の正本にしか覆われていない機能 (`R-SPEC-FEATURE-LAYER-ONLY`): op-spec の consolidate へ回す。
 - 重複・食い違い (confirmed): `.result.health.drift_counts` を Phase 6 の `--drift-count <feature>=duplicate:<N>` / `=conflict:<N>` で Ledger に記録し、op-spec の drift-driven に乗せる。
 - 散らばり (`scatter`): 報告だけにする。
 - domain confirmed drift: 起票せず、Phase 6 で Ledger に記録する。op-spec の drift-driven entry がそれを拾って cultivation する。
@@ -140,7 +142,7 @@ push の出力の `health_delta` を Phase 7 の前回比に使う (dry-run で�
 - 自動 fix しなかった機械 finding と人間判断が要る点
 - 健康状態: 上限超えの本数、読み込み量の上位 5、正本の無い機能の数、覆われていないパスの数、A〜F の割合 (未巡回の feature は古い値)、
   前回比 (`health_delta`。数値はそのまま載せ、自分で引き算しない)
-- op-spec へ回す候補: trim で細くする正本、lazy 構築する機能、重複・食い違い
+- op-spec へ回す候補: trim で細くする正本、missing で正本を作る機能、consolidate で決まりを集める機能、重複・食い違い
 - Ledger checkpoint id、未巡回 feature
 
 正本を俯瞰したいときは `/op-skill:op-rules` を案内してよい。

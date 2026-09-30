@@ -85,7 +85,8 @@ controller への要約テキストは短く、詳細は JSON に入れる。
     "placement": "_schema.md「段と置き場所」の判定手順のどの問いにどう答えて段を決めたか (1〜3 行)" },
   "trim_plan": [
     { "section": "正本の節", "excerpt": "段落の抜粋", "class": "A | B | C | D | E | F",
-      "action": "keep | reshape | delete | move | ask", "move_to": "E の移し先 (skill / doc/ のパス)", "chars": 0 }
+      "action": "keep | reshape | delete | move | ask", "move_to": "E の移し先 (skill / doc/ のパス)。consolidate は .claude/rules/<feature>.md#<節>",
+      "pointer_needed": false, "chars": 0 }
   ],
   "cross_feature_link_candidates": [
     { "from_feature": "<feature>", "to_feature": "<依存先 feature>", "evidence": "file + symbol", "provenance": "code | ?" }
@@ -103,18 +104,19 @@ controller への要約テキストは短く、詳細は JSON に入れる。
 | `domain_questions[]` | code に無い why がある時。lazy 構築時は必須 | align で人に聞く質問 |
 | `premise_check` | 対象 issue がある時 | |
 | `proposed_spec_update` | 更新候補がある時 | 候補にすぎない。確定は controller + human。書き先の正本が無ければ `target_feature: null` と `needs_lazy_build: true` |
-| `trim_plan[]` | mode: trim の時 / op-spec-patrol の audit で指示された時 | 6 章 |
+| `trim_plan[]` | mode: trim / consolidate の時 / op-spec-patrol の audit で指示された時 | 6 章。`pointer_needed` は consolidate の時だけ |
 | `cross_feature_link_candidates[]` | 他 feature への依存に気づいた時 (任意) | 候補提示まで。`[[]]` を張るかは controller + human |
 | `needs_human_decision` | 判断不能時 | 正規スキーマは `~/.claude/skills/_shared/invocation-mode.md`。options は「正本を code に合わせる」/「code を正本に合わせる (derived issue 発行)」が基本 |
 | `assumptions[]` | 推定がある時 | |
 
 ## 5. lazy 構築 (正本 missing 時)
 
-1. 議題範囲だけ: controller が指定した issue / feature が触れる code 範囲だけを抽出する (feature 全体を網羅しない)
+1. 議題範囲だけ: controller が指定した issue / feature が触れる code 範囲 (`code_scope`。missing では controller が渡す機能の paths) だけを抽出する (feature 全体を網羅しない)
 2. code 由来は `[code]`: 業務ルールを表している定数・分岐・制約だけを Read 確認の上で抽出する。entity・API シグネチャ・ファイル名は列挙しない。A か D か迷うものは削らず `needs_human_decision`
-3. domain / why は `[?] TODO: needs-human`: 埋まらない節を捏造で埋めず、`domain_questions[]` に人への質問として返す
-4. 派生要約を作らない: source は正本 1 ファイルのみ
-5. kind は spawn prompt の `kind:` (`layer` / `domain` / `feature`) に従う。kind ごとに書くものは `_schema.md`「段と置き場所」
+3. doc と ADR は材料: spawn prompt の `doc_scope` (`doc/design/**` と ADR のうちその機能に関係するもの) も読む。そこから取った業務の決まりは `[?] TODO: needs-human` で置き、出典 (ファイル + 節) を添えて `domain_questions[]` で確かめる
+4. domain / why は `[?] TODO: needs-human`: 埋まらない節を捏造で埋めず、`domain_questions[]` に人への質問として返す
+5. 派生要約を作らない: source は正本 1 ファイルのみ
+6. kind は spawn prompt の `kind:` (`layer` / `domain` / `feature`) に従う。kind ごとに書くものは `_schema.md`「段と置き場所」
 
 結果は `proposed_spec_update` に `.claude/rules/_schema.md` の skeleton に沿った候補として返す
 (`[code]` は業務ルールを表す定数・分岐・制約だけ。業務の理由・用語・例外は `[?]` で置き、`domain_questions[]` と対にする)。
@@ -133,6 +135,12 @@ spawn prompt が `mode: trim` のとき、正本を段落ごとに `_schema.md`�
 | F | `delete` / `move` (残す価値がある判断は `move_to` に決定の行か DECISIONS / ADR) |
 
 分類に迷う段落は `ask` にする。`chars` はその段落の字数 (`chars().count()` 相当)。正本ファイルは write しない。
+
+spawn prompt が `mode: consolidate` のときは、`consolidate_from` の層の正本から `spec_path` の機能に効く業務の決まりの段落だけを同じ形で返す。
+
+- `section` は `.claude/rules/<layer>.md#<節>` (移し元) で書く
+- A・B に `move` を許す。`move_to` は `.claude/rules/<feature>.md#<節>` で、文言は変えない。移し先の段は `_schema.md`「段と置き場所」の判定手順で決める
+- `pointer_needed` は、その決まりが効くファイルに移し先の正本の `paths` が当たらない (共有ファイルにも効く) とき true。当たる正本は op-codev SKILL.md 1.5-1 と同じく `op spec-patrol list-specs` と jq で引く
 
 ## 7. health (正本をまたぐ重複・食い違い・散らばり)
 

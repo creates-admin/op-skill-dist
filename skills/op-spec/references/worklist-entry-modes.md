@@ -41,3 +41,30 @@ seed は大きさの warning が出ている正本。1 正本ずつ `references/
 op spec-patrol list-specs --json \
   | jq -r '.details.findings[] | select(.lens == "size" and .severity == "warn" and .feature != null) | "\(.feature)\t\(.rule_id)\t\(.message)"'
 ```
+
+## consolidate
+
+seed は機能地図で層の正本にしか覆われていない機能。人が機能名を指定してもよい。1 機能ずつ `references/spec-consolidate.md` の手順で移す (1-2 には合流しない)。
+
+```bash
+op spec-patrol coverage --json \
+  | jq -r '.details.feature_map.features[] | select(.state == "layer_only") | "\(.name)\t\(.specs | join(","))"'
+```
+
+## missing
+
+seed は機能地図で正本が `(未作成)` の機能。人が機能を指定してもよい (機能地図に行が無い機能も含む)。1 機能ずつ SKILL.md 2-4 の lazy 構築へ渡す (1-2 には合流しない。1 機能 1 PR)。
+
+```bash
+op spec-patrol coverage --json | jq -r '.details.feature_map.features[] | select(.state == "missing") | .name'
+```
+
+1. 機能ごとに feature キー (書き方は SKILL.md 2-4) と `paths` を人と決める (op-adopt の PR 本文に承認した地図があればそのキーと `paths` を示す)。
+2. 優先順を人と決める。目安は op-adopt SKILL.md フェーズ3 手順1 と同じ変更頻度と影響の大きさで、変更頻度は下の bash で示す。
+3. 2-4 の spawn で `code_scope` に `paths`、`doc_scope` に `doc/design/**` と ADR のうちその機能に関係するものを渡す。
+
+```bash
+: "${PATHS:?機能の paths (空白区切りの glob)}"
+set -f
+git log --since=6.months --name-only --format= -- $PATHS | grep -c .
+```

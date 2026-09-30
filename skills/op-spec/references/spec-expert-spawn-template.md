@@ -16,16 +16,20 @@ invocation_mode: op_managed
 
 # 照合タスク
 
-mode: <gather | lazy | trim>
+mode: <gather | lazy | trim | consolidate>
 feature: <feature id>
 kind: <layer | domain | feature>        # lazy 構築で人が選んだ種類 (既存正本なら frontmatter の kind)
-spec_path: .claude/rules/<feature>.md   # missing なら lazy 構築モード
+spec_path: .claude/rules/<feature>.md   # missing なら lazy 構築モード。consolidate では移し先
+consolidate_from:                       # consolidate の移し元 (機能地図の行の specs の層の正本)
+  - .claude/rules/<layer>.md
 target_issues: [#NN, #MM]               # この feature に紐づく pending issue
 issue_premises:                         # 各 issue が前提とする挙動 (controller が抽出)
   - issue: #NN
     premise: <issue が前提とする挙動 1 文>
 code_scope:                             # 読むべき code 範囲 (paths から)
   - <src/feature/**>
+doc_scope:                              # lazy 構築で読む doc/design/** と ADR のうちこの機能に関係するもの
+  - <doc/design/feature.md>
 
 # リポジトリ情報
 
@@ -34,7 +38,7 @@ repo_root: <git rev-parse --show-toplevel の結果>
 # 指示
 
 expert-spec の手順で正本 ⟷ code ⟷ issue 前提を照合し、「4. 返却契約スキーマ」で返す。正本は write しない (proposed_spec_update を返すまで)。
-mode: trim なら照合せず、expert-spec「6. trim (正本を細くする)」の trim_plan[] で返す。
+mode: trim / consolidate なら照合せず、expert-spec「6. trim (正本を細くする)」の trim_plan[] で返す。
 
 You must not ask interactive questions.
 You must not ask the commander or user for clarification.
