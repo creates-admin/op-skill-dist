@@ -19,8 +19,8 @@ status: draft
 <!-- 自動生成: `op spec-patrol rebuild-index --apply` が各正本の frontmatter から再生成する。表を手で編集しない (概要 列は保持される)。 -->
 <!-- 索引除外: `_` prefix / `00-` prefix の meta ファイルは載せない。 -->
 
-| feature | paths | status | 概要 |
-|---|---|---|---|
+| feature | kind | paths | status | 概要 |
+|---|---|---|---|---|
 
 ## Part 3: 機能地図
 
