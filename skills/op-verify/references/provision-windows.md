@@ -12,7 +12,7 @@ Claude が不足を見つけて提案し、人間が承認し (AskUserQuestion �
 
 ## 1. スクリプトの場所
 
-plugin root (skill_dir の 2 つ上) の `scripts/` に 2 本があればそれを使う。無ければ op-skill の checkout のパスを人間に聞いてその `scripts/` を使い、checkout が無ければ終了する。
+plugin root (skill_dir の 2 つ上) の `scripts/` にある 2 本を使う (dist にも同梱される)。無いのは古い dist やローカル symlink 以外の配置のときだけで、そのときは op-skill の checkout のパスを人間に聞いてその `scripts/` を使い、checkout が無ければ終了する。
 以降の fence の `<scripts>` はその絶対パス、`<scripts_win>` は `wslpath -w <scripts>` の結果、`<cache>` は `--windows-cache` (既定 `C:\op-verify`)、`<cache_wsl>` は `wslpath -u '<cache>'` の結果。
 
 ## 2. 検出 (何も変えない)
