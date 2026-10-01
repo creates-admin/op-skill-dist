@@ -131,7 +131,7 @@ human と対話して食い違いを解消する。align できた fact のみ�
 feature キーが決まっていなければ、機能地図の表示名から op-adopt SKILL.md フェーズ3 手順1 のキーの書き方で人と決め、`feature:` と `spec_path` に使う。
 spec-expert に code から正本 skeleton 候補を抽出させ、2-3 の align (`domain_questions` の聞き取りを含む) を経て構築する。
 手順は `expert-spec/SKILL.md`「lazy 構築」節。
-正本を write したら、constitution Part 3 (機能地図) の該当行の正本列を `(未作成)` から feature キーに更新する (行が無ければ機能名と feature キーの行を足す)。
+正本を write したら、`.claude/rules/_index.md` の機能地図の該当行の正本列を `(未作成)` から feature キーに更新する (行が無ければ機能名と feature キーの行を足す)。
 
 ---
 
@@ -161,7 +161,7 @@ cross-feature 依存が見つかったら `[[feature/section]]` で正本どう�
 
 - 「関連 (Links)」節に `- [[<related-feature>/<section>]] — <関係の説明>` を追記する
 - 特定の決定に紐づくなら該当決定行にも `([[feature/section]], realizes #NN)` を付ける
-- 解決先は `00-constitution.md` Part 2 索引の feature キー。索引に無い feature は `[?]` で残すか human に確認する
+- 解決先は各正本の frontmatter の feature キー (`op spec-patrol list-specs`)。キーが無い feature は `[?]` で残すか human に確認する
 - 関係の説明にも provenance を付ける: `[code]` (import / 呼び出しを Read 確認) / `[human]` (出典付き) / `[?] TODO: needs-human` (推測)
 
 リンク検証・逆参照・索引生成は op-spec-patrol の担当。op-spec は `[[]]` を張るだけ。
@@ -226,4 +226,4 @@ grep -rlE "\[\[${F}(/|\]\])" .claude/rules/*.md 2>/dev/null | grep -v "/${F}\.md
 op-spec は正本 (`.claude/rules/<feature>.md`) を write する mutation 責務を持つ (CLAUDE.md 不変則9 の例外)。
 write は human align gate 通過後のみ。spec-expert worker は read-only で、write は op-spec controller のみ。
 write には trim の削除 (消える文言の一覧を人が承認した後)、集約の移動 (移し先への追記と層の正本からの削除。移す文言の一覧を人が承認した後)、`_schema.md` の追従 (フェーズ0、承認後の追記)、
-constitution Part 3 (機能地図) の行の更新と追加を含む。
+`_index.md` の機能地図の行の更新と追加を含む (索引表は `rebuild-index` の担当で書かない)。

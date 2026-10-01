@@ -11,7 +11,7 @@ Direct Mode 固定 (`_shared/invocation-mode.md`「Direct 固定 skill に op_ma
 ## 不変則9 例外宣言
 
 op-adopt は人間が承認した地図から、層の正本 (`kind: layer`) の骨組み (frontmatter と空の 6 節。status は `unverified`) だけを
-書く。業務領域・機能の正本と constitution の Part 3 は書かない (op-spec が書く)。事実・決定・用語は書かない (中身は op-spec が human align 後に書く)。それ以外の書き込みはテンプレートの配置と設定ファイルだけ。
+書く。業務領域・機能の正本と `_index.md` の機能地図は書かない (op-spec が書く)。事実・決定・用語は書かない (中身は op-spec が human align 後に書く)。それ以外の書き込みはテンプレートの配置と設定ファイルだけ。
 
 ## フェーズ0: 診断 (read-only)
 
@@ -20,7 +20,7 @@ op-adopt は人間が承認した地図から、層の正本 (`kind: layer`) の
 | 領域 | 確認 | 済の条件 |
 |---|---|---|
 | 基盤 | `op-config.yaml` の有無 (ラベルは判定しない。フェーズ1 の `op repo init` は冪等) | ファイルあり |
-| 正本の土台 | `.claude/rules/_schema.md` と `00-constitution.md` | 両方あり |
+| 正本の土台 | `.claude/rules/_schema.md` と `00-constitution.md` と `_index.md` | 3 つともあり。`_index.md` だけ無い旧形式は、constitution に機能地図があれば `rebuild-index` が作って移し、無ければテンプレートを置く (フェーズ2) |
 | 正本の中身 | `op spec-patrol list-specs`、主要ディレクトリ構成 | 主要な層に `kind: layer` の正本がある (status 問わず。kind 未指定の正本は済に数えず、フェーズ3 の地図で「済 (kind 未指定)」として扱う) |
 | デザインシステム | UI の有無 (`package.json` / `pubspec.yaml` 等)、`op-config.yaml` の `design_system` | UI 無し、または設定あり |
 | 実機検証ハーネス | `op-config.yaml` の `verify_harness` 節の有無 (`_shared/op-config-schema.md` §14) | 宣言あり |
@@ -37,8 +37,9 @@ op-adopt は人間が承認した地図から、層の正本 (`kind: layer`) の
 
 ## フェーズ2: 正本の土台
 
-`~/.claude/skills/_shared/templates/rules-schema.md` → `.claude/rules/_schema.md`、`rules-constitution.md` → `.claude/rules/00-constitution.md`
-として置く (既にあれば触らない)。
+`~/.claude/skills/_shared/templates/rules-schema.md` → `.claude/rules/_schema.md`、`rules-constitution.md` → `.claude/rules/00-constitution.md`、
+`rules-index.md` → `.claude/rules/_index.md` として置く (既にあれば触らない)。
+既存の constitution に機能地図 (`| 機能 | 正本 | 備考 |` の表) がある旧形式では `_index.md` のテンプレートを置かず、フェーズ3 手順4 の `rebuild-index --apply` に作らせて移す (機能地図も移る)。索引表だけの旧形式ではテンプレートを置く (`rebuild-index` は機能地図節を持たない `_index.md` を作るため)。
 `.claude/rules/` が git の追跡対象になっていることを確認する (`.gitignore` で除外されていないか)。
 
 ## フェーズ3: 構造の承認と層の骨組み
@@ -56,11 +57,11 @@ op-adopt は人間が承認した地図から、層の正本 (`kind: layer`) の
 3. 承認された層のうち正本が無いものだけ、`_schema.md` の skeleton で `.claude/rules/<key>.md` を作る
    (`kind: layer`、`status: unverified`、各節は空。概要は scope 行だけに書く)。業務領域と機能の正本は作らない。
    kind 未指定の正本と paths が重なる層は作らず、その正本の kind は `/op-skill:op-spec` (フェーズ3-1) で足すよう案内する。
-4. `op spec-patrol list-specs` で block (同じ kind 同士、または kind 未指定の正本との paths の重なり) が無いことを確認し、`op spec-patrol rebuild-index --apply --yes` で索引を作る。
+4. `op spec-patrol list-specs` で block (同じ kind 同士、または kind 未指定の正本との paths の重なり) が無いことを確認し、`op spec-patrol rebuild-index --apply --yes` で constitution のキー一覧と `_index.md` の索引表を作る。
    kind 未指定の正本との重なりで block したら、手順3 で作ったその層の正本を消して再確認する。
-   索引の 概要 列の placeholder を承認された 1 行概要に置き換える。
+   `_index.md` の索引表の 概要 列の placeholder を承認された 1 行概要に置き換える。
 5. デザインシステム (UI 部品・トークン・カタログ) は地図に含めない (フェーズ4 の `design-system` 正本が持つ)。
-6. 承認した地図の業務領域と機能を `/op-skill:op-spec` (mode `missing`) で優先度順に作る。constitution の Part 3 (機能地図) の行も op-spec が書く、と案内する (本 skill では作らない)。
+6. 承認した地図の業務領域と機能を `/op-skill:op-spec` (mode `missing`) で優先度順に作る。`_index.md` の機能地図の行も op-spec が書く、と案内する (本 skill では作らない)。
 
 ## フェーズ4: デザインシステム
 

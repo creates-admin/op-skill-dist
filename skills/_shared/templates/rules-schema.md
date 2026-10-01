@@ -14,7 +14,7 @@ status: draft
 ```yaml
 ---
 paths: ["src/billing/**"]   # この正本を構成するファイルの glob。同じ kind の正本間で重複させない
-feature: billing            # 一意 id (constitution 索引のキー)
+feature: billing            # 一意 id (索引のキー)
 status: draft               # cultivated (3 者照合済み) | draft | unverified (code 由来の抽出のみ)
 kind: feature               # 任意。layer | domain | feature
 budget_override: <理由>     # 任意。大きさの上限を超えてよい理由
@@ -51,10 +51,15 @@ A か D か迷うものは削らず人に聞く。
 
 | 段 | 正本 | 書くもの |
 |---|---|---|
-| 0 | constitution (`00-constitution.md`) | repo 全体の不変則・索引・機能地図 |
+| 0 | constitution (`00-constitution.md`) | repo 全体の不変則・kind ごとの正本のキー一覧・`_index.md` への案内 |
 | 1 | `kind: layer` | その層の共通の作り方だけ |
 | 1.5 | `kind: domain` | 2 つ以上の機能に共通する業務の決まり・用語だけ。共通の決まりが出たときだけ作る |
 | 2 | `kind: feature` | その機能だけの業務の決まり |
+
+索引:
+
+- 全 kind の正本の索引表 (`feature | kind | paths | status | 概要`) と機能地図は `.claude/rules/_index.md` に置く。constitution には書かない。
+- 索引表と constitution のキー一覧は `op spec-patrol rebuild-index` が再生成する。機能地図の行は op-spec が書く。
 
 置き場所:
 
@@ -73,7 +78,7 @@ A か D か迷うものは削らず人に聞く。
 | 段 | 良い例 | 悪い例 (→ 正しい置き場所) |
 |---|---|---|
 | constitution | 個人情報をログに出さない | 請求の締め日は月末 (→ 機能) |
-| constitution | 正本の索引と機能地図 | API のエラーは共通のエラー型で返す (→ 層) |
+| constitution | 正本のキー一覧と `_index.md` への案内 | API のエラーは共通のエラー型で返す (→ 層) |
 | 層 | API のエラーは共通のエラー型で返す | 受注の取消は出荷前だけ許す (→ 機能) |
 | 層 | 画面は登録済みの部品だけで組む | 画面の部品のファイル名の一覧 (→ 書かない。D) |
 | 業務領域 | 受注と請求で共通の「顧客」の定義と与信の上限の扱い | 受注の入力画面だけで使う上限 (→ 機能) |
@@ -109,7 +114,7 @@ A か D か迷うものは削らず人に聞く。
 
 ## 索引から除外するファイル
 
-`_` prefix (本ファイル) と `00-` prefix (`00-constitution.md`) は feature 索引に載せない。
+`_` prefix (本ファイルと `_index.md`) と `00-` prefix (`00-constitution.md`) は正本の索引に載せない。
 
 ## skeleton
 

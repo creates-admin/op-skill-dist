@@ -19,6 +19,7 @@ description: canonical spec (.claude/rules/) を警備員的に巡回するス�
 
 op-spec-patrol は機械 drift のうち fix が決定論的に確定するもの (`rebuild-index` / `cite-downgrade`) だけを
 auto-fix する mutation 責務を持つ (CLAUDE.md 不変則9 の例外)。
+`rebuild-index` が書くのは constitution のキー一覧と `_index.md` の索引表で、constitution に索引表・機能地図がある旧形式は中身を変えずに `_index.md` へ移す。機能地図の中身を書き換えるのは op-spec だけ。
 それ以外の機械 drift は検出のみ (修正先は人間判断)。domain drift は auto-fix も起票もせず、正本も書き換えない
 (正本 write は op-spec が human align 後に行う)。
 
@@ -52,10 +53,10 @@ op spec-patrol score --last-patrolled-at <feature>=<RFC3339> ...   # area_state 
 ```bash
 op spec-patrol list-specs --json       # paths overlap / kind / 大きさ
 op spec-patrol check-links --json      # [[]] link・本文中のパスと節・op-spec-ref の参照切れ
-op spec-patrol coverage --json         # 読み込み量の上位 / 覆われていないパス / 機能地図 (constitution Part 3)
+op spec-patrol coverage --json         # 読み込み量の上位 / 覆われていないパス / 機能地図 (`_index.md`)
 op spec-patrol health --previous-state "$PREV_STATE_JSON" --json > "$HEALTH_JSON"   # 健康状態の要約と前回比 (delta)
 op spec-patrol cite-downgrade --json   # dry-run: 出典欠落 [human] の降格予定
-op spec-patrol rebuild-index --json    # dry-run: 索引表の再生成差分
+op spec-patrol rebuild-index --json    # dry-run: constitution と _index.md の再生成差分 (details.planned_constitution / planned_index)
 ```
 
 機械 drift の種類 (一覧の正本はこの表):
@@ -71,7 +72,7 @@ op spec-patrol rebuild-index --json    # dry-run: 索引表の再生成差分
 | `R-SPEC-LINK-DEAD-PATH` / `R-SPEC-LINK-DEAD-DOC-SECTION` / `R-SPEC-REF-DEAD` | check-links | warn | 報告 (人間判断) |
 | `R-SPEC-UNCOVERED-PATH` | coverage | info | 報告 |
 | `R-SPEC-FEATURE-MISSING` | coverage | info | op-spec の missing |
-| `R-SPEC-FEATURE-DEAD-KEY` | coverage | warn | 報告: Part 3 の行を実在する正本キーに直す (op-spec、人がキーを決める) |
+| `R-SPEC-FEATURE-DEAD-KEY` | coverage | warn | 報告: `_index.md` の機能地図の行を実在する正本キーに直す (op-spec、人がキーを決める) |
 | `R-SPEC-FEATURE-LAYER-ONLY` | coverage | info | op-spec の consolidate |
 | `R-SPEC-CITE-HUMAN-NO-SOURCE` / `R-SPEC-CITE-NEEDS-HUMAN` | cite-downgrade | warn / info | Phase 3 で auto-fix |
 | `R-SPEC-INDEX-NEW-FEATURE` / `R-SPEC-INDEX-STALE-FEATURE` | rebuild-index | info / warn | Phase 3 で auto-fix |
@@ -90,10 +91,11 @@ op spec-patrol rebuild-index --json    # dry-run: 索引表の再生成差分
 Phase 2 の dry-run に差分があるものだけ適用する (対話は承認後、`--auto` は自動):
 
 ```bash
-op spec-patrol rebuild-index --apply --yes    # constitution Part 2 索引を再生成
+op spec-patrol rebuild-index --apply --yes    # constitution のキー一覧と _index.md の索引表を再生成 (旧形式は _index.md へ移す)
 op spec-patrol cite-downgrade --apply --yes   # 出典欠落 [human] → [?] TODO: needs-human
 ```
 
+`rebuild-index` の `warnings` (機能地図が constitution と `_index.md` の両方にある等、移せなかったもの) は適用後も残るので、Phase 7 で人間判断として報告する。
 Phase 2 の表で行き先が auto-fix でないものは fix を生成せず、Phase 5 で振り分ける。
 
 ### Phase 4: domain drift 監査
@@ -117,7 +119,7 @@ args 規約と `.result` の unwrap は `_shared/workflow-calling.md`。
 - 機械 drift: Phase 2 の表の行き先に従う。auto-fix 以外は起票しない。
 - 消す候補 (大きさの警告と、中身の内訳の D・E・F): op-spec の trim へ回す。上限内の正本の D・E・F は報告だけにする。
 - 正本の無い機能 (`R-SPEC-FEATURE-MISSING`): op-spec の missing へ回す。
-- 正本列に実在しないキーがある機能 (`R-SPEC-FEATURE-DEAD-KEY`): Part 3 の行を実在する正本キーに直す (op-spec、人がキーを決める) として報告する。
+- 正本列に実在しないキーがある機能 (`R-SPEC-FEATURE-DEAD-KEY`): `_index.md` の機能地図の行を実在する正本キーに直す (op-spec、人がキーを決める) として報告する。
 - 層の正本にしか覆われていない機能 (`R-SPEC-FEATURE-LAYER-ONLY`): op-spec の consolidate へ回す。
 - 重複・食い違い (confirmed): `.result.health.drift_counts` を Phase 6 の `--drift-count <feature>=duplicate:<N>` / `=conflict:<N>` で Ledger に記録し、op-spec の drift-driven に乗せる。
 - 散らばり (`scatter`): 報告だけにする。

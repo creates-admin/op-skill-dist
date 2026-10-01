@@ -146,7 +146,7 @@ spawn prompt が `mode: consolidate` のときは、`consolidate_from` の層の
 
 ## 7. health (正本をまたぐ重複・食い違い・散らばり)
 
-spawn prompt が `mode: health` のとき、全正本・constitution (Part 3 は機能地図)・CLAUDE.md を読み、次の JSON で返す。
+spawn prompt が `mode: health` のとき、全正本・`_index.md` (機能地図)・constitution (不変則)・CLAUDE.md を読み、次の JSON で返す。
 
 ```json
 {

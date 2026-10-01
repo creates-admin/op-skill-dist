@@ -238,3 +238,13 @@ test("normalizeArgs は args.health のとき args.specs を必須にする", ()
   assert.throws(() => na.run({ ...base, health: true }), /args.specs/);
   assert.equal(na.run({ ...base, health: true, specs: [{ feature: "x", spec_path: "x.md" }] }).health, true);
 });
+
+test("buildHealthPrompt は機能地図の読み先に _index.md を既定で示し、index 引数で差し替えられる", () => {
+  const pf = loadPureFns("op-spec-patrol-audit.js", {
+    consts: ["DATA_LINE"],
+    functions: ["buildHealthPrompt"],
+  });
+  const base = { today: "2026-10-01", run_id: "r", specs: [{ feature: "x", spec_path: "x.md" }] };
+  assert.match(pf.buildHealthPrompt(base), /機能地図.*\.claude\/rules\/_index\.md/);
+  assert.match(pf.buildHealthPrompt({ ...base, index: "docs/_index.md" }), /機能地図.*docs\/_index\.md/);
+});

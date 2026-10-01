@@ -169,7 +169,7 @@ spec_budget:
 
 | key | 型 | default | 意味 |
 |---|---|---|---|
-| `constitution_max_chars` | int | `4000` | constitution (`list-specs --constitution`、既定 `<rules-dir>/00-constitution.md`) の上限 |
+| `constitution_max_chars` | int | `4000` | constitution (`list-specs --constitution`、既定 `<rules-dir>/00-constitution.md`) の上限。`_index.md` は対象外 |
 | `layer_max_chars` | int | `5000` | `kind: layer` の正本 1 本の上限 |
 | `domain_max_chars` | int | `6000` | `kind: domain` の正本 1 本の上限 |
 | `feature_max_chars` | int | `12000` | `kind: feature` と kind 未指定の正本 1 本の上限 |
