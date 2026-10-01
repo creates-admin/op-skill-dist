@@ -6,7 +6,7 @@ status: draft
 # constitution — 横断不変則 + feature 正本 索引
 
 常時ロードされる薄い索引。各 feature の WHAT は `.claude/rules/<feature>.md` が正本。
-`[[feature/section]]` は Part 2 の feature キーで解決する。
+`[[feature/section]]` は各正本の frontmatter の feature キーで解決する。
 
 ## Part 1: 横断不変則 (repo-wide MUST)
 
@@ -16,16 +16,11 @@ status: draft
 
 ## Part 2: feature 正本 索引 (自動生成)
 
-<!-- 自動生成: `op spec-patrol rebuild-index --apply` が各正本の frontmatter から再生成する。表を手で編集しない (概要 列は保持される)。 -->
+<!-- 自動生成: `op spec-patrol rebuild-index --apply` が正本の frontmatter の kind と feature キーから再生成する。手で編集しない。 -->
 <!-- 索引除外: `_` prefix / `00-` prefix の meta ファイルは載せない。 -->
 
-| feature | kind | paths | status | 概要 |
-|---|---|---|---|---|
+層の正本のキー: (なし)
+業務領域の正本のキー: (なし)
+機能の正本のキー: (なし)
 
-## Part 3: 機能地図
-
-<!-- 機能地図: op-spec が書く。正本列は feature キー (複数はカンマ区切り) か (未作成)。op spec-patrol coverage が網羅を調べる。 -->
-<!-- 正本列には kind: domain の正本のキーも書ける (業務の正本として数える)。 -->
-
-| 機能 | 正本 | 備考 |
-|---|---|---|
+正本の概要・paths と機能地図は `.claude/rules/_index.md` にある (正本を Read すると一緒に読み込まれる)。
