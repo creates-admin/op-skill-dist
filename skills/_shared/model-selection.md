@@ -146,7 +146,7 @@ read-only = repo のコードを変更しない spawn (文章生成も含む)。
 | op-scan / op-patrol | audit (パターン1) |
 | refute | skeptic spawn (`refute-contract.md`) |
 | op-run | investigation (`op-run-discover`)、post-check / aux post-check、global review 全 phase |
-| Utility Worker | `spec-expert` (op-spec / op-spec-patrol)、`scout` (op-report) |
+| Utility Worker | `spec-expert` (op-spec / op-spec-patrol)、`scout` (op-report / op-intake) |
 | op-codev | Step A (explore)、Step C (verify)、Review 選択 2 (review-expert) |
 | op-explore / デザインモック | designer-expert の既存 design system 要約 (`design-mock.md`) |
 

@@ -32,6 +32,7 @@ controller が計算して渡す。起票テンプレは `pr-templates.md`「op-
 | op-scan の scan finding | controller (op-scan フェーズ2-2)。expert は生成しない |
 | op-patrol の scan finding | controller (op-patrol フェーズ5)。expert は生成しない |
 | op-report の起票 | controller (op-report フェーズ 3)。scout は生成しない |
+| op-intake の起票 | controller (op-intake 手順 2。scout の報告は手順 3 の dedup envelope から) |
 | review finding / post-check finding | agent (review-expert / post-check expert) |
 | architecture_debt 追跡キー (`op-fingerprint-bulk`) | controller (op-scan / op-patrol)。refactor-expert は `bulk_group` / `affected_paths` を埋めるだけ |
 | op-plan / op-architect の起票前 dedup | controller |

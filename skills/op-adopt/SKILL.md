@@ -1,6 +1,6 @@
 ---
 name: op-adopt
-description: OP 未適用の既存プロジェクトを OP の運用へ移行するスキル。現状を診断し、基盤 (ラベル・op-config.yaml)、正本 (.claude/rules の書式・索引・層 / 業務領域 / 機能の地図の承認・層の骨組み)、デザインシステム (op-component --init への引き渡し)、実機検証ハーネス (op-verify --init への引き渡し) を、人間の承認を挟みながら段階的に導入する。何度実行しても未導入の分だけを進める。「op-adopt」「移行」「導入」「OP 化」「既存プロジェクトに適用」等のキーワードで起動。
+description: OP 未適用の既存プロジェクトを OP の運用へ移行するスキル。現状を診断し、基盤 (ラベル・op-config.yaml・REVIEW.md)、正本 (.claude/rules の書式・索引・層 / 業務領域 / 機能の地図の承認・層の骨組み)、デザインシステム (op-component --init への引き渡し)、実機検証ハーネス (op-verify --init への引き渡し) を、人間の承認を挟みながら段階的に導入する。何度実行しても未導入の分だけを進める。「op-adopt」「移行」「導入」「OP 化」「既存プロジェクトに適用」等のキーワードで起動。
 ---
 
 # op-adopt: 既存プロジェクトの OP 移行
@@ -19,7 +19,7 @@ op-adopt は人間が承認した地図から、層の正本 (`kind: layer`) の
 
 | 領域 | 確認 | 済の条件 |
 |---|---|---|
-| 基盤 | `op-config.yaml` の有無 (ラベルは判定しない。フェーズ1 の `op repo init` は冪等) | ファイルあり |
+| 基盤 | `op-config.yaml` とルートの `REVIEW.md` の有無 (ラベルは判定しない。フェーズ1 の `op repo init` は冪等) | 両方あり (無いものだけフェーズ1 で入れる) |
 | 正本の土台 | `.claude/rules/_schema.md` と `00-constitution.md` と `_index.md` | 3 つともあり。`_index.md` だけ無い旧形式は、constitution に機能地図があれば `rebuild-index` が作って移し、無ければテンプレートを置く (フェーズ2) |
 | 正本の中身 | `op spec-patrol list-specs`、主要ディレクトリ構成 | 主要な層に `kind: layer` の正本がある (status 問わず。kind 未指定の正本は済に数えず、フェーズ3 の地図で「済 (kind 未指定)」として扱う) |
 | デザインシステム | UI の有無 (`package.json` / `pubspec.yaml` 等)、`op-config.yaml` の `design_system` | UI 無し、または設定あり |
@@ -34,6 +34,8 @@ op-adopt は人間が承認した地図から、層の正本 (`kind: layer`) の
 - ラベル: 診断の「済」にかかわらず、canonical ラベルの作成を確認して承認後に `op repo init` を実行する (既存ラベルは skip される。
   `--dry-run` は作成済みかを判定せず全件を列挙するだけなので判定に使わない)。
 - `op-config.yaml`: 無ければ空に近い最小ファイルを作る (値は推測で埋めない。キーの意味は `_shared/op-config-schema.md`)。
+- `REVIEW.md`: ルートに無ければ `references/review-md-template.md` の 3 つの値 (重要とするもの・毎回見ること・レビューしないパス) を人間に聞いて埋めた案を見せ、承認後に置く。
+  重要とするものが無ければその行を消し、毎回見ることは「なし」から始める。2 つ目のコメント (置き換える値) は消し、1 つ目 (ルールを足す基準) は残す。既にあれば触らない。
 
 ## フェーズ2: 正本の土台
 
@@ -74,7 +76,7 @@ UI を持つ repo で `design_system` が未設定なら、`/op-skill:op-compone
 ## フェーズ6: commit と PR
 
 - branch は `auto/adopt-<YYYYMMDD-HHMMSS>` (`_shared/worktree-ops.md`)。フェーズ1〜3 の変更を 1 PR にまとめる。
-- `op pr create`。本文に診断表 (前後)、承認した地図 (kind・キー・paths・概要・優先度。作った層の正本と、op-spec へ渡す業務領域・機能の別)、次にやること (`/op-skill:op-spec` (mode `missing`) の順番、`/op-skill:op-component --init`、`/op-skill:op-verify --init`、`/op-skill:op-doctor`) を書く。
+- `op pr create`。`.claude/` と `REVIEW.md` も含めて自分で commit する。本文に診断表 (前後)、承認した地図 (kind・キー・paths・概要・優先度。作った層の正本と、op-spec へ渡す業務領域・機能の別)、次にやること (`/op-skill:op-spec` (mode `missing`) の順番、`/op-skill:op-component --init`、`/op-skill:op-verify --init`、`/op-skill:op-doctor`) を書く。
 - マージは `/op-skill:op-merge` または人間が GitHub で行う。
 
 ## 完了報告

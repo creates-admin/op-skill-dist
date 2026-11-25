@@ -35,7 +35,7 @@ op-scan / op-patrol / op-run の routing・cluster 化の対象外。spawn 時�
 
 | Agent | Skill directory | 呼び出し元 |
 |---|---|---|
-| `scout` | `skills/expert-scout/` | op-report |
+| `scout` | `skills/expert-scout/` | op-report / op-intake |
 | `spec-expert` | `skills/expert-spec/` | op-spec / op-spec-patrol |
 | `verify-runner` | `skills/expert-verify/` | op-run (CO の runtime verify 段) / op-codev (verify フェーズ) / op-verify |
 
