@@ -41,7 +41,7 @@ UX/UI 専門監査は ux-ui-audit-expert、security 深掘りは security-expert
 
 ### correctness 候補列挙の下請け invoke (optional)
 
-`Skill(op-skill:op-code-review)` を correctness 候補の列挙に使ってよい (例: `args: "diff: origin/<BASE_REF>...HEAD effort: high"`)。
+built-in の `Skill(code-review)` を read-only (`--fix` / `--comment` なし) で correctness 候補の列挙に使ってよい (例: `args: "high <PR の head branch>"`)。`origin/<BASE_REF>...HEAD` の外の指摘は捨てる。
 
 - 返却は **候補**。最終判定・severity・lens 割当・finding 化は自分で行う (JSON を転記しない)。
 - apply 側の自己検証と重複する finding は独立再確認として扱う。

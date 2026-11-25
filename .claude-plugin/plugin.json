@@ -7,5 +7,5 @@
     "name": "creates-admin",
     "email": "miyai@d-creates.jp"
   },
-  "description": "Claude Code 用 OP skill / expert agent パッケージ。op-* ワークフロー skill (23) と expert agent (12) を同梱し、Issue 起票から worktree 実装・レビュー・マージまでを自律駆動する。"
+  "description": "Claude Code 用 OP skill / expert agent パッケージ。op-* ワークフロー skill (22) と expert agent (12) を同梱し、Issue 起票から worktree 実装・レビュー・マージまでを自律駆動する。"
 }

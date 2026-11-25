@@ -187,13 +187,13 @@ Agent({
     <§rules>
     既存パターンを模倣して実装する。PR は作成せず commit のみ (push しない)。
 
-    【実行順序】checklist「2-A. commit 先行経路」の順 (commit → 自己検証 → Critical/High のみ追加 commit)。
-    自己検証は Skill({skill: "op-skill:op-code-review"}) を自分の変更差分に対して実行する (effort 指定なし)。
-    手動 fallback は checklist「手動 fallback の発動条件」を満たす場合のみ。子 agent にレビューを委任しない。
+    【実行順序】checklist「2-A. commit 先行経路」の順 (commit → 自己検証 → important のみ追加 commit)。
+    自己検証は Skill({skill: "code-review", args: "high <BRANCH_NAME>"}) を実行し、<IU_BASE_SHA>...HEAD の外の指摘は外す。
+    呼べなかったときは checklist「呼べないとき」に従う。子 agent にレビューを委任しない。
 
     【完了報告】~/.claude/skills/_shared/expert-report-schemas.md「修正完了報告 schema」で返す。
     commits_added (SHA 文字列の配列、1 件以上) / self_review_result / self_check_blocked / code_review_invoked / code_review_result は必須。
-    op-code-review の findings 配列をそのまま完了報告として返さない (code_review_result / self_review_result に要約する)。
+    code-review の findings 配列をそのまま完了報告として返さない (code_review_result / self_review_result に要約する)。
     加えて「手本にした既存ファイル」「再利用した既存資産」を書く (空欄は silent fork 兆候として不可)。
 
     <§4>
@@ -235,13 +235,13 @@ Agent({
     変更ファイル: <Step B の modified_files>
     <§rules>
 
-    1. Skill({skill: "op-skill:op-code-review", args: "diff: <IU_BASE_SHA>...HEAD effort: high"}) を実行する
-    2. 返却された findings をそのまま報告する。severity を独自に格下げしない
+    1. Skill({skill: "code-review", args: "high <BRANCH_NAME>"}) を実行する (read-only。--fix / --comment を付けない)
+    2. 返却された findings のうち対象 diff の中のものをそのまま報告する (branch 全体が対象になるので、前の IU の分は外す)。severity を独自に格下げしない
     3. IU ゴールに対する未達 (実装漏れ / goal と挙動の食い違い) は findings とは別に goal_gap[] で報告する
 
     禁止: ファイル修正 / commit / push。findings をゼロ件に見せるための取り繕い。
-    報告に含める: code_review_invoked (false なら理由) / findings (op-code-review の JSON 配列そのまま) /
-    goal_gap: [] / review_verdict: "pass" | "needs_fix" (Critical / High が 1 件でもあれば needs_fix)
+    報告に含める: code_review_invoked (false なら理由) / findings (code-review の JSON 配列そのまま) /
+    goal_gap: [] / review_verdict: "pass" | "needs_fix" (対象 diff の中の important が 1 件でもあれば needs_fix。pre_existing は数えない)
 
     <§4>
   `
@@ -255,7 +255,7 @@ Agent({
 - コミット (SHA と要約) / commit verify の decision (block なら blocking_reasons と retry で解消したか)
 - 変更ファイル / 手本にした既存ファイル / 再利用した既存資産
 - 自己検証 (`code_review_invoked` / `code_review_result`、invoked: false なら理由)
-- 独立レビュー: review_verdict と model / Critical・High の各 file:line + summary / Medium・Low の件数 / goal_gap
+- 独立レビュー: review_verdict と model / important の各 file:line + summary / nit の件数 / goal_gap
 - `needs_human_decision` / trivial な判断 (変数名・文言) の完了報告上の記載
 
 `review_verdict: "needs_fix"` のときは「そのまま進める」を既定にしない。修正して Step B 再実行 / 親判断で許容して Step C、

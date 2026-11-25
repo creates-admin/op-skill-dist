@@ -50,7 +50,7 @@ interface ClusterOrchestratorInput {
   base_ref:   string;            // OP_RUN_BASE_REF (base_sha と整合させるのは呼出側の責務)
   ts:         string;            // bundle-level run timestamp
   session_id: string;            // OP_RUN_SESSION_ID (controller が払い出す)
-  code_review_effort?: string;   // model-selection.md §5.5 由来。未指定 / auto なら effort 引数なし
+  code_review_effort?: string;   // model-selection.md §5.5 由来。未指定 / auto なら high
 }
 ```
 
@@ -124,7 +124,7 @@ ${ISSUE_DIRECTIVES_TEXT}
 apply-expert がフェーズ2 の中で実施する。手順の正本は `references/apply-prompt-directives.md`「自己検証」節と
 `_shared/apply-completion-checklist.md`「2-A. commit 先行経路」。CO は返却値を読むだけで、指示を重ねて書かない。
 
-- `self_check_blocked: true` = 再検証後も Critical/High が残った、または修正不能。
+- `self_check_blocked: true` = 再検証後も Critical / High に当たる指摘が残った、または修正不能。
 - `status: completed` の完了報告で `self_review_result` / `self_check_blocked` が欠落、または完了報告自体が返らない場合は
   fail-closed: フェーズ4 に進まず、apply-expert に再返却を求めるか人間 gate へ回す
   (`status: blocked` / `partial` の escalation 報告はそのまま人間 gate)。

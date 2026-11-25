@@ -45,7 +45,7 @@ description: Issue 番号から、実装 → 検証 → /code-review → draft P
 ## Step 4. 自己レビュー
 
 1. push 前に `/code-review` を差分に回す (effort は既定 `medium`、大きい差分・危ない場所は `high`)。`/code-review` は別の context で走る (不変則 9)。
-   使えない環境では `op-code-review` skill を Agent で別の context に回す。
+   使えない環境では、Agent (別の context、read-only) に差分の correctness レビューを頼む。それもできなければ PR 本文に書いて人に上げる。
 2. 指摘は `references/watch-pass.md`「レビューの指摘」と同じ扱いで直す。
 3. 直したら Step 3 のうち関係するものを再実行する。
 

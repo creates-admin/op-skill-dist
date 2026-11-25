@@ -24,21 +24,19 @@ controller 側の検証は `apply-completion-verify.md`。
 
 ### code-review skill 名と effort-level
 
-- invoke 先は `Skill({skill: "op-skill:op-code-review"})`。手順・出力形式の正本は op-code-review skill。
-  built-in `/code-review` ではなく本 skill を使う (固定 JSON 契約・read-only・single-context で controller が機械的に扱えるため)。
-- controller が `code_review_effort` を渡した場合は `args: "effort: <effort>"` を付ける。`auto` / 未指定なら引数なし (既定 high)。
+- invoke 先は built-in の `Skill({skill: "code-review", args: "<effort> <target>"})`。read-only で使う (`--fix` / `--comment` を付けない)。
+  target は commit 前 (§2) なら付けない (working tree の差分を見る)、commit 後 (§2-A) なら自分の branch。
+- branch を target にすると default branch との差分が対象になる。base が default branch でないとき (積み重ね・op-codev の IU・
+  default branch に無い `OP_RUN_BASE_SHA`) は、自分の diff (`<base>...HEAD`) の外の指摘を外す。
+- findings の severity は `important` (merge 前に直すべき不具合。Critical / High より広い) / `nit` / `pre_existing` (diff の外の既存の不具合)。
+  自己修正するのは important だけ。nit と pre_existing は code_review_result に書いて formal review に委ねる。
+- effort は controller が渡した `code_review_effort`。`auto` / 未指定なら `high`。`max` は Issue / cluster に明示があるときだけ。
   派生ルールは `model-selection.md` §5.5。
-- skill 解決に失敗した場合の fallback は、`op-code-review/SKILL.md` の Angle A〜E + 3 値 verify を同一 context で手動一巡すること。
-  発動は下記条件を満たす場合のみ。
 
-### 手動 fallback の発動条件
+### 呼べないとき
 
-以下を両方満たす場合のみ手動 fallback してよい。
-
-1. `Skill({skill: "op-skill:op-code-review", ...})` を実際に呼んだ (呼ばずに「解決できないはず」と判断するのは禁止)
-2. 返ってきたエラー文言を verbatim で `code_review_skip_reason` に含めた (要約・言い換え不可)
-
-エラー文言を伴わない fallback 申告は contract violation であり、`code_review_invoked: true` を名乗ってはならない。
+`Skill({skill: "code-review", ...})` を実際に呼んで失敗したときだけ、`code_review_invoked: false` にし、返ってきたエラー文言を
+verbatim で `code_review_skip_reason` に書く。呼ばずに「使えないはず」と判断しない。自分でレビューを代行して `true` を名乗らない。
 
 自己検証は best-effort であり、merge 可否の判定権は controller が spawn する独立レビュー
 (op-run フェーズ4 global review / op-codev Step B-2) にある。
@@ -52,10 +50,10 @@ op-run / op-codev 経由の apply-expert は commit を先に打ってから自�
 2. Static 検証 pass 確認
 3. unit test pass 確認
 4. commit
-5. Skill(op-skill:op-code-review) 自己検証 (effort は controller 由来の code_review_effort)
-6. Critical / High が出た場合のみ: 自己修正 → 追加 commit → 自己検証を 1 回だけ再実行
-   (2 回目も Critical/High が残れば self_check_blocked: true で返す)
-   Medium / Low は自己修正せず formal review に委ねる
+5. Skill(code-review) 自己検証 (effort は controller 由来の code_review_effort)
+6. important が出た場合のみ: 自己修正 → 追加 commit → 自己検証を 1 回だけ再実行
+   (2 回目も important が残り、その中に severity-rubric.md の Critical / High に当たるものがあれば self_check_blocked: true で返す。
+   無ければ残りを code_review_result に書いて formal review に委ねる)
 ```
 
 ## 3. 完了前チェックリスト
@@ -69,7 +67,7 @@ op-run / op-codev 経由の apply-expert は commit を先に打ってから自�
 - [ ] git status --porcelain が空 (untracked な新規ファイルも含む。未 commit 分は push されず失われ、
       controller の `op apply verify-commit` が UNCOMMITTED_CHANGES で block する)
 - [ ] commits_added に "${OP_RUN_BASE_SHA}..HEAD" の全 SHA を SHA 文字列の配列で記入 (1 件以上。object でラップしない)
-- [ ] 完了報告は canonical completion_report の形式。op-code-review の findings JSON 配列をそのまま返さない
+- [ ] 完了報告は canonical completion_report の形式。code-review の findings JSON 配列をそのまま返さない
       (findings は code_review_result / self_review_result に要約して載せる)
 ```
 

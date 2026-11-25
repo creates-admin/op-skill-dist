@@ -197,7 +197,7 @@ op-run ClusterOrchestrator フェーズ2 で apply expert が返す完了報告�
 | `modified_files` | `status: completed` 時必須 | |
 | `commits_added` | ✓ | SHA 文字列の配列 (`string[]`)。apply は 1 件以上、exploration-only spawn は `[]`。object でラップしない (`[{"sha": ...}]` は不可)。短縮 SHA (7 桁以上) 可 |
 | `verification_executed` / `verification_results` | ✓ | Verification Ladder Level 1〜3 |
-| `code_review_invoked` | ✓ | apply Run Mode では原則 `true`。`false` が正当なのは (a) exploration-only spawn、(b) expert 固有 skip 条件に該当し `code_review_skip_reason` に理由を書いた場合のみ (mode 表は `apply-completion-checklist.md` §1、skip 条件は §5)。手動 fallback を `true` と報告する条件は同ファイル「手動 fallback の発動条件」 |
+| `code_review_invoked` | ✓ | apply Run Mode では原則 `true`。`false` が正当なのは (a) exploration-only spawn、(b) expert 固有 skip 条件に該当し `code_review_skip_reason` に理由を書いた場合のみ (mode 表は `apply-completion-checklist.md` §1、skip 条件は §5)。呼べなかったときの書き方は同ファイル「呼べないとき」 |
 | `code_review_result` | `code_review_invoked: true` 時必須 | |
 | `code_review_skip_reason` | `code_review_result: "skip"` 時、または apply Run Mode で `code_review_invoked: false` 時に必須 | |
 | `code_review_effort` | optional | spawn 時に渡した effort の転写 (`model-selection.md` §5.5) |

@@ -33,13 +33,13 @@ ClusterOrchestrator はフェーズ2 で `common` 節 + 当該 expert の節の�
 完了報告に project-profile.md「検証レベルの分類」で記録する (ClusterOrchestrator が PR 本文に転記する)。fail を含むまま完了報告しない。
 ```
 
-### 自己検証 (Skill op-code-review)
+### 自己検証 (Skill code-review)
 
-順序・手動 fallback・完了前チェックリストは `_shared/apply-completion-checklist.md`「2-A. commit 先行経路」と同ファイルが正本。
+順序・呼べないとき・完了前チェックリストは `_shared/apply-completion-checklist.md`「2-A. commit 先行経路」と同ファイルが正本。
 
 ```
-1. commit 後、Skill({skill: "op-skill:op-code-review", args: "diff: ${OP_RUN_BASE_SHA}...HEAD effort: ${code_review_effort}"})
-   を実行する (code_review_effort が auto / 未指定なら effort を付けない)。scope は自分が変更した diff のみ。
+1. commit 後、Skill({skill: "code-review", args: "${code_review_effort} <自分の branch>"}) を実行する
+   (code_review_effort が auto / 未指定なら high)。${OP_RUN_BASE_SHA}...HEAD の外の指摘は外す。
 2. 完了報告に含める: self_review_result ("pass" | "needs_fix" | "skip"。skip = ドキュメントのみ等 code-review 非該当) /
    self_check_blocked (false でも省略しない。欠落すると PR が作られない) / commits_added (1 件以上) /
    code_review_invoked / code_review_result (invoked: false なら code_review_skip_reason)
