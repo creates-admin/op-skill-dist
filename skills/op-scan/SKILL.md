@@ -63,7 +63,7 @@ audit 中 (フェーズ0〜3) は `severity-rubric.md`「scan 実行レベル」
 
 ## フェーズ0: 環境確認
 
-- `_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」を実行する。gh channel で未認証なら中断する。
+- `_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」を実行する。gh が未認証なら中断する。
   Workflow の capability preflight は `--from-merged-pr` では skip する。
 - controller は全フェーズで `read-economy.md` の Controller 規律に従う。
 
@@ -142,7 +142,7 @@ const auditOut = await Workflow({
 ### 2-1-b. バッチ起票判定 (bulk_group)
 
 ```bash
-op scan bulk-group --findings-json findings.json --json   # mcp channel では --input-json で既存 Issue 素材を注入
+op scan bulk-group --findings-json findings.json --json
 ```
 
 ### 2-2. fingerprint 生成 + 重複・衝突チェック
@@ -239,7 +239,6 @@ refactor finding は以下を追加で付与する (op-patrol も同じ表を使
 
 各 `op issue create` の直前に `expert-spawn.md`「Marker Publish Validate」を行う
 (`op core marker-lint --body-file <本文> --source-hint issue-body --strict`)。block なら起票せず、対話はユーザーに提示、`--auto` は `manual_review_bucket` へ。
-mcp channel の call-spec 完遂は `github-channel.md` §3-§4 (新 Issue 番号は ingest envelope から取る)。
 
 ---
 
@@ -272,4 +271,4 @@ refute の限界の明示は `refute-contract.md` §7.2。
 ## 特殊モード
 
 - `--from-issue #N` (op-run からの委譲を含む): `references/from-issue-mode.md` を読む。
-- `--from-merged-pr <PR>`: `references/from-merged-pr-mode.md` を読む (Cloud / mcp channel 非対応)。
+- `--from-merged-pr <PR>`: `references/from-merged-pr-mode.md` を読む。

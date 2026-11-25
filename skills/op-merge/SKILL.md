@@ -32,17 +32,11 @@ effort: high
 
 `_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」に従う。GitHub I/O は `_shared/github-channel.md`。
 
-- gh channel: 下記の `op` / `gh` をそのまま使う。
-- mcp channel: `op` の read 系 (`pr view` / `pr list` / `issue view` / `issue dep-graph`) は fail-closed する。
-  PR 素材は `mcp__github__search_pull_requests` (`repo:<owner>/<repo> is:pr is:open`、labels と raw body を含む) と
-  `mcp__github__pull_request_read` (get / get_files / get_check_runs)、review state は
-  `op review state pull --pr <N> --input-json <search item>` で読む。write (`op pr merge` / `op issue close`) は
-  call-spec を同ファイル §4 どおり完遂する。marker は search 素材の raw body からだけ読む (§6)。
-
 ## フェーズ1: 対象 PR の収集
 
 ```bash
-gh pr list --state open --limit 100 --json number,title,headRefName,baseRefName,isDraft,labels,author  # 既定 / --all
+gh api 'repos/{owner}/{repo}/pulls?state=open&per_page=100' --paginate \
+  --jq '.[] | {number, title, headRefName: .head.ref, baseRefName: .base.ref, isDraft: .draft, labels: [.labels[].name], author: .user.login}'  # 既定 / --all
 op pr list --label <name>                                                                               # --label
 ```
 
@@ -57,7 +51,7 @@ git fetch origin "+refs/pull/<N>/head:refs/remotes/origin/pr/<N>"
 op pr view <N> --include meta        # isDraft / mergeable / headRefName / headRefOid / baseRefName / headRepositoryOwner
 op pr view <N> --include files       # 変更ファイル
 op pr view <N> --include body-comments-commits   # 本文 (Fixes #M) / コメント
-gh pr checks <N> --json name,state,bucket        # CI
+gh api 'repos/{owner}/{repo}/commits/<headRefOid>/check-runs?per_page=100' --jq '.check_runs[] | {name, status, conclusion}'   # CI
 op review state pull --pr <N>        # details.found / state.attempts[] 最新の review_result・reviewed_head_sha
 op issue view <M> --include meta     # 紐づく Issue の成功条件・labels
 git merge-tree --write-tree origin/<base> origin/pr/<N> >/dev/null   # exit 1 = conflict
@@ -133,8 +127,8 @@ PR を保留にしたら、その PR に依存する後続 PR (Issue 依存・�
 ### 4-1. base との整合
 
 - `git merge-tree --write-tree origin/<base> origin/pr/<N>` が conflict → 4-2。
-- conflict は無いが、この run で直前にマージした PR と変更ファイルが重なる → `gh pr update-branch <N>`
-  (mcp: `mcp__github__update_pull_request_branch`、merge 方式。`--rebase` は使わない) で base を取り込み 4-3 へ。
+- conflict は無いが、この run で直前にマージした PR と変更ファイルが重なる → `gh api -X PUT 'repos/{owner}/{repo}/pulls/<N>/update-branch'`
+  (merge 方式。rebase はしない) で base を取り込み 4-3 へ。
 - どちらでもなければ 4-3 へ。
 
 ### 4-2. コンフリクト解消 (expert に委譲)
@@ -215,11 +209,17 @@ Agent({
 ### 4-3. CI 待ち
 
 ```bash
-timeout 900 gh pr checks <N> --watch --interval 60 --fail-fast   # run_in_background で起動し完了通知を待つ
+# run_in_background で起動し完了通知を待つ。<head sha> は push 後の head
+for i in $(seq 1 15); do
+  R=$(gh api 'repos/{owner}/{repo}/commits/<head sha>/check-runs?per_page=100' --jq '[.check_runs[] | .conclusion // "pending"]
+    | if any(. == "pending") then "pending" elif all(. == "success" or . == "skipped" or . == "neutral") then "pass" else "fail" end')
+  [ "$R" != pending ] && break
+  sleep 60
+done
+echo "$R"
 ```
 
-mcp channel は `pull_request_read` (get_check_runs) を 60 秒間隔・上限 15 分で確認する。
-exit 0 (全 green) → 4-4。fail → 保留。15 分で終わらない → 保留 (pending のまま)。CI が無い repo はフェーズ3 で
+`pass` → 4-4。`fail` → 保留。15 分で `pending` のまま → 保留。CI が無い repo はフェーズ3 で
 「CI なし」と承認済みならそのまま 4-4。
 
 ### 4-4. マージ

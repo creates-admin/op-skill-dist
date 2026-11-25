@@ -334,7 +334,7 @@ lint / typecheck / unit test の PASS・FAIL と、Step C-2 の実機検証の�
 
 ### Step D: PR 作成
 
-全 IU 完了後に push して PR を作成する (Cloud では `_shared/github-channel.md` の call-spec 経路)。
+全 IU 完了後に push して PR を作成する。
 
 ```bash
 git push -u origin "<BRANCH_NAME>"

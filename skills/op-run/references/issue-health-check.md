@@ -53,9 +53,6 @@ EOF
 op issue edit-labels "$N" --remove "auto-report" --add "needs-clarification"
 ```
 
-mcp channel では `op issue edit-labels` の直前に fresh な `mcp__github__issue_read` (method: get) を `--input-json` で渡し、
-emit された call-spec を `github-channel.md` §3-§4 で完遂する。
-
 ## 1.5-4. 派生 Issue の取り込み
 
 委譲完了後、`op issue list --label "derived-from-issue" --state open --search "label:auto-report" --limit 50` で派生 Issue を取得し、

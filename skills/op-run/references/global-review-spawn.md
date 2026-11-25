@@ -125,8 +125,7 @@ review_round は PR 全体での review attempt 通算 (head SHA で絞らない
 
 ```bash
 : "${PR_NUMBER:?}"
-REVIEW_STATE_JSON=$(op review state pull --pr "$PR_NUMBER" \
-  ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"})
+REVIEW_STATE_JSON=$(op review state pull --pr "$PR_NUMBER")
 PREV_ROUND=$(printf '%s' "$REVIEW_STATE_JSON" | jq '[.details.state.attempts[]?.review_round] | max // 0')
 printf '%s' "$PREV_ROUND" | grep -Eq '^[0-9]+$' || PREV_ROUND=0
 export REVIEW_ROUND=$((PREV_ROUND + 1))
@@ -148,14 +147,13 @@ review-expert の attempt は上書きしない (controller の判定は state �
 
 ```bash
 : "${PR_NUMBER:?}" "${REVIEW_ROUND:?}" "${OP_RUN_SESSION_ID:?}"
-op pr label-transition --pr "$PR_NUMBER" --target review --result blocked \
-  ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"}
+op pr label-transition --pr "$PR_NUMBER" --target review --result blocked
 op pr comment "$PR_NUMBER" --body "Review Fix Loop の上限 (review_round=${REVIEW_ROUND}) に達したため自動修正を停止しました。Issue 分割 / scope 再定義 / 人間判断が必要です。" \
   || echo "⚠️ terminal コメント投稿に失敗 (label は更新済み)" >&2
 jq -n --argjson round "$REVIEW_ROUND" --arg at "$(date -Iseconds)" \
   '{kind:"controller", value:{controller_result:"blocked", reason:"review_round_over_limit", review_round:$round, controlled_at:$at}}' \
   | op review state push --pr "$PR_NUMBER" --apply-json - --write-id "${OP_RUN_SESSION_ID}-terminal" \
-      --session "$OP_RUN_SESSION_ID" ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"}
+      --session "$OP_RUN_SESSION_ID"
 ```
 
 CO は verdict `needs_human_decision` (blocker_reason: review_round 上限) を返し、自動再 review しない。
@@ -275,8 +273,7 @@ if [ "$VERDICT" = "approve" ]; then
   op review publish-approval --pr "$PR_NUM" --session "$OP_RUN_SESSION_ID" \
     --reviewer review-expert --verdict approve --review-round "$RV_ROUND" \
     --reviewed-head-sha "$(printf '%s' "$REV" | jq -r '.reviewed_head_sha')" \
-    --review-worktree-head-sha "$(printf '%s' "$REV" | jq -r '.review_worktree_head_sha')" \
-    ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"}
+    --review-worktree-head-sha "$(printf '%s' "$REV" | jq -r '.review_worktree_head_sha')"
 else
   printf '%s' "$REV" | jq -r '
     "## review-expert global review: \(.verdict) (round \(.review_round))\n\n\(.rationale // "")\n\n### Findings\n" +
@@ -291,13 +288,11 @@ else
       findings:[.findings[]? | {id, result, severity, lens, scope,
         recommended_fix_expert, requires_post_check, summary, file, evidence}]}' \
     | op review state push --pr "$PR_NUM" --apply-json - \
-        --write-id "${OP_RUN_SESSION_ID}-r${RV_ROUND}-attempt" --session "$OP_RUN_SESSION_ID" \
-        ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"}
+        --write-id "${OP_RUN_SESSION_ID}-r${RV_ROUND}-attempt" --session "$OP_RUN_SESSION_ID"
 
   # needs-specialist-review は label 上 needs-fix と同じ遷移
   LABEL_RESULT=$([ "$VERDICT" = "needs-specialist-review" ] && echo needs-fix || echo "$VERDICT")
-  op pr label-transition --pr "$PR_NUM" --target review --result "$LABEL_RESULT" \
-    ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"}
+  op pr label-transition --pr "$PR_NUM" --target review --result "$LABEL_RESULT"
 fi
 ```
 

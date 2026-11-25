@@ -56,8 +56,7 @@ specialist 判断が出揃う前の部分 apply。
 ```bash
 : "${PR_NUMBER:?}" "${WORKTREE_PATH:?}"
 CURRENT_HEAD_SHA=$(git -C "$WORKTREE_PATH" rev-parse HEAD)   # CO が push した PR head
-REVIEW_STATE_JSON=$(op review state pull --pr "$PR_NUMBER" \
-  ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"})
+REVIEW_STATE_JSON=$(op review state pull --pr "$PR_NUMBER")
 LATEST_ATTEMPT_JSON=$(printf '%s' "$REVIEW_STATE_JSON" | jq -c --arg head "$CURRENT_HEAD_SHA" '
   (.details.state.attempts // []) as $a
   | ($a | map(.review_round) | max // 0) as $m
@@ -169,8 +168,7 @@ jq -n --arg id "$RVW_ID" --arg sp "$SPECIALIST_EXPERT" --arg r "$SPECIALIST_RESU
     requires_post_check:(if $pc=="" then null else $pc end),
     reviewed_round:$round, reviewed_at:$at, reason:$reason}}' \
   | op review state push --pr "$PR_NUMBER" --apply-json - \
-      --write-id "${OP_RUN_SESSION_ID}-r${REVIEW_ROUND}-specialist-${RVW_ID}" --session "$OP_RUN_SESSION_ID" \
-      ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"}
+      --write-id "${OP_RUN_SESSION_ID}-r${REVIEW_ROUND}-specialist-${RVW_ID}" --session "$OP_RUN_SESSION_ID"
 ```
 
 | specialist_result | 動作 |

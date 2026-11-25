@@ -33,7 +33,7 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 
 ## フェーズ0: 環境確認
 
-`_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」を実行する (gh channel で未認証なら中断)。
+`_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」を実行する (gh が未認証なら中断)。
 `.claude/rules/_schema.md` か `00-constitution.md` が無い repo は OP 未移行。先に `/op-skill:op-adopt` (正本の書式・索引・層 / 業務領域 / 機能の地図の承認・層の骨組み) を案内して終了する。
 土台があり個別 feature の正本が無いだけなら 2-4 の lazy 構築で作る。
 `_schema.md` に「書くもの・書かないもの」「段と置き場所」「大きさ」節が無ければ、`~/.claude/skills/_shared/templates/rules-schema.md` との差分を示し、承認後に追記する。

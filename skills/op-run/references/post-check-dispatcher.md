@@ -47,16 +47,14 @@ case "$RESULT" in                       # label-transition の result 名へ変�
   needs_human_decision) LABEL_RESULT=needs-human-decision ;;
   *) LABEL_RESULT="$RESULT" ;;
 esac
-op pr label-transition --pr "$PR_NUMBER" --target "$LABEL_TARGET" --result "$LABEL_RESULT" \
-  ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"}
+op pr label-transition --pr "$PR_NUMBER" --target "$LABEL_TARGET" --result "$LABEL_RESULT"
 
 jq -n --arg key "$STATE_KEY" --arg expert "$EXPERT" --arg r "$RESULT" --arg sha "$POST_CHECKED_HEAD_SHA" \
   --argjson round "$POST_CHECK_ROUND" --argjson extra "${EXTRA_JSON:-{\}}" \
   '{kind:"post_check", expert:$key, post_check_result:$r, audit_result:($r|ascii_upcase),
     post_checked_head_sha:$sha, post_check_round:$round, post_check_expert:$expert} + $extra' \
   | op review state push --pr "$PR_NUMBER" --apply-json - \
-      --write-id "${OP_RUN_SESSION_ID}-postcheck-${STATE_KEY}-r${POST_CHECK_ROUND}" --session "$OP_RUN_SESSION_ID" \
-      ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"}
+      --write-id "${OP_RUN_SESSION_ID}-postcheck-${STATE_KEY}-r${POST_CHECK_ROUND}" --session "$OP_RUN_SESSION_ID"
 ```
 
 | 節 | `LABEL_TARGET` | `STATE_KEY` | `EXPERT` | `EXTRA_JSON` |

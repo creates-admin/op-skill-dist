@@ -30,7 +30,7 @@ op-scan / op-patrol は Critical / High だけを起票するので、この種�
 
 ## フェーズ0: 環境確認
 
-`~/.claude/skills/_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」。GitHub I/O は `~/.claude/skills/_shared/github-channel.md` の channel 判定に従う。
+`~/.claude/skills/_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」。GitHub I/O は `~/.claude/skills/_shared/github-channel.md` に従う。
 
 base を確定し、以降の fence ではリテラルで書く (`~/.claude/skills/_shared/bash-fence-convention.md`):
 

@@ -30,8 +30,8 @@ op-sweep は「機械判定 housekeeping mutation」専任として例外的に 
 
 ## フェーズ0: 環境確認
 
-`~/.claude/skills/_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」に従う (gh channel で未認証なら中断)。
-GitHub 操作は `~/.claude/skills/_shared/github-channel.md` の channel 判定に従う。origin が無ければ remote 削除をスキップする旨を表示する。
+`~/.claude/skills/_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」に従う (gh が未認証なら中断)。
+GitHub 操作は `~/.claude/skills/_shared/github-channel.md` に従う。origin が無ければ remote 削除をスキップする旨を表示する。
 
 ## フェーズ1: 候補列挙 (read-only)
 

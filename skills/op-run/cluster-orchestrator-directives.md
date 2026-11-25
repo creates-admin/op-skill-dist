@@ -16,10 +16,6 @@ controller との通信は起動時の入力 payload と返却時の ClusterSumm
 - 待機: 配下の完了報告が遅れても無限待ちしない。git log / worktree / PR 状態からフェーズ完了を確認できれば
   それを根拠に次へ進む (controller の relay SendMessage に依存しない)。30 分応答が無い配下はそのフェーズの失敗として扱う
   (post-check / runtime verify は `RESULT=skipped`、apply / review は verdict `needs_human_decision`)。例外はフェーズ4 の入力条件 (fail-closed)。
-- GitHub channel: mcp channel では `op pr *` / `op issue *` / `op review *` が call-spec を emit する。CO 自身が
-  実行者として `_shared/github-channel.md` §3-§4 (verbatim MCP 実行 → read-back → ingest) を完遂する。
-  `--input-json` が必要な呼び出し (state pull/push・label 系) には直前に取得した fresh `search_pull_requests` item を渡す
-  (fence 内の `REVIEW_STATE_INPUT_JSON`)。gh channel では不要。
 - 記録: review / post-check / controller 判定の機械正本は PR body の op-review-state 文書 (`op review state pull/push`)。
   write_id は決定的キー (同一 write_id の再送は NO_OP)。PR コメントは人間向けの自然文で書き、HTML marker を付けない。
 - label: 遷移は CO が `op pr label-transition --pr <N> --target <review|security-post-check|ux-post-check> --result <...>`
@@ -170,11 +166,10 @@ export PR_NUMBER=$(printf '%s' "$PR_CREATE_JSON" | jq -r '.details.pr_number // 
 
 ### auto-fix label (PR 作成直後)
 
-`op pr create` は label を付けない (mcp channel は `--label` を block する)。PR 対象なので `op pr edit-labels` を使う。
+`op pr create` では label を付けない。PR 対象なので `op pr edit-labels` を使う。
 
 ```bash
-op pr edit-labels --pr "$PR_NUMBER" --add "auto-fix" \
-  ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"}
+op pr edit-labels --pr "$PR_NUMBER" --add "auto-fix"
 ```
 
 失敗したら `pending_label: "auto-fix"` をフェーズ8 に記録する (silent skip しない)。
@@ -197,8 +192,7 @@ null / planned / unregistered は spawn しない。
 state push を終えた後に review_mode を決める (push 前に読むと空で `full` に倒れる)。
 
 ```bash
-REVIEW_STATE_JSON=$(op review state pull --pr "$PR_NUMBER" \
-  ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"})
+REVIEW_STATE_JSON=$(op review state pull --pr "$PR_NUMBER")
 export REVIEW_MODE=$(printf '%s' "$REVIEW_STATE_JSON" | jq -r '
   (.details.state.post_checks // {}) as $p
   | ($p["security-expert"].audit_result // "SKIPPED") as $s
@@ -264,7 +258,7 @@ export BLOCKER_REASON=$(printf '%s' "$REVIEW_RESULT_JSON" | jq -r '
 | `needs-fix` / `needs-specialist-review` かつ round 上限 | `global-review-spawn.md` §4-2-pre-blocked の terminal 処理。verdict `needs_human_decision` (blocker_reason: review_round 上限) |
 | `approve` かつ follow-up なし | verdict `approved` |
 | `approve` かつ follow-up あり (最終 round の Medium/Low finding + fix loop で specialist が `new-issue` とした finding を `FOLLOWUP_FINDINGS_JSON` に合流) | verdict `approve_with_followup`。下記の PR コメントを残し、`followup_findings` に載せる |
-| state 経路 (`op review state pull/push`) 自体が成立しない (primitive 不在 / mcp 素材を注入できない等) | verdict `pr_open_degraded_mcp_channel`。止めたフェーズと理由を `degrade_note` に 1 文 |
+| state 経路 (`op review state pull/push`) 自体が成立しない (primitive 不在等) | verdict `pr_open_degraded`。止めたフェーズと理由を `degrade_note` に 1 文 |
 
 needs_human_decision (terminal を含む) の PR は自動再 review せず、そのまま人間に委ねる。
 
@@ -286,19 +280,19 @@ printf '%s' "$FOLLOWUP_FINDINGS_JSON" | jq -r --arg round "$REVIEW_ROUND" '
 interface ClusterSummary {
   cluster_id:          string;
   pr_url:              string | null;
-  verdict:             "approved" | "approve_with_followup" | "needs_human_decision" | "pr_open_degraded_mcp_channel"
+  verdict:             "approved" | "approve_with_followup" | "needs_human_decision" | "pr_open_degraded"
                      | "nested_spawn_unavailable";
   round:               number;
   followup_findings?:  string[];        // approve_with_followup 時のみ。follow-up finding の 1 行要約
   critical_count:      number;
   blocker_reason?:     string;          // needs_human_decision 時のみ。1〜2 文の要約 (finding 全文は渡さない)
   pending_label?:      string | null;   // CO が付けられなかった label (write 失敗時のみ非 null)
-  degrade_note?:       string;          // pr_open_degraded_mcp_channel 時のみ
+  degrade_note?:       string;          // pr_open_degraded 時のみ
   runtime_verify_note?: string | null;  // フェーズ5.7 で人間に伝えることがあるときだけ 1〜2 文 (runtime-verify-dispatcher.md「6.3」)
 }
 ```
 
-`pr_open_degraded_mcp_channel` は approve を捏造しないための verdict で、controller は needs_human_decision と同様に人間へ提示する。
+`pr_open_degraded` は approve を捏造しないための verdict で、controller は needs_human_decision と同様に人間へ提示する。
 `nested_spawn_unavailable` は何も実行していないことを示し、controller が本書を自分で実行する (op-run SKILL.md「2-Orchestrate-inline」)。
 
 ```bash

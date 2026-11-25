@@ -10,16 +10,12 @@ gh 未認証時・git リポジトリ外の skill 固有の扱いだけを自前
 ```bash
 git rev-parse --is-inside-work-tree || { echo "not a git repo"; exit 1; }
 
-if [ "${OP_GITHUB_CHANNEL:-gh}" = "mcp" ]; then
-  echo "[channel] mcp — GitHub write は call-spec 経路 (gh 認証不要)"
-else
-  gh auth status || { echo "gh login が必要"; exit 1; }
-fi
+gh api 'repos/{owner}/{repo}' --jq .full_name || { echo "GitHub に届かない (ローカルは gh auth login が必要)"; exit 1; }
 ```
 
-- 既定: git リポジトリ外なら中断し、git リポジトリ内で実行するよう案内する。gh channel で未認証なら中断して `! gh auth login` を案内する。
+- 既定: git リポジトリ外なら中断し、git リポジトリ内で実行するよう案内する。GitHub に届かなければ中断し、ローカルなら `! gh auth login` を案内する。
   中断せず続行する skill (op-architect / op-plan / op-patrol `--dry-run` / op-cleanup Tier1 等) は各 SKILL.md に書く。
-- mcp channel は call-spec 経路 (`github-channel.md`) で GitHub write が成立するため gh auth を要求しない。
+- GitHub の経路 (ローカルとクラウドの違い) は `github-channel.md`。
 - Workflow を呼ぶ skill は続けて capability preflight (`workflow-calling.md` §1)。workflow は `op-skill:<name>` で呼ぶ。
 
 ## Explore 委譲プロトコル

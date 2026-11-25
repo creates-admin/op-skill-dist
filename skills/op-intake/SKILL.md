@@ -74,7 +74,6 @@ gh api -X GET search/issues --paginate --slurp \
 op scan dedup --findings-json "<INTAKE_DIR>/drafts.json" --input-json "<INTAKE_DIR>/existing.json" --json > "<INTAKE_DIR>/dedup.json"
 ```
 
-   gh が使えない (認証が無い) ときは `mcp__github__search_issues` の生レスポンスを `existing.json` にする (`_shared/github-channel.md` §6)。
 2. `details.results[i]` の扱いは `filing-gate.md` §2 (対話経路)。envelope が取れない・`block` なのに `matched_existing` も `matched_draft` も無いときは中断して人に見せる。
 3. dedup の後に、関係しそうな open Issue を言葉でも探す (`gh api -X GET search/issues -f q='repo:<owner>/<repo> is:issue is:open <キーワード>'`)。重なりではないが関係するものは一覧の注記に書く。
 4. 下書きのラベルのうちリポジトリに無いものを洗い出す (`gh api "repos/<owner>/<repo>/labels" --paginate --jq '.[].name'` と突き合わせる)。
@@ -100,7 +99,6 @@ op issue create --title "<title>" --label "<ラベルを , で連結>" --body-fi
 ```
 
 - marker-lint が `pass` 以外なら起票せず失敗に記録して次へ進む。
-- 出力に `"op_call_spec": 1` があれば `_shared/github-channel.md` §3〜§4 で完遂する。
 - `op issue create` が `HTTP 403` と `GraphQL` を含むエラーで失敗したら、同じ本文を `references/github-rest.md`「起票」で起票する。
 - 番号は envelope の `details.issue_number` (REST なら応答の `number`) を使い (タイトル検索で逆引きしない)、`<key> → #N` を `<INTAKE_DIR>/numbers.txt` に追記する。
 - 依存先が起票に失敗した Issue は起票しない (未作成に記録する)。

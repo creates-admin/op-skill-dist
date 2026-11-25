@@ -75,7 +75,7 @@ Issue/PR の書き込み・worktree 作成・apply spawn は 1-3 の承認後に
 
 ### 0-1. git / gh
 
-`_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」を実行する (mcp channel は gh auth 不要)。
+`_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」を実行する。
 
 ### 0-cap. Dynamic Workflows capability preflight
 
@@ -179,26 +179,20 @@ CLI で決まらない規則は `references/expert-resolution.md`。
 
 cluster 確定後・1-3 の plan gate 前に、Issue 単位で claim を取る (`_shared/markers/claim-markers.md`)。
 exit 1 (他 instance が owner) の Issue は cluster から外して再構成し、全 Issue が skip なら正常終了。exit 2 は run 全体を abort。
-mcp channel では `op claim` が恒久 refuse のため skip し、単一 instance 前提で運用する (Cloud で並行 op-run を走らせない)。
 
 ```bash
 source "<RUN_DIR>/env"
 : "${OP_RUN_TASK_BUNDLE_ID:?}" "${OP_RUN_REPO:?}"
 test -s "$RUN_DIR/clustered-issues.txt" || { echo "clustered-issues.txt が無い (1 行 1 Issue 番号で書き出す)"; exit 1; }
-if [ "${OP_GITHUB_CHANNEL:-gh}" = "mcp" ]; then
-  echo "⚠️ mcp channel — claim を skip。単一 instance 前提で運用すること"
-  cp "$RUN_DIR/clustered-issues.txt" "$RUN_DIR/claimed-issues.txt"
-else
-  : > "$RUN_DIR/claimed-issues.txt"
-  while read -r ISSUE; do
-    op claim acquire --repo "$OP_RUN_REPO" --issue "$ISSUE" --task-id "$OP_RUN_TASK_BUNDLE_ID"
-    case $? in
-      0) echo "$ISSUE" >> "$RUN_DIR/claimed-issues.txt" ;;
-      2) echo "❌ op claim acquire 致命的エラー: #$ISSUE" >&2; exit 2 ;;
-    esac
-  done < "$RUN_DIR/clustered-issues.txt"
-  test -s "$RUN_DIR/claimed-issues.txt" || { echo "ℹ️ 全 Issue が他 instance に claim 済。終了。"; exit 0; }
-fi
+: > "$RUN_DIR/claimed-issues.txt"
+while read -r ISSUE; do
+  op claim acquire --repo "$OP_RUN_REPO" --issue "$ISSUE" --task-id "$OP_RUN_TASK_BUNDLE_ID"
+  case $? in
+    0) echo "$ISSUE" >> "$RUN_DIR/claimed-issues.txt" ;;
+    2) echo "❌ op claim acquire 致命的エラー: #$ISSUE" >&2; exit 2 ;;
+  esac
+done < "$RUN_DIR/clustered-issues.txt"
+test -s "$RUN_DIR/claimed-issues.txt" || { echo "ℹ️ 全 Issue が他 instance に claim 済。終了。"; exit 0; }
 cat "$RUN_DIR/claimed-issues.txt"
 ```
 
@@ -386,11 +380,11 @@ ClusterSummary の schema は `cluster-orchestrator-directives.md` フェーズ8
 | `approved` | claim release → status table 更新 |
 | `approve_with_followup` | claim release → `followup_findings` をフェーズ5 の follow-up 候補に記録 |
 | `needs_human_decision` | claim release → `blocker_reason` を人間に提示 |
-| `pr_open_degraded_mcp_channel` | claim release → `degrade_note` を提示し、ローカル (gh channel) での後続実施を案内 |
+| `pr_open_degraded` | claim release → `degrade_note` を提示し、後続の手作業を案内 |
 
 どの verdict でも `runtime_verify_note` が非 null なら、フェーズ5 の「runtime verify」に載せる。
 
-claim release はすべての verdict で行う (best-effort。失敗は `op claim sweep` が回収)。mcp channel では skip。
+claim release はすべての verdict で行う (best-effort。失敗は `op claim sweep` が回収)。
 
 ```bash
 source "<RUN_DIR>/env"
@@ -403,8 +397,7 @@ done
 
 #### 2-E-3. CO write 取りこぼし回収 (mandatory)
 
-`pending_label` が非 null → `op pr edit-labels --pr <N> --add "<label>"` で補完する
-(mcp channel は fresh な `search_pull_requests` 素材を `--input-json` で渡し、`github-channel.md` §3-§4 で完遂)。
+`pending_label` が非 null → `op pr edit-labels --pr <N> --add "<label>"` で補完する。
 
 #### 2-E-1. status table 再 render 規約
 
@@ -419,7 +412,7 @@ CO が 1 つ返るたびに status table を再 render する (列: # / cluster_
 ## フェーズ3〜4.5: PR 作成 / Post-check / Global Review / Review Fix Loop (CO 内部)
 
 controller は直接実行せず ClusterSummary を受け取るだけ。review / post-check の結果は PR body の op-review-state 文書
-(`op review state pull/push`) が唯一の記録で、mcp channel でも成立する。
+(`op review state pull/push`) が唯一の記録。
 
 - フェーズ3 (PR 作成): CO フェーズ4
 - フェーズ3.5 (Post-check Dispatch): CO フェーズ5.5 / `references/post-check-dispatcher.md` (3.5-A UX/UI、3.5-B Security)
@@ -438,7 +431,7 @@ controller は直接実行せず ClusterSummary を受け取るだけ。review /
 <2-E-1 の status table>
 <1 行サマリ: 例「2/4 clusters approved, 2 needs_human_decision」>
 
-### needs_human_decision / pr_open_degraded_mcp_channel クラスタ
+### needs_human_decision / pr_open_degraded クラスタ
 - <cluster>: <blocker_reason / degrade_note>。方針決定後に PR を更新または close する
 
 ### runtime verify

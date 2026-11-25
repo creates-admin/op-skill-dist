@@ -32,7 +32,7 @@ description: 実機検証ハーネスを導入・実行・育成するスキル�
 
 ## フェーズ0: 環境確認
 
-`~/.claude/skills/_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」。GitHub I/O は `~/.claude/skills/_shared/github-channel.md` の channel 判定に従う。
+`~/.claude/skills/_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」。GitHub I/O は `~/.claude/skills/_shared/github-channel.md` に従う。
 `op verify --help` が失敗する op は古いので、plugin を更新するよう案内して終了する。
 
 base を確定し、以降の fence ではリテラルで書く (`~/.claude/skills/_shared/bash-fence-convention.md`):

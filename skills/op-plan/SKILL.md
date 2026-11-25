@@ -236,13 +236,12 @@ plan mode で Artifact の作成・更新が権限でブロックされた場合
 
 ## フェーズ7: Issue 起票
 
-`_shared/filing-gate.md` §3 に従う。mcp channel では `op issue create` / `op issue edit-body` は call-spec を emit するので、
-`github-channel.md` §3-§4 の protocol で完遂し、`details.issue_number` 等は ingest envelope から取る。本フェーズの手順は op-architect フェーズ5 も使う。
+`_shared/filing-gate.md` §3 に従う。本フェーズの手順は op-architect フェーズ5 も使う。
 
 ### 7-1. ラベル確認
 
 新規ラベルが出る場合は `op issue create --title <t> --label <csv> --body-file <f> --ensure-labels --dry-run` の
-`labels_would_create` を提示し、承認を得てから本起票する (gh channel のみ。mcp channel では dry-run 不可のため skip)。
+`labels_would_create` を提示し、承認を得てから本起票する。
 
 ### 7-2. Marker Publish Validate
 

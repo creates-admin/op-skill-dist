@@ -1,7 +1,6 @@
 # op-scan `--from-merged-pr` モード (follow-up Issue 半自動起票)
 
 merged PR の完了報告・review 結果・post-check Notes から follow-up を抽出し、plan モード承認後に Issue を起票する。
-Cloud (mcp channel) 非対応 — ローカル (gh channel) で実行する (fence は fail-closed で停止する)。
 
 ```
 /op-skill:op-scan --from-merged-pr <PR>

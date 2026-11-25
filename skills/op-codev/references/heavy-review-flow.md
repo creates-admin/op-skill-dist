@@ -13,7 +13,7 @@ op-run skill の `references/global-review-spawn.md` §4-1-b (`REVIEW_MODEL` / `
 
 ```bash
 PR_NUMBER=<PR番号>
-REVIEW_STATE_JSON=$(op review state pull --pr "$PR_NUMBER" ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"})
+REVIEW_STATE_JSON=$(op review state pull --pr "$PR_NUMBER")
 PREV_ROUND=$(printf '%s' "$REVIEW_STATE_JSON" | jq '[.details.state.attempts[]?.review_round] | max // 0')
 echo "REVIEW_ROUND=$((PREV_ROUND + 1))"
 ```

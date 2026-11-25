@@ -32,7 +32,7 @@ CLI は `op doctor env` (項目 1〜6) と `op verify conformance` (項目 7)。
 
 ## フェーズ0: 環境確認
 
-`~/.claude/skills/_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」に従う。gh channel で未認証なら中断する。
+`~/.claude/skills/_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」に従う。gh が未認証なら中断する。
 
 ## フェーズ1: 決定論 inventory
 

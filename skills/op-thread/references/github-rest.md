@@ -143,6 +143,6 @@ git fetch origin '<base>' && git merge --no-edit FETCH_HEAD
 gh api -X PUT 'repos/{owner}/{repo}/pulls/<PR>/merge-async' -f merge_method='<merge|squash>' -f sha='<head-sha>'
 ```
 
-`merge_method` は repo の決まり (`.claude/skills/steward/SKILL.md`「マージ」) に従う。無ければ `merge`。
+`merge_method` は repo の決まり (`.claude/skills/steward/SKILL.md`「マージ」) に従う。無ければ単独の PR は `squash`、積み重ねは `merge`。
 
 積み重ねは `references/stack.md`「まとめてマージ」。

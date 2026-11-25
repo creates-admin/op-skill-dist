@@ -7,7 +7,7 @@
 | 通常 finding (4-seg) | `op core fingerprint --domain <d> --title <t> --file <files[0]> [--symbol <symbols[0]>] --plain` |
 | bulk Issue (3-seg) | `op core fingerprint-bulk --domain <d> --bulk-group <g> --primary-dir <LCA> --plain` |
 | architecture_debt 追跡キー | `op core fingerprint-bulk --domain refactor --bulk-group <g> --primary-dir <affected_paths の LCA> --plain` |
-| 既存 Issue との重複判定 | `op scan dedup --findings-json <f>` (Cloud では `--input-json` で既存 Issue 素材を注入) |
+| 既存 Issue との重複判定 | `op scan dedup --findings-json <f>` |
 
 通常 finding の形式は `<domain>:<normalized_title>:<primary_file>:<symbol>` (symbol が空でも 4 segment)。
 

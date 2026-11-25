@@ -102,7 +102,7 @@ function buildDiscoverPrompt(cluster, a) {
     `1. cd ${cluster.worktree_path}`,
     bodies.length
       ? "2. 下の Issue 本文から指示書節を把握する"
-      : "2. 各 Issue を `op issue view <N> --plain` で取得し、指示書節を把握する (失敗したら mcp__github__issue_read)",
+      : "2. 各 Issue を `op issue view <N> --plain` で取得し、指示書節を把握する",
     "3. 関連コードを Read して根本原因の仮説を立てる",
     "4. 修正対象になりうるファイルを列挙する。Issue 本文に無いファイルも含め、依存マニフェスト・lockfile・shared component・DTO・schema も拾う (Stage2 競合検出の素材)",
     "",

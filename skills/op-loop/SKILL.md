@@ -114,7 +114,7 @@ controller 自身のフローとして実行する (`Skill(op-run)` は呼ばな
 
 全 CO の `ClusterSummary` を集める。
 - 全 CO の verdict が `approved` / `approve_with_followup` → フェーズ 3-2 へ (follow-up は完了サマリに載せる)。
-- `needs_human_decision` / `pr_open_degraded_mcp_channel` / CO の失敗がある → フェーズ 3-1 へ。
+- `needs_human_decision` / `pr_open_degraded` / CO の失敗がある → フェーズ 3-1 へ。
 
 ---
 

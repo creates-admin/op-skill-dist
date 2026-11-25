@@ -1,99 +1,16 @@
-# GitHub I/O Channel — call-spec protocol
+# GitHub I/O Channel
 
 ## 1. 正本宣言
 
-本ファイルは call-spec protocol (司令官が call-spec を受けたときの義務) の正本。
-channel 解決・gh↔MCP mapping・mcp 対応コマンドの判定は op が持つ。op が request を作り検証し、司令官は指定 MCP tool を verbatim 実行するだけ。
+本ファイルは op と skill が GitHub とやりとりする経路の正本。
 
-## 2. channel の概念と解決
+## 2. 経路
 
-`OP_GITHUB_CHANNEL` で op の GitHub I/O transport を切り替える (gh auth の probe はしない)。
+- op の GitHub の読み書きはすべて REST の `gh api` で、ローカル (gh auth の資格) でもクラウド (セッションに付いたリポジトリ) でも同じ経路で通る。環境変数の設定は要らない。
+- 実行場所は `CLAUDE_CODE_REMOTE=true` ならクラウド、それ以外はローカル。違いは REST に無い操作 (draft / ready の切り替え・レビューのスレッドの解決) だけで、op がクラウドは `/pulls/{n}/ccr/...`、ローカルは `gh pr ready`・GraphQL に切り替える。
+- skill から op に無い操作をするときは `gh api 'repos/{owner}/{repo}/...'` を使う。`gh pr …`・`gh issue …` などの porcelain は中で GraphQL を使うので、クラウドでは 403 になる。
+- クラウドからはブランチの削除・CI の再実行・GraphQL・セッションに付いていないリポジトリができない。要るときは人に頼む。
 
-| 値 | 挙動 |
-|---|---|
-| `gh` (または未設定) | gh subprocess を実行する (default) |
-| `mcp` | write 系 pilot コマンドは call-spec を emit する。それ以外の gh 到達は fail-closed |
+## 3. MCP の read 系 tool
 
-- Cloud: 環境の環境変数 (.env 形式) に `OP_GITHUB_CHANNEL=mcp` を置く。
-- ローカル: 設定不要 (gh channel)。
-
-## 3. call-spec の検出
-
-mcp channel では op は gh を叩く代わりに stdout へ JSON を出力し exit 0 で終える。
-判別子 `"op_call_spec": 1` のほか、`tool` (実行する MCP tool 名)、`args` (そのまま渡す引数。本文・marker・labels は op が検証済み)、
-`expect`、`ingest` (結果を検証する op コマンド) を持つ。
-
-stdout に `"op_call_spec": 1` があれば §4 の protocol に入る。無ければ通常出力として扱う。
-
-## 4. 司令官 (main Claude / controller) の義務
-
-実行者は call-spec を受け取った op 実行主体の LLM context。OP-managed worker (例: ClusterOrchestrator)
-が op を実行した場合は、その worker 自身が隔離 context 内で本節を完遂する。
-
-1. verbatim 実行: `tool` の MCP tool を `args` を一切改変せず実行する。補完・別 tool への差し替え・
-   payload の書き換え・値の付け足しは禁止 (本文・marker・fingerprint・labels の検証は op 側で完結済み)。
-   `args.body` は渡された文字列をそのまま tool の引数に渡す。**再入力・要約・エスケープ・
-   placeholder 化をしない** (marker が壊れると ingest の本文検査が block する、後述)。
-2. read-back で結果を組む: `mcp__github__issue_write` の返却は `{id, url}` のみで ingest の必須 field
-   (number / title / body) を満たさない。返却 `url` 末尾の番号に対し `mcp__github__issue_read`
-   (method: get) を実行し、その読み戻し JSON をファイルに保存する。これを ingest の result とする。
-3. ingest を実行する: `ingest` フィールドのコマンドを read-back 結果ファイルとともに実行する
-   (write の echo を渡すと `missing required field 'number'` で block される)。
-4. ingest の出力を後続処理の正とする: ingest の envelope は gh channel の
-   `op issue create --ensure-labels` の成功出力と同一 shape。call-spec の emit や MCP tool 呼び出しの成功を
-   「起票成功」として扱わない。ingest 完走までは未確定。
-5. 本文不一致 (`BODY_MISMATCH` / reason に `body mismatch` を含む block) の修復手順: kind `issue`
-   (`op issue create`) の ingest は read-back body と call-spec body を正規化して比較する。
-   実行者が `args.body` をそのまま渡さず要約・エスケープした場合などに block されるが、
-   **この時点で Issue 自体は既に GitHub 上に作成済み**なので再作成しない (二重起票になる)。
-   block envelope の `created_issue_number` / `created_url` を使い、以下の手順で 1 回だけ修復する。
-   1. 本文ファイルを用意する: create に `--body-file <path>` を渡していればそのファイルをそのまま使う。
-      本文をコード内で組み立てて渡した (元ファイルが無い) 場合は、create の call-spec の `args.body`
-      を一切改変せずファイルに書き出す。
-   2. `op issue edit-body --number <created_issue_number> --body-file <1 のファイル>` を実行する。
-      gh channel はそのまま gh へ到達する。mcp channel ではこのコマンド自体が call-spec
-      (`expect.kind = "issue_edit_body"`) を emit するので、§4-1〜4-3 の手順 (verbatim 実行 →
-      read-back → ingest) をこの call-spec に対して実行する。
-   3. edit-body (mcp channel ではその ingest) が完了したら、`mcp__github__issue_read` (get) で
-      read-back を撮り直し、元の create call-spec の `ingest` コマンド (`op issue ingest-result`)
-      を再実行する。この create の ingest は §4-4 が正とする envelope (number / title / labels /
-      body の検査) を返すので、これが pass すれば起票確定でその envelope を後続処理の正とする。
-      edit-body またはこの create の ingest が block したら再試行しない (本文の作り直し・
-      再修復はしない)。§4-6 と同様に `created_issue_number` / `created_url` を人間に報告するか
-      `needs_human_decision` として渡す。
-6. VerifyFailed の扱い: ingest が `VerifyFailed` 系エラーを返したら、含まれる URL (orphan 資源) を
-   人間に報告する。自動リトライで再実行しない (二重起票になる)。人間の判断を仰ぐか
-   `needs_human_decision` として次工程へ渡す。
-
-## 5. 未対応コマンドの挙動
-
-mcp channel で未対応の op コマンドは構造化エラーで fail-closed する (`FetchError::McpChannelUnsupported` 等)。
-これは「ローカル実行が必要」の意味。gh を直接叩く・MCP tool で見様見真似の代替実行をする等の
-代替経路を自分で組み立ててはならない。
-
-## 6. MCP read 層の hidden marker sanitize (制約)
-
-MCP の read 系 tool (`mcp__github__issue_read` / `list_issues` / `pull_request_read` 等) は body 中の
-HTML コメント (hidden marker) を sanitize して返す。GitHub 本体には verbatim 保存されている。
-
-- write は無傷: call-spec 経由の起票で marker は verbatim 保存され、fingerprint / dedup 基盤は成立する。
-- 禁止: marker 依存の照合 (dedup 突き合わせ / marker 検証等) を `issue_read` / `list_issues` の返却 body に
-  対して行わない。marker 依存の read は gh channel で行うか、raw body を `--input-json` 等で op に渡す。
-
-### search_issues は sanitize しない
-
-`mcp__github__search_issues` は body を raw で返し、検索 index は HTML コメント内の文字列にもヒットする。
-
-marker 依存素材の Cloud 正規経路: `mcp__github__search_issues` (例: query
-`repo:<owner>/<repo> is:issue is:open label:auto-report`、perPage 100) の生レスポンスをファイル保存し、
-op の判定 primitive に `--input-json` で渡す (例: `op scan dedup --input-json`)。加工不要 (op が `items[]` shape を受理)。
-query には必ず `repo:<owner>/<repo>` を含める (op は素材の repo 帰属を再検証しないため、他 repo 混入で false block になる)。
-search 側も sanitize されるようになった場合、op は `DEDUP_INPUT_NO_MARKERS` warning を出す。
-
-### PR (pull_request) の read 層 — sanitize と正準素材
-
-- `pull_request_read` (get) / `issue_read` (get、PR 番号でも動作) は PR body の marker を sanitize する。
-- `mcp__github__search_pull_requests` は body を raw で返し、item に labels が同梱される。
-  PR labels / marker 依存の PR 素材 (review state 文書の pull 等) は `search_pull_requests` の item を正準とする。
-  `issue_read` (get_labels) は PR 番号を解決できない。
-- `issue_write` (update、`issue_number` に PR 番号) で PR の labels 完全置換ができる。
+`mcp__github__issue_read` / `list_issues` / `pull_request_read` は body の HTML コメント (hidden marker) を落として返す。marker に依存する照合 (dedup・marker 検証・review state) にはこれらの返り値を使わず、op か `gh api` で読む。

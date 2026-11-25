@@ -11,8 +11,7 @@
 
 ## 1. 元 Issue 取得
 
-`op issue view "$ISSUE_NUM" --include meta --json` で title / body / labels / state を取得する
-(mcp channel では `mcp__github__issue_read` (method: get)。scope 推定は可視 body / labels だけを使う)。
+`op issue view "$ISSUE_NUM" --include meta --json` で title / body / labels / state を取得する。
 `closed` または `superseded-by-scan` ラベル付きならエラーで中断する (二重正規化防止)。
 
 ## 2. scope 推定
@@ -81,8 +80,6 @@ op issue edit-labels "$ISSUE_NUM" --add "superseded-by-scan"
 ```
 
 - 元 Issue は close しない (close は人間が判断する)。
-- mcp channel では `edit-labels` の直前に `mcp__github__issue_read` を取り直して `--input-json` で渡す
-  (labels は全置換のため、手順 1 の snapshot を使うと後から付いたラベルが消える)。call-spec は `github-channel.md` §3-§4 で完遂する。
 
 ## 7. 完了報告
 

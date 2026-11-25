@@ -27,7 +27,7 @@ auto-fix する mutation 責務を持つ (CLAUDE.md 不変則9 の例外)。
 
 ### Phase 0: preflight
 
-1. `_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」(gh channel で未認証なら中断) と Workflow の capability preflight (`workflow-calling.md` §1)。
+1. `_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」(gh が未認証なら中断) と Workflow の capability preflight (`workflow-calling.md` §1)。
 2. `.claude/rules` が無ければ停止し、先に `/op-skill:op-spec` で正本を起こすよう案内する。
 3. Spec Patrol Ledger の取得:
    ```bash

@@ -66,7 +66,6 @@ op patrol ledger pull --auto-find --json --out-file ledger.json
 - `decision == "pass"`: `.details.issue_number` を `LEDGER_ISSUE` として以降で使う。
   複数 Ledger は最古を採用し `.warnings` を完了報告に転記する (自動 close しない)。
 - 0 件 / parse 失敗: Ledger 未作成として扱い、フェーズ7 で作る (`--dry-run` なら作らず「初回 audit 時に作成予定」と表示)。
-- mcp channel では `--input-json` に label:op-state の `mcp__github__search_issues` 素材を渡す (`github-channel.md` §6)。
 
 ### gh auth なしの場合
 
@@ -113,8 +112,7 @@ op patrol area-select --input-file scored.json --budget <small|medium|large> [--
 ```
 
 - `RUN_ID` は `run-YYYY-MM-DD-NNN`。フェーズ4 / 7 でも同じ値を使う。
-- `--incident-count` は score 上位 10 区画だけ `op issue list --search "<area path>" --state all --limit 30 --json` の件数を渡す
-  (mcp channel では `mcp__github__search_issues` の `total_count`)。
+- `--incident-count` は score 上位 10 区画だけ `op issue list --search "<area path>" --state all --limit 30 --json` の件数を渡す。
 - `area-select` の `selected[]` を巡回対象、`excluded_top[]` を「今回除外した上位候補」として選定理由付きで plan に載せる。
 
 ---
@@ -251,7 +249,6 @@ refactor の debt 系 finding (`architecture_debt` / `staged_refactor` / `needs_
    op issue list --label auto-report --label needs:spec-decision --limit 100 --json
    op issue view-batch <候補番号...> --include meta --json
    ```
-   mcp channel では `mcp__github__search_issues` (`repo:<owner>/<repo> is:issue is:open label:auto-report`) の素材から同じ 3 ラベルで絞る。
 2. 同一 debt の判定 (最初に一致したもので確定): ① `op-fingerprint-bulk` 完全一致 → ② `op-fingerprint` 完全一致 →
    ③ affected_paths 類似 + bulk_group 一致 + symbols 類似。
 3. 一致あり: 新規起票せず、既存 Issue に `op issue comment` で今回の `last_seen_at` / `affected_paths` / `risk_trend` を追記し、
@@ -319,16 +316,12 @@ op patrol ledger init --title "[op-patrol] 巡回監査ステート / Patrol Led
 op patrol ledger pull --issue "$LEDGER_ISSUE" --json --out-file ledger.json   # 新規作成時は取り直す
 ```
 
-mcp channel では `--input-json` に既存 Ledger 探索素材を渡し、emit された call-spec を `github-channel.md` §3-§4 で完遂する。
-
 ### 7-2. state (body) 更新
 
 ```bash
 op patrol ledger push --issue "$LEDGER_ISSUE" --run-id "$RUN_ID" --previous-state ledger.json \
   --updated-area "<area1>" --updated-area "<area2>" --timestamp-now [--dry-run]
 ```
-
-mcp channel では body 全置換の `op issue edit-body` call-spec が emit されるので `github-channel.md` §3-§4 で完遂する。
 
 ### 7-3. 完了報告
 

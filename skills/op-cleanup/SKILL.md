@@ -39,7 +39,7 @@ worktree のパス規則・失敗隔離 path は `~/.claude/skills/_shared/workt
 ## フェーズ0: 環境確認
 
 `~/.claude/skills/_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」に従う。ただし gh 未認証 / origin なしでも中断せず、Tier1 は続行して Tier2 だけスキップする。
-Tier2 の GitHub 操作は `~/.claude/skills/_shared/github-channel.md` の channel 判定に従う (`op` 経由なら mcp channel でも call-spec が出る)。
+Tier2 の GitHub 操作は `~/.claude/skills/_shared/github-channel.md` に従う。
 
 ## フェーズ1: 候補列挙 (read-only)
 

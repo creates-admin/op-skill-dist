@@ -46,7 +46,7 @@ record が無い / 不整合なら通常の対話に戻る。
 ## フェーズ0: 環境確認
 
 `_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」に従う。ただし op-architect は中断しない:
-git リポジトリ外ならユーザー確認後に `git init`、gh 未認証 (gh channel) なら `--adr-only` / `--issue-md` を提案する。続けて:
+git リポジトリ外ならユーザー確認後に `git init`、gh 未認証なら `--adr-only` / `--issue-md` を提案する。続けて:
 
 ```bash
 # ADR フォルダ (この優先順で最初に存在するもの。無ければ docs/adr を新規作成)

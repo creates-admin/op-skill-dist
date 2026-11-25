@@ -26,7 +26,7 @@ scout の実在確認 gate が `confirmed` なら severity で絞らず起票す
 
 ## フェーズ 0: 環境確認
 
-`_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」に従う (gh channel で未認証なら中断)。
+`_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」に従う (gh が未認証なら中断)。
 
 scout との受け渡しディレクトリを作る:
 
@@ -93,7 +93,7 @@ No. | 概要 | 検出根拠
 `confirmed` の各返却の `draft` から `{domain, title, files, symbols}` を Task No. 順に並べた配列を `<REPORT_DIR>/drafts.json` に書き、1 回だけ判定する:
 
 ```bash
-op scan dedup --findings-json "<REPORT_DIR>/drafts.json" --json > "<REPORT_DIR>/dedup.json"   # mcp channel では --input-json で既存 Issue 素材を注入 (github-channel.md §6)
+op scan dedup --findings-json "<REPORT_DIR>/drafts.json" --json > "<REPORT_DIR>/dedup.json"
 ```
 
 - `MISSING_REQUIRED_INPUT` は `warnings` の指摘どおり drafts.json を直して再実行する (手作業の検索で代替しない)。envelope が取れなければ中断してエラーを提示する。
@@ -134,7 +134,6 @@ test -s "$BODY" &&
 
 - 本文ファイルが無い・空、または marker-lint が `pass` 以外なら起票せず `lint_blocked` とし、次の draft へ進む。
 - Issue 番号と URL は envelope の `details.issue_number` / `details.url` から取る。起票失敗は `failed` として記録し次へ進む。
-- mcp channel では `op issue create` が call-spec を emit する。controller が `github-channel.md` §3〜§4 を完遂し、ingest の envelope を正とする。VerifyFailed は `failed` とし、orphan URL を添えて報告する。
 
 ### 3-3. 結果 relay
 

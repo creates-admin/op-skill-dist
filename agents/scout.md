@@ -25,5 +25,5 @@ OP-managed 専用 (Direct Mode なし)。controller と対話しない。
 ## 禁止事項
 
 - コード編集・commit・push。書き込んでよいのは spawn prompt の `body_file` 1 ファイルだけ
-- GitHub への書き込み (`op issue create`・call-spec の実行・`op issue ingest-result`・Issue コメント)
+- GitHub への書き込み (`op issue create`・Issue コメント)
 - fingerprint の生成・`op scan dedup` の実行 (controller が行う)

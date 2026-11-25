@@ -361,8 +361,7 @@ jq -n --arg r "$RESULT" --arg sha "$VERIFIED_HEAD_SHA" --argjson round "$RUNTIME
    + (($runner.requires_runtime // []) as $rr | if $with_rr and ($rr | length) > 0 then {requires_runtime:$rr} else {} end)
    + (($runner.gaps // []) as $g | if ($g | length) > 0 then {gaps:$g} else {} end)' \
   | op review state push --pr "$PR_NUMBER" --apply-json - \
-      --write-id "${OP_RUN_SESSION_ID}-postcheck-verify-runner-r${RUNTIME_VERIFY_ROUND}" --session "$OP_RUN_SESSION_ID" \
-      ${REVIEW_STATE_INPUT_JSON:+--input-json "$REVIEW_STATE_INPUT_JSON"}
+      --write-id "${OP_RUN_SESSION_ID}-postcheck-verify-runner-r${RUNTIME_VERIFY_ROUND}" --session "$OP_RUN_SESSION_ID"
 ```
 
 spawn していない場合 (ハーネス未導入 / 結果が得られない) は `RUNNER_JSON` を空のままにする。

@@ -27,7 +27,7 @@ op-intake が scout の報告・人の Issue の正規化から起票すると�
 ## 2. 重複・衝突チェック (省略不可)
 
 ```bash
-op scan dedup --findings-json drafts.json --json   # クラウド (GraphQL 不可) と mcp channel では --input-json で既存 Issue 素材を注入 (REST での取り方は op-intake 手順 3)
+op scan dedup --findings-json drafts.json --json   # --input-json で既存 Issue 素材を注入できる (REST での取り方は op-intake 手順 3)
 ```
 
 - fingerprint と `drafts.json` の形は `dedup-policy.md` のとおり (fingerprint は CLI で生成する)。

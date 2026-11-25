@@ -25,8 +25,6 @@ op-run が Issue を占有 (claim) していることを示す。`op claim acqui
 | 確認 | `op claim status` | 診断用 |
 | 掃除 | `op claim sweep` (定期実行) | TTL 超過の claim を解放 |
 
-mcp channel では `op claim` は使えない (op-run は claim を skip する。手順は op-run skill の 1-2-e)。
-
 ## 除外条件
 
 次の Issue には claim しない: `op-state` / `do-not-close` 付き (Ledger 等の永続 Issue)、`op:in-progress` 付き (他 instance が占有中)、closed。

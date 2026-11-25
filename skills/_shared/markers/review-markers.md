@@ -61,13 +61,12 @@ block が無い PR への初回 push は空 state から作る。手編集しな
 
 ### 読み書き
 
-- `op review state pull --pr N [--input-json <素材>]` — state を読む。現在 round は `attempts[].review_round` の最大値
+- `op review state pull --pr N` — state を読む。現在 round は `attempts[].review_round` の最大値
   (同一 round 重複時の tie-break は CLI が行う。呼び出し側で再実装しない)。
-- `op review state push --pr N --apply-json <file|-> --write-id <id> [--session S] [--input-json <素材>]` — 1 push = 1 payload。
+- `op review state push --pr N --apply-json <file|-> --write-id <id> [--session S]` — 1 push = 1 payload。
   `kind` は `attempt` / `post_check` (`expert` キー + entry) / `controller` / `specialist_review`。
 - `op review publish-approval --pr N --session S --reviewer review-expert --verdict approve [--review-round R]` —
-  approve attempt の push と `pro-reviewed` 付与を 1 コマンドで行う (mcp では 2 call-spec を順に emit)。
-- mcp channel では pull / push / publish-approval とも `--input-json` (fresh な `search_pull_requests` 素材の file path) が必須。
+  approve attempt の push と `pro-reviewed` 付与を 1 コマンドで行う。
 
 ### write_id 規約
 
