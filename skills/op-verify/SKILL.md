@@ -1,12 +1,12 @@
 ---
 name: op-verify
-description: 実機検証ハーネスを導入・実行・育成するスキル。--init は stack (Web / Tauri) を診断し、テンプレートからハーネスを expert に作らせ、op verify conformance が通るまで仕上げて PR。通常モードは対象 branch / PR でハーネスを起動し、verify-runner が実機で操作して証跡を残し、停止して結果を記録する。--grow は記録された gap と regression spec 昇格候補を人間が選び、expert がハーネスへ還元して PR。--provision-windows は Windows 検証の環境の不足を見つけて準備を提案し、人間の承認後にスクリプトで行う。起票はしない。「op-verify」「実機検証」「ハーネス導入」「verify harness」「動作確認」等のキーワードで起動。
+description: 実機検証ハーネスを導入・実行・育成するスキル。--init は stack (Web / Tauri) を診断し、テンプレートからハーネスと .claude/skills/verify/SKILL.md (どのセッションでも読まれる検証の手順) を expert に作らせ、op verify conformance が通るまで仕上げて PR。通常モードは対象 branch / PR でハーネスを起動し、verify-runner が実機で操作して証跡を残し、停止して結果を記録する。--grow は記録された gap と regression spec 昇格候補を人間が選び、expert がハーネスと verify SKILL.md へ還元して PR。--provision-windows は Windows 検証の環境の不足を見つけて準備を提案し、人間の承認後にスクリプトで行う。起票はしない。「op-verify」「実機検証」「ハーネス導入」「verify harness」「動作確認」等のキーワードで起動。
 ---
 
 # op-verify: 実機検証ハーネスの導入 / 実機検証 / 育成
 
 ハーネスが無い repo では作り、ある repo では使い、足りなければ育てる (ADR-0033)。
-ハーネスの契約は `~/.claude/skills/_shared/verify-harness.md`、`op-config.yaml` での宣言は `~/.claude/skills/_shared/op-config-schema.md` §14 `verify_harness`。
+ハーネスの契約は `~/.claude/skills/_shared/verify-harness.md` (対象 repo の `.claude/skills/verify/SKILL.md` は同 §8)、`op-config.yaml` での宣言は `~/.claude/skills/_shared/op-config-schema.md` §14 `verify_harness`。
 
 - Direct Mode 固定 (`~/.claude/skills/_shared/invocation-mode.md`「Direct 固定 skill に op_managed が渡った場合」)。spawn する worker には `op_managed` を渡す。
 - ハーネスとテストの変更は feature-expert が worktree で apply → PR する経路だけで行う。司令官はコードを編集しない。マージは人間 (op-merge 可)。
@@ -50,7 +50,7 @@ op run base-sha --base-ref "origin/$BASE_REF" | jq -r '.payload.base_sha'   # �
 | `verify_harness` | `--init` | `--grow` |
 |---|---|---|
 | 無い | `--init` へ進む | `--init` を案内して終了 |
-| ある | `op verify conformance` を実行する。pass なら「導入済み」と報告して終了。fail なら理由を示し、`--grow` と同じ apply で直すか人間に聞く | `--grow` へ進む |
+| ある | `op verify conformance` を実行する。pass で `.claude/skills/verify/SKILL.md` もあれば「導入済み」と報告して終了。pass で verify SKILL.md だけ無ければ「`--init`: verify SKILL.md だけを足す」へ進む。fail なら理由を示し、`--grow` と同じ apply で直すか人間に聞く | `--grow` へ進む |
 
 テンプレートは `<skill_dir>/templates/` にある。skill_dir はこの skill の Base directory (Skill 読み込み時に表示される絶対パス)。
 相対パスは plugin 配布では解決しないため、司令官が絶対パスに解決して expert に渡す。
@@ -58,6 +58,7 @@ op run base-sha --base-ref "origin/$BASE_REF" | jq -r '.payload.base_sha'   # �
 | パス | 内容 |
 |---|---|
 | `templates/common/verify-harness.mjs` | start / stop / smoke の本体。run_id による namespace 化・PID の本人確認停止・実 bind ポートの照合・失敗時の自己回収を持つ (契約 §1〜§3) |
+| `templates/common/verify-skill.md` | 対象 repo の `.claude/skills/verify/SKILL.md` のひな形 (契約 §8)。冒頭のコメントに置き換える値がある |
 | `templates/web/stack.mjs` + `op-config.snippet.yaml` | Web: dev server を空きポートで起動し、Playwright のブラウザを解決する (`driver: playwright`) |
 | `templates/tauri-linux/stack.mjs` + `op-config.snippet.yaml` | Tauri Linux: ビルド → Xvfb → tauri-driver (WebKitGTK)。`driver: webdriver`、capabilities を start の JSON の `webdriver_capabilities` で渡す |
 
@@ -80,7 +81,7 @@ op run base-sha --base-ref "origin/$BASE_REF" | jq -r '.payload.base_sha'   # �
 
 2. 導入計画を人間に提示して承認を得る: 使うテンプレート、置き場所 (既定 `scripts/verify/`)、target 名と起動コマンド、
    ポートの渡し方、認証の扱い、追加する依存 (Playwright が無ければ devDependency に足すか)、smoke で見る要素、
-   `.gitignore` に足す行 (`.verify/`)。`stack: other` や `blockers` があれば、テンプレートでは足りない点を示して進め方を聞く。
+   `.gitignore` に足す行 (`.verify/`)、`.claude/skills/verify/SKILL.md` を置くこと (既にあれば上書きせず、ハーネスを呼ぶ手順との差分を示す。`.claude/` が gitignore されていれば `!.claude/skills/verify/` の例外を足す)。`stack: other` や `blockers` があれば、テンプレートでは足りない点を示して進め方を聞く。
    キャンセルならここで終了する。
 3. apply (worktree):
 
@@ -98,7 +99,9 @@ op run base-sha --base-ref "origin/$BASE_REF" | jq -r '.payload.base_sha'   # �
    手本: <skill_dir>/templates/common/verify-harness.mjs と <skill_dir>/templates/<web|tauri-linux>/ (絶対パス)。
      両方の .mjs を計画の置き場所へコピーし、stack.mjs の TODO を計画どおりに直す。op-config.snippet.yaml を op-config.yaml の
      verify_harness 節として足し、コマンドのパスを置き場所に合わせる。.gitignore に計画の行を足す。
-   触ってよいもの: ハーネスのファイル、op-config.yaml の verify_harness 節、.gitignore、計画で承認された依存の追加。
+     <skill_dir>/templates/common/verify-skill.md を .claude/skills/verify/SKILL.md へコピーし、冒頭のコメントどおりに値を
+     verify_harness の宣言から埋めてコメントを消す (既にあるファイルは計画で承認された差分だけ直す)。
+   触ってよいもの: ハーネスのファイル、op-config.yaml の verify_harness 節、.gitignore、.claude/skills/verify/SKILL.md、計画で承認された依存の追加。
      アプリのコードやポートの固定をやめるための変更が要るなら実施せず needs_human_decision で返す。
    検証: `op verify conformance --dir <worktree_path>` が exit 0 になるまで直す。最後の出力 JSON を完了報告に含める。
    完了報告は expert-spawn「修正完了報告 schema」(issue: null / cluster_id: "verify-init")。
@@ -107,8 +110,20 @@ op run base-sha --base-ref "origin/$BASE_REF" | jq -r '.payload.base_sha'   # �
 4. 完了後は `~/.claude/skills/_shared/apply-completion-verify.md` に従う
    (`op apply verify-commit --worktree <worktree_path> --base-ref <BASE_REF> --reported-json '<commits_added>'`)。
    続けて司令官が `op verify conformance --dir <worktree_path>` を自分で実行し、exit 0 を確かめる (自己申告だけで PR にしない)。
+   `.claude/skills/verify/SKILL.md` も Read し、先頭が `name: verify` の frontmatter で、`{{` とひな形のコメントが残っておらず、
+   コマンドが `verify_harness` の start / smoke / stop と一致し、`git -C <worktree_path> ls-files --error-unmatch .claude/skills/verify/SKILL.md` が exit 0 であることを確かめる。
    fail なら failures を添えて同じ expert に 1 回だけ戻す。それでも fail なら `op run worktree cleanup --task-id <task_id> --failure` して報告する。
 5. PR: フェーズ「PR」の手順で作る。タイトルは `verify(init): <stack> harness`。
+
+verify SKILL.md は `verify_harness` に start / stop / smoke があるときだけ扱う (`verify-harness.md` §8)。
+
+### `--init`: verify SKILL.md だけを足す
+
+1. ひな形を `verify_harness` の宣言で埋めた案を人間に示して承認を得る (gitignore の例外が要ればそれも)。キャンセルならここで終了する。
+2. apply: `--init` の 3 と同じ手順 (task-prefix `verify-skill`、フェーズ名 verify-skill-apply、model は Sonnet = §5.3 の `extension`)。
+   指示書は承認した案。ハーネスと op-config.yaml は触らず、触ってよいものは `.claude/skills/verify/SKILL.md` と `.gitignore` の例外の行だけ。
+3. `--init` の 4 の確認をする。
+4. PR: タイトルは `verify(skill): add verify SKILL.md`。
 
 ## 通常モード: 実機検証
 
@@ -165,13 +180,19 @@ op run base-sha --base-ref "origin/$BASE_REF" | jq -r '.payload.base_sha'   # �
    |---|---|---|---|---|
    | G1 | gap | ... | ... | ... |
    | S1 | spec | ... | - | regression spec に昇格 |
+   | V1 | skill | - | - | verify SKILL.md をひな形から作る |
 
    どれを還元しますか?  1. すべて  2. id を選択 (例: G1, S1)  3. キャンセル
    ```
 
+   V1 は `.claude/skills/verify/SKILL.md` が無く、`verify_harness` に start / stop / smoke があるときだけ載せる。
+
 3. apply: `--init` の 3〜4 と同じ手順 (task-prefix `verify-grow`、フェーズ名 verify-grow-apply、model は Sonnet = §5.3 の `extension`)。
    指示書は選ばれた候補の JSON。触ってよいものはハーネスのファイル・op-config.yaml の verify_harness 節・regression spec
-   (既存 E2E の置き場所に置き、start 済みの run に対して通ることを確かめる)。conformance が exit 0 であることは同じく必須。
+   (既存 E2E の置き場所に置き、start 済みの run に対して通ることを確かめる)・`.claude/skills/verify/SKILL.md`。
+   verify SKILL.md には、昇格した spec を「繰り返し確かめる流れ」に実行コマンドで足し、ハーネスへ還元した gap を「手作業で補う工程」から消す
+   (還元できず手作業のまま残す gap はそこに足す)。V1 が選ばれたらひな形から作る。verify SKILL.md が無く V1 も選ばれていなければ触らない。
+   conformance が exit 0 であることと、`--init` の手順 4 の verify SKILL.md の確認は同じく必須。
 4. PR: タイトルは `verify(grow): <要約>`。
 
 ## `--provision-windows`: Windows 検証の環境の準備
@@ -188,7 +209,8 @@ EOF
 op pr create --base "<BASE_REF>" --head "<branch>" --title "<タイトル>" --body-file "<worktree_path>.pr-body.md"
 ```
 
-- 本文: stack とテンプレート、置き場所、`op verify conformance` の結果 (司令官が実行したもの)、還元した候補 (`--grow`)、実行した検証 Level。
+- 本文: stack とテンプレート、置き場所、`op verify conformance` の結果 (司令官が実行したもの)、verify SKILL.md の追加・変更、還元した候補 (`--grow`)、実行した検証 Level。
+- `.claude/` のファイルも含めて worktree の commit を push する (公式の `/ship` は使わない)。
 - worktree は残す (`~/.claude/skills/_shared/worktree-ops.md`「cleanup タイミング」)。push か PR 作成に失敗したら `--failure` で隔離して報告する。
 
 ## 完了報告

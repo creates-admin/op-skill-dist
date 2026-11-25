@@ -101,3 +101,13 @@
 | §2 の JSON | 不足。`run_id` / `driver` / `browser` が無く、URL と auth・state は `siteUrl` / `cmsUrl` / `gatewayUrl` / `storageStatePath` / `pidFile` の flat key。既存 key は残したまま §2 の key を足せる |
 
 適合には、§2 の key の追加と、生きているのに照合できない PID を停止せずにその run の state を残して非 0 で終える修正の両方が要る。
+
+## 8. verify skill
+
+ハーネスのある repo は `.claude/skills/verify/SKILL.md` (`name: verify`) を tracked で持つ。ひな形は op-verify の `templates/common/verify-skill.md`。
+`runtime: windows` で start / stop / smoke を宣言しない repo は持たない。
+
+- 本文は §1 のコマンド (`verify_harness` の宣言の値) を呼ぶ手順だけにし、ハーネスの中身を写さない。
+- 手順の順: start → smoke → サインイン (`auth_state`) → 変えた流れを操作して撮る → stop → 報告。
+- 最後の手順は「実行した手順と見た結果を報告する。手順と見た結果を示さずに成功を報告しない」。
+- regression spec と、ハーネスがまだ自動でやらず手作業で補う工程は、`op-verify --grow` が同じファイルに反映する。
