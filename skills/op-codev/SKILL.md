@@ -191,7 +191,7 @@ Agent({
     自己検証は Skill({skill: "op-skill:op-code-review"}) を自分の変更差分に対して実行する (effort 指定なし)。
     手動 fallback は checklist「手動 fallback の発動条件」を満たす場合のみ。子 agent にレビューを委任しない。
 
-    【完了報告】~/.claude/skills/_shared/expert-spawn.md「修正完了報告 schema」で返す。
+    【完了報告】~/.claude/skills/_shared/expert-report-schemas.md「修正完了報告 schema」で返す。
     commits_added (SHA 文字列の配列、1 件以上) / self_review_result / self_check_blocked / code_review_invoked / code_review_result は必須。
     op-code-review の findings 配列をそのまま完了報告として返さない (code_review_result / self_review_result に要約する)。
     加えて「手本にした既存ファイル」「再利用した既存資産」を書く (空欄は silent fork 兆候として不可)。
@@ -316,7 +316,7 @@ Agent({
 - skipped のうち probe → 1 回だけ再 spawn の対象は `skip_reason: all_means_failed` だけ。
   `requires_runtime` / `harness_not_installed` は正当な skip として CHECKPOINT C に提示する (規則の本文は dispatcher)。
 - 返却の `harness.stop_status` が `deferred` なら、この IU の verify-runner (再 spawn を含む) がすべて返ったあと、
-  CHECKPOINT C の前に controller が expert-verify skill「保留した stop の引き取り」に従って stop を実行する。
+  CHECKPOINT C の前に controller が expert-verify skill の `references/deferred-stop.md` (「保留した stop の引き取り」) に従って stop を実行する。
 
 ### [CHECKPOINT C] 検証結果
 

@@ -53,7 +53,7 @@ Claude Design (`/design` Artifact) は作り込み中の作業台であり、正
 op-spec-patrol の指摘から作る) は次の形にする:
 
 - タイトル: `[designer-expert] 部品: <部品名> — <内容>`
-- marker: `op-fingerprint` (domain `design`) / `op-run-expert: designer-expert` (書式は `pr-templates.md`「Issue 本文 hidden marker」)
+- marker: `op-fingerprint` (domain `design`) / `op-run-expert: designer-expert` (書式は `issue-templates.md`「Issue 本文 hidden marker」)
 - 本文の 1 行目: `実施: /op-skill:op-component <部品名> --issue <N>` (`<N>` は起票後の番号。起票時は `--issue` を省いてよい)
 - 本文: 必要な variant / 状態、なぜ必要か (どの画面・どの gap から来たか)
 

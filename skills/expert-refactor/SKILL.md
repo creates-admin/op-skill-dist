@@ -32,38 +32,7 @@ React / Go は `scope_in` に明示された場合か op-run の変更差分に�
 
 ## Severity Policy (報告閾値)
 
-報告ルールは `_shared/severity-rubric.md`「scan 報告ルール (共通)」節 (scan / patrol 前に Read)。
-
-```text
-行数 = scan trigger
-責務混在 = Issue 化の根拠
-```
-
-### Critical (限定的)
-
-- public API / IPC contract / serialized format / DB schema の同期境界が現に崩壊している (build 破壊か実行時 silent 破壊を確認済み)
-- ビルド破壊または実行時破壊に直結している循環依存
-- file IO / permission / shell 周辺の構造悪化が進行中で、現バージョンの本番 build に影響している
-
-「悪化のリスクがある」だけでは Critical にしない。
-
-### High (主たる起票対象)
-
-- 同じ意味の literal / token / path / key が 3 箇所以上に散り、2 つ以上の layer / module / feature を跨ぐ
-- god function / large file / large component が複数責務を抱え、変更理由が複数化している
-- import 方向の逆流 / shared が domain を import / utils 配下に feature 固有処理が漏れている
-- active path と紛らわしい dead code が残り、新規実装が誤再利用するリスクがある
-- 既存 architecture_debt の腐敗度が上がっている (条件は `architecture-debt.md`「Severity Exception」)
-
-好み / formatter 問題 / 2 箇所程度の軽微な重複は報告しない。
-
-### blocking フラグ (severity と独立)
-
-以下のいずれかで `blocking: true` + `blocking_reason` を付ける。Critical = blocking ではない。
-
-- 新規変更 (今回の scan 対象 PR / 変更ファイル) が既存 architecture_debt を悪化させている (今回の変更起点の判定。過去回数の推測ではない)
-- public API / IPC contract / serialized format / file location に近接する変更が refactor PR 内で進行し、scope_out を踏もうとしている
-- Critical 級だが、まず本 PR を止めて人間判断を仰ぎたい
+scan / patrol で finding を返す前に `references/severity-policy.md` を読む。
 
 ---
 
@@ -71,7 +40,7 @@ React / Go は `scope_in` に明示された場合か op-run の変更差分に�
 
 ### scan / patrol モード
 
-- 出力は「Canonical Schema Contract」節。`bulk_group` 必須、subtype は必要に応じて。
+- 出力は `references/report-schema.md`「Canonical Schema Contract」。`bulk_group` 必須、subtype は必要に応じて。
 - 一度で直せない巨大負債は捨てず `architecture_debt` finding にする。返す前に `references/architecture-debt.md` を Read する。
 - patrol では巡回対象を決める前に `references/structure-health.md`「Patrol Sampling 優先度」節を Read する。
 
@@ -80,7 +49,7 @@ React / Go は `scope_in` に明示された場合か op-run の変更差分に�
 - Issue の `scope_in` (op-prune では承認 items) に閉じる。仕様変更 / bug fix / performance 最適化 / feature 実装を混ぜない。
 - 変更前に Grep で参照元を repo 全体から確認する。
 - 小さな単位で抽出・移動・統合する。既存テストを維持し、新規テスト設計は test-expert に委ねる。
-- 保護対象は「Apply Report」節の `contract_preservation`。UI 見た目 / UX flow / DOM 構造 / props / emit / class / key / focus / state も変えない。
+- 保護対象は `references/report-schema.md`「Apply Report」の `contract_preservation`。UI 見た目 / UX flow / DOM 構造 / props / emit / class / key / focus / state も変えない。
   file location の変更が避けられない場合は移動せず `staged_refactor` で計画化する。
 - 1 PR は失敗時に 1 revert で戻せる単位にする: commit は 1〜3 程度、変更ファイルは責務境界の単位に揃え複数 boundary を跨ぐ移動をしない、
   staged_refactor の stage を連続実行して 1 PR にしない。
@@ -105,20 +74,9 @@ canonical doc (`skills/**/*.md` / `docs/**` / `agents/*.md` 等) を圧縮・再
 
 ---
 
-## Canonical Schema Contract
-
-scan / patrol の出力は `_shared/expert-spawn.md`「scan 出力 envelope 契約」節の envelope (`{"findings": [...]}`) で返す。
-payload の正本は `op help payload refactor-finding --json`。
-
-- domain: `"refactor"` / recommended_runner: `"refactor-expert"`
-- post_check_expert の選択基準は `references/post-check-policy.md`
-- fingerprint 文字列は finding に埋めない。`files` / `symbols` / `bulk_group` / `affected_paths` を正確に埋めれば op-scan / op-patrol が CLI で生成する
-
----
-
 ## Refactor Execution Control
 
-refactor Issue では Issue 本文の `## 🧱 Refactor Execution Control` 節 (`_shared/pr-templates.md`) を source of truth とする。本節はその意味と実行ルールの正本。
+refactor Issue では Issue 本文の `## 🧱 Refactor Execution Control` 節 (形は `references/execution-control.md`) を source of truth とする。本節はその意味と実行ルールの正本。
 
 ### Issue 本文 / scan finding から確認する項目
 
@@ -152,18 +110,4 @@ refactor Issue では Issue 本文の `## 🧱 Refactor Execution Control` 節 (
 
 ## Apply Report
 
-apply 完了報告の共通フィールドは `_shared/expert-spawn.md`「修正完了報告 schema」。refactor 固有:
-
-- `behavior_change_claim`: `"no_behavior_change"`
-- `structural_change_summary`: 構造的変更の要約 (意味レベル)
-- `contract_preservation` (保護対象の正本。1 つでも true が必要なら実装せず `needs_spec_decision`):
-  `public_api_changed` (trait / interface の signature・引数順・戻り値型を含む) / `serialized_format_changed` / `db_schema_changed` /
-  `migration_changed` / `config_format_changed` / `ipc_contract_changed` / `tauri_command_names_changed` / `event_names_changed` /
-  `permission_names_changed` / `path_values_changed` / `key_values_changed` / `file_locations_changed` / `status_values_changed` /
-  `error_codes_changed` / `env_vars_changed`
-- `stage_executed`: `safe_first_step` / `direct_apply` / `N/A`
-- `forbidden_actions_respected`: `forbidden_stage_actions` を実行していないことの確認
-- `verification_performed` / `verification_not_run` / `residual_risk`
-- `recommended_post_check_expert` / `recommended_followup_experts` (`post-check-policy.md`)
-
-scattered token の apply では、実値が変更前後で変わっていないことを明記する。
+完了報告を返す前に `references/report-schema.md`「Apply Report」を読む。

@@ -1,6 +1,6 @@
 # scan 出力契約 (test-expert)
 
-envelope・canonical 必須フィールドは `~/.claude/skills/_shared/expert-spawn.md` の「scan 出力契約 (canonical schema)」が正本。
+envelope・canonical 必須フィールドは `~/.claude/skills/_shared/expert-report-schemas.md` の「scan 出力契約 (canonical schema)」が正本。
 本ファイルは test-expert の拡張フィールドと、canonical フィールドの test 文脈での埋め方を定める。
 
 ## scan の責務: 実装計画つき Issue
@@ -17,7 +17,7 @@ coverage 上昇だけを目的にしたテストは計画しない。
 ## canonical フィールドの埋め方
 
 `domain: "test"` / `recommended_runner: "test-expert"` / `post_check_expert` はテスト追加のみなら `null` / `recommendation.type` は `test` (調査が要るなら `investigation`) /
-`symbols` はテスト対象の関数・クラス・コンポーネント名。severity の基準は SKILL.md「severity / confidence の判定」。
+`symbols` はテスト対象の関数・クラス・コンポーネント名。severity の基準は下の「severity / confidence の判定」。
 
 ## 拡張フィールド
 
@@ -47,3 +47,27 @@ delete_candidate は 3 段階モデルに従う。
 | `coverage-gap-error-path` | 同領域の error path 未テスト集中 | add_test |
 | `coverage-gap-boundary` | 境界値テスト未整備 | add_test (parametrize) |
 | `coverage-gap-permission` | 権限境界の未網羅 role | add_test (parametrize) |
+
+## severity / confidence の判定
+
+危険度と確信度は別に付ける。報告ルールは `~/.claude/skills/_shared/severity-rubric.md`「scan 報告ルール (共通)」。
+
+| severity | 基準 |
+|----------|------|
+| critical | CI 不能 / collect 不能 / 認証認可・課金・データ破壊・永続化の未テスト / 既知 flaky による CI 阻害 |
+| high | Critical 周辺の error path・boundary・permission gap / 実 HTTP 依存 / 危険な sleep / 意味検証なし snapshot の大量発生 |
+
+重複 / 長 setup / 命名不良 / fixture 整理 / スタイルは medium 以下で、scan では返さない。
+
+| confidence | 基準 |
+|------------|------|
+| high | coverage / 実行結果 / git blame / 既存テスト確認の複数根拠が一致 |
+| medium | grep + Read で妥当だが coverage や blame は未確認 |
+| low | grep のみ、または仕様意図が不明 (finding にしない) |
+
+次は severity に関係なく `needs_human_decision.required: true` にする (schema は `~/.claude/skills/_shared/invocation-mode.md`):
+
+- 追加意図が復元できない古いテスト
+- 仕様か偶然か判断できない挙動
+- UI 仕様を守っている可能性がある snapshot
+- business rule / domain rule に見えるもの

@@ -29,7 +29,7 @@ feature が `design-system` で、gap が部品の作成・変更・登録状態
 
 ## 3. 起票 (1 件ずつ直列)
 
-本文は `pr-templates.md`「Issue 本文 (指示書フル版)」に従って一時ファイルに書く。marker は次の 3 つ:
+本文は `issue-templates.md`「Issue 本文 (指示書フル版)」に従って一時ファイルに書く。marker は次の 3 つ:
 
 ```
 <!-- op-fingerprint: <手順2 で生成した fingerprint> -->

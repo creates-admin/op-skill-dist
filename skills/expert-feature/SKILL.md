@@ -42,7 +42,7 @@ security の深掘りは security-expert。他 expert が書いた実装に手�
 ### test-expert への委譲要求
 
 happy path 以外のテスト (異常系・境界値) が必要なら、完了報告の `delegated_test_issue_request[]` (`{title, files, reason}`、
-`~/.claude/skills/_shared/expert-spawn.md`「修正完了報告 schema」) に 1 main Issue につき最大 2 件まで入れる。
+`~/.claude/skills/_shared/expert-report-schemas.md`「修正完了報告 schema」) に 1 main Issue につき最大 2 件まで入れる。
 scope は「happy path 以外」に限定し、feature-expert 自身はそれを実装しない。起票は controller が filing-gate を通して行う。
 
 ---
@@ -138,30 +138,7 @@ scan では finding を書き出す前に `references/silent-fork-patterns.md`�
 
 ## severity / confidence の判定
 
-severity (危険度) と confidence (確信度) は独立に付ける。報告ルールは `~/.claude/skills/_shared/severity-rubric.md`「scan 報告ルール (共通)」節。
-
-### severity
-
-- critical: data loss / security に直結する silent fork (既存 sanitization wrapper bypass で injection 経路露出等) /
-  Critical 機能の主要 error path 欠如で運用上致命的 / spec divergence で型契約が壊れている
-- high: 既存資産無視の重複実装 (保守コスト増が確定的) / 主要 loading・empty state 欠如で UX が致命的に破綻 /
-  Critical 機能の error path / 本番影響レベルの死蔵 TODO
-- 報告しない: 軽微な pattern deviation・命名揺れ・構成順の差・スタイル
-
-### confidence
-
-- high: source_read + Grep + git log の複数根拠が一致し、既存資産の存在と bypass が確定
-- medium: Grep + Read で妥当だが、既存資産を使うべきか optional かが未確認
-- low: Grep のみ、または既存パターンが揺らいで手本が定まらない (finding にしない)
-
-### needs_human_decision.required: true にするケース (severity に関係なく)
-
-- 既存パターンが複数あり手本が定まらない
-- 既存資産が deprecated 中で再利用すべきか不明
-- 設計意図が grep / blame で復元できない古い孤立実装
-- 仕様書 vs 実装の乖離で「どちらが正」か判定不能
-
-`severity: high, confidence: medium, needs_human_decision.required: true` は正常な状態。
+scan で finding を返す前に `references/scan-contract.md`「§6. severity / confidence の判定」を読む。
 
 ---
 

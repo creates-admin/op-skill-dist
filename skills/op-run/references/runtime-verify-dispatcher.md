@@ -172,7 +172,7 @@ lease が exit 2 (エラー) で終わった段も holder ファイルを書き�
 | windows_endpoint | 1.1 で借りたときの `WINDOWS_ENDPOINT` (lease の `details.provision.relay.webdriver_url`) |
 | windows_capabilities | 1.1 で借りたときの `WINDOWS_CAPABILITIES` (lease の `details.provision.driver.capabilities`。New Session の `capabilities.alwaysMatch` の中身) |
 | windows の理由 | 1.1 で借りられなかったときの `WINDOWS_REQUIRES_RUNTIME` と `WINDOWS_DETAIL` |
-| windows_provision | 1.1 で借りたときの `WINDOWS_PROVISION_JSON` (lease の `details.provision`。key は `expert-verify` §1) |
+| windows_provision | 1.1 で借りたときの `WINDOWS_PROVISION_JSON` (lease の `details.provision`。key は expert-verify skill の `references/windows-target.md`) |
 
 ```
 invocation_mode: op_managed

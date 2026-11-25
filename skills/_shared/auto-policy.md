@@ -1,7 +1,7 @@
 # --auto 起票 policy (op-scan / op-patrol / op-doctor 共通)
 
 `--auto` で無人起票してよいのは、以下 8 条件をすべて満たす検出のみ。
-field 名は canonical schema (`_shared/expert-spawn.md`) に従う。
+field 名は canonical schema (`_shared/expert-report-schemas.md`) に従う。
 #1〜#7 は `op scan eligibility`、#8 は `op scan dedup` が評価する。
 
 | # | 条件 | CLI が見る field |

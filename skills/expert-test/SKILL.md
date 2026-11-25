@@ -54,27 +54,7 @@ production code は原則修正しない。
 
 ## severity / confidence の判定
 
-危険度と確信度は別に付ける。報告ルールは `~/.claude/skills/_shared/severity-rubric.md`「scan 報告ルール (共通)」。
-
-| severity | 基準 |
-|----------|------|
-| critical | CI 不能 / collect 不能 / 認証認可・課金・データ破壊・永続化の未テスト / 既知 flaky による CI 阻害 |
-| high | Critical 周辺の error path・boundary・permission gap / 実 HTTP 依存 / 危険な sleep / 意味検証なし snapshot の大量発生 |
-
-重複 / 長 setup / 命名不良 / fixture 整理 / スタイルは medium 以下で、scan では返さない。
-
-| confidence | 基準 |
-|------------|------|
-| high | coverage / 実行結果 / git blame / 既存テスト確認の複数根拠が一致 |
-| medium | grep + Read で妥当だが coverage や blame は未確認 |
-| low | grep のみ、または仕様意図が不明 (finding にしない) |
-
-次は severity に関係なく `needs_human_decision.required: true` にする (schema は `~/.claude/skills/_shared/invocation-mode.md`):
-
-- 追加意図が復元できない古いテスト
-- 仕様か偶然か判断できない挙動
-- UI 仕様を守っている可能性がある snapshot
-- business rule / domain rule に見えるもの
+scan で finding を返す前に `references/scan-contract.md`「severity / confidence の判定」を読む。
 
 ## テスト種別の選択
 

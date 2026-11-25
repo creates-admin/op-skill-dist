@@ -65,7 +65,7 @@ apply / post-check expert は `op run expert-resolve` の結果を使う。
 - post_check (op-run フェーズ3.5) = Issue 固有の再監査。global review (フェーズ4、review-expert) = 全 PR が必ず受ける独立レビュー。post_check が null でも global review は skip しない。
 - ux-ui: 検出 (scan / patrol / post-check) は `ux-ui-audit-expert` (実装しない)、実装 (apply) は `designer-expert`。
 - design: 検出も実装も `designer-expert`。UI files を触る場合は post-check で `ux-ui-audit-expert` を呼ぶ。
-- domain → expert の対応表は `pr-templates.md`「domain → marker / ラベル表」。
+- domain → expert の対応表は `issue-templates.md`「domain → marker / ラベル表」。
 
 ---
 
@@ -94,7 +94,7 @@ CLI は `files_declared` の重複だけを検出する。controller は次も�
 
 ### Stage 2: Post-investigation conflict check (探知フェーズ後)
 
-各 expert は修正フェーズの前に探知フェーズを行い、investigation report (`expert-spawn.md`「investigation report schema」) を返す。
+各 expert は修正フェーズの前に探知フェーズを行い、investigation report (`expert-report-schemas.md`「investigation report schema」) を返す。
 controller は `files_likely_to_modify` で `op run cluster recheck` を実行し、Stage 1 と同じ検証をやり直す。
 
 | Stage 2 結果 | 対処 |

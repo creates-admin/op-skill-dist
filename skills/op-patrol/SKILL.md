@@ -267,29 +267,8 @@ op-scan フェーズ2-3 の 2 番目 (expert) の後に「area の patrol_score 
 
 ### 対話モード (デフォルト)
 
-```
-## op-patrol 巡回結果 (<RUN_ID>)
-
-### サマリ
-| area | Critical | High | 既存重複 |
-|---|---|---|---|
-
-### 起票候補
-| # | severity | expert | area | title |
-|---|---|---|---|---|
-
-### 既存 Issue 重複でスキップ
-- #<matched_existing.issue_number> と重複: <title>
-
-### run 内重複で統合
-- 先行 draft「<matched_draft.draft_title>」と fingerprint 完全一致: <title>
-
-### 要確認 (manual_review_bucket / 類似 Issue あり)
-- evidence_grade=requires_runtime: <area> の <内容>
-
-起票しますか?
-1. すべて起票  2. Critical のみ  3. 番号で個別選択  4. キャンセル (Ledger は更新する)
-```
+op-scan フェーズ3「対話モード」と同じ (op-intake skill の `--findings` の手順 2〜6)。一覧の前の件数は area ごとに書き、一覧の表に area の列を足す。
+op-intake 手順 5 が終わったら (やめたときも) op-patrol に戻り、承認された architecture_debt の既存 Issue の更新 (フェーズ5) とフェーズ7 を行ってから、op-intake 手順 6 の引き渡しをする。
 
 ### 自動モード (`--auto`)
 
@@ -298,10 +277,10 @@ op-scan フェーズ3「自動モード」と同じ (`op scan eligibility` + `op
 
 ### Issue 本文・marker・ラベル
 
-- 本文は `pr-templates.md`「Issue 本文 (指示書フル版)」(バッチは「バッチ版」)。巡回 area と run_id は本文の自然文で書く。
-- marker とラベルは `pr-templates.md`「Issue 本文 hidden marker」/「domain → marker / ラベル表」。ラベルには `patrol` と
+- 本文は `issue-templates.md`「Issue 本文 (指示書フル版)」(バッチは「バッチ版」)。巡回 area と run_id は本文の自然文で書く。
+- marker とラベルは `issue-templates.md`「Issue 本文 hidden marker」/「domain → marker / ラベル表」。ラベルには `patrol` と
   `area:<area 短縮形>` (例: `area:export`) を足す。refactor は op-scan「domain=refactor 固有のラベル付与ルール」も適用する。
-- 起票は `filing-gate.md` §3 (op-scan「Marker Publish Validate」→ `op issue create` を 1 件ずつ直列)。
+- 起票は対話モードは op-intake 手順 5、`--auto` は `filing-gate.md` §3 (op-scan「Marker Publish Validate」→ `op issue create` を 1 件ずつ直列)。
 
 ---
 
@@ -332,8 +311,7 @@ op patrol ledger push --issue "$LEDGER_ISSUE" --run-id "$RUN_ID" --previous-stat
 - <area> (<experts>)
 
 ### 起票結果
-| # | Issue | severity | expert | area | title |
-|---|---|---|---|---|---|
+(対話モードは op-intake 手順 6 の表に area の列を足す。`--auto` は | # | Issue | severity | expert | area | title |)
 
 ### 統計
 - 起票 N / スキップ (重複) N / debt 既存 Issue 更新 N / manual_review_bucket N / 検出 0 件 area N
@@ -350,5 +328,4 @@ op patrol ledger push --issue "$LEDGER_ISSUE" --run-id "$RUN_ID" --previous-stat
 ### 警告
 - Ledger 複数検出 / parse warning / SKIPPED_PLANNED (なければ「なし」)
 
-次は `/op-skill:op-run` で起票 Issue を実装できます。
 ```

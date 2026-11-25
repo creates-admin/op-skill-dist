@@ -4,7 +4,7 @@
 
 apply Run Mode で commit を打つ全 expert (Direct apply / op-run 経由の両方)。
 scan / patrol / review / gate / post-check モードは対象外。
-完了報告 schema は `_shared/expert-spawn.md`、完了手順は `_shared/apply-completion-checklist.md`。
+完了報告 schema は `_shared/expert-report-schemas.md`、完了手順は `_shared/apply-completion-checklist.md`。
 
 ## 2. 共通形式
 

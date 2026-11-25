@@ -24,7 +24,7 @@ severity は判定に使わない (ラベルと本文の記述にのみ使う。
 
 1. dedup 入力を決める: `domain` / `title` / `files` / `symbols` (形は `~/.claude/skills/_shared/dedup-policy.md`)。
    `files[0]` が primary file になる。
-2. 本文組立: `~/.claude/skills/_shared/pr-templates.md`「Issue 本文 (指示書フル版)」。marker は同ファイル「Issue 本文 hidden marker」、
+2. 本文組立: `~/.claude/skills/_shared/issue-templates.md`「Issue 本文 (指示書フル版)」。marker は同ファイル「Issue 本文 hidden marker」、
    `op-run-expert` / `op-post-check-expert` の値とラベルは「domain → marker / ラベル表」で決める。
    `op-fingerprint` marker は書かない (controller が生成して差し込む)。
    severity ラベル (`severity:<critical|high>`) は severity が Critical / High のときだけ付ける。

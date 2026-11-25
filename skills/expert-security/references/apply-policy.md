@@ -53,7 +53,7 @@
 
 ## 5. 完了報告の security 追加 field
 
-`~/.claude/skills/_shared/expert-spawn.md`「修正完了報告 schema」に以下を足す。
+`~/.claude/skills/_shared/expert-report-schemas.md`「修正完了報告 schema」に以下を足す。
 
 ```yaml
 apply_decision:

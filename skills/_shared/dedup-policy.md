@@ -21,7 +21,7 @@
 
 `bulk_group` ごとに finding をまとめて起票する bulk Issue (1 Issue = N 個の同種問題) は 3-seg
 `<domain>:<bulk_group>:<primary_dir>` を使う。`--primary-dir` には affected_paths の最小共通祖先 (LCA) ディレクトリを
-controller が計算して渡す。起票テンプレは `pr-templates.md`「op-scan: バッチ Issue 起票テンプレ」節。
+controller が計算して渡す。起票テンプレは `issue-templates.md`「op-scan: バッチ Issue 起票テンプレ」節。
 
 ## fingerprint 生成責務マトリクス (誰が採番するか)
 
@@ -31,11 +31,9 @@ controller が計算して渡す。起票テンプレは `pr-templates.md`「op-
 |---|---|
 | op-scan の scan finding | controller (op-scan フェーズ2-2)。expert は生成しない |
 | op-patrol の scan finding | controller (op-patrol フェーズ5)。expert は生成しない |
-| op-report の起票 | controller (op-report フェーズ 3)。scout は生成しない |
-| op-intake の起票 | controller (op-intake 手順 2。scout の報告は手順 3 の dedup envelope から) |
+| op-intake の起票 (op-plan / op-architect / op-report の起票を含む) | controller (op-intake 手順 2。scout の報告は手順 3 の dedup envelope から、scout は生成しない) |
 | review finding / post-check finding | agent (review-expert / post-check expert) |
 | architecture_debt 追跡キー (`op-fingerprint-bulk`) | controller (op-scan / op-patrol)。refactor-expert は `bulk_group` / `affected_paths` を埋めるだけ |
-| op-plan / op-architect の起票前 dedup | controller |
 
 ## 既存 Issue との重複除外
 

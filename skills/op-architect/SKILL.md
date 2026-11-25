@@ -39,7 +39,7 @@ decision record (デザインモック URL / 決定事項 / 振る舞い / 意�
 record のモック URL は該当する UI マイルストーンの `デザインモック:` 行に引き継ぐ (フェーズ4.6 で作り直さない)。
 record が無い / 不整合なら通常の対話に戻る。
 
-参照: `_shared/pr-templates.md` / `_shared/project-profile.md` (種別ごとの検証コマンド) / `_shared/common-setup.md` / `_shared/github-channel.md`。
+参照: `_shared/issue-templates.md` / `_shared/project-profile.md` (種別ごとの検証コマンド) / `_shared/common-setup.md` / `_shared/github-channel.md`。
 
 ---
 
@@ -248,7 +248,7 @@ UI を持つ種別 (Tauri v2 + Vue 3 / Vue 3 SPA / Nuxt / Flutter) で `ui_impac
 
 ### 5-1. Issue 本文
 
-`_shared/pr-templates.md`「Issue 本文 (指示書フル版)」に、新規構築向けに次のように書く:
+`_shared/issue-templates.md`「Issue 本文 (指示書フル版)」に、新規構築向けに次のように書く:
 
 | 節 | 書き方 |
 |---|---|
@@ -260,28 +260,24 @@ UI を持つ種別 (Tauri v2 + Vue 3 / Vue 3 SPA / Nuxt / Flutter) で `ui_impac
 | 成功条件 | マイルストーンの success_criteria |
 | 既知の落とし穴 | 初期構築で踏みやすい罠 (依存初期化漏れ・型生成タイミング等) |
 
-本文末尾に `## 関連 ADR`、依存があれば `## 依存` を置く。UI マイルストーンには `デザインモック: <URL>` の 1 行を書く。
-marker とラベルは `pr-templates.md`「Issue 本文 hidden marker」/「domain → marker / ラベル表」に従う (apply 担当が feature-expert なら
-domain `feature`、designer-expert なら `design`。fingerprint の `--file` は `scope_in[0]`)。依存の marker は起票時に番号解決する。
+本文末尾に `## 関連 ADR` を置く。UI マイルストーンには `デザインモック: <URL>` の 1 行を書く。
+marker とラベルは `issue-templates.md`「Issue 本文 hidden marker」/「domain → marker / ラベル表」に従う (apply 担当が feature-expert なら
+domain `feature`、designer-expert なら `design`。fingerprint の `--file` は `scope_in[0]`)。依存は `#issue[M<n>]` で書き、op-intake 手順 5 で番号に置き換える。
 
 ### 5-2. ラベル
 
 `auto-report` + `op-architect` + expert ラベル (5-1) + `milestone:initial` + `module:<name>`。
 
-### 5-3. ラベル bootstrap・dedup・起票プレビュー
+### 5-3. ラベル bootstrap
 
-1. canonical ラベルの作成をユーザーに確認し、承認後に `op repo init` を実行する (既存ラベルは skip されるので何度実行してもよい。
-   `--dry-run` は作成済みかを判定せず全件を列挙するだけ)。`module:<name>` は起票時の `--ensure-labels` が補完する。
-2. 全マイルストーンの draft で `op scan dedup --findings-json drafts.json --json` を実行する (op-plan 4-4 と同じ扱い)。
-3. 起票予定表 (`| key | title | labels | depends_on |`) を提示し、「この内容で起票します。よろしいですか?」の承認を得る。
+canonical ラベルの作成をユーザーに確認し、承認後に `op repo init` を実行する (既存ラベルは skip されるので何度実行してもよい。
+`--dry-run` は作成済みかを判定せず全件を列挙するだけ)。`module:<name>` は起票時の `--ensure-labels` が補完する。
 
 ### 5-4. 起票実行
 
-op-plan skill のフェーズ7 (7-2 Marker Publish Validate / 7-3 Pass 1・Pass 2 と失敗時の報告) の手順で、`M<n>` を draft 識別子として
-トポロジカル順に直列起票し、`op-depends-on` / `## 依存` / `参照: issue[k]` を実番号に解決する。
+マイルストーンを下書きにして (key は `M<n>`)、op-intake skill の手順 0 の作業ディレクトリ (`INTAKE_DIR`・`REPO`) を作り、手順 2〜6 で dedup・一覧の確認・承認・直列の起票・番号の置き換え・引き渡しを行う。
 `op issue create` が gh 認証 / 権限 / ネットワークで失敗した場合は、ユーザー確認後に `--issue-md` 出力へ切り替えてよい。
 
 ### 5-5. 完了レポート
 
-生成 ADR (番号 / タイトル)、bootstrap-brief に集約した軽微判断の件数、起票 Issue (# / title / 依存 / 関連 ADR) を表で示し、
-次のステップとして `/op-skill:op-run --label milestone:initial` または依存順に直列駆動する `/op-skill:op-loop --label milestone:initial` を案内する。
+生成 ADR (番号 / タイトル) と bootstrap-brief に集約した軽微判断の件数を、op-intake 手順 6 の表に添えて示す。

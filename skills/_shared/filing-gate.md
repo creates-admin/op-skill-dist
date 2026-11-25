@@ -9,11 +9,10 @@ apply 中の expert は起票しない。起票要求は完了報告で返し、
 
 | 経路 | レビュー |
 |---|---|
-| 対話 (op-plan / op-architect / op-scan・op-patrol 対話モード / op-spec 派生 Issue) | 人間が起票内容を承認する (ExitPlanMode / AskUserQuestion)。承認前に起票しない |
+| 対話 (op-spec 派生 Issue) | 人間が起票内容を承認する (ExitPlanMode / AskUserQuestion)。承認前に起票しない |
 | `--auto` (op-scan / op-patrol) | refute (`refute-contract.md`) を通過し、かつ `auto-policy.md` の 8 条件をすべて満たすもののみ。満たさないものは manual_review_bucket |
 | `--auto` (op-doctor) | `auto-policy.md` の 8 条件をすべて満たすもののみ |
-| op-report | scout の実在確認 (confirmed) のみ。scout は起票せず、controller が §2 以降を通して起票する |
-| op-intake | どの入口でも、人間が一覧と本文を承認する。scout の報告は confirmed のみ。`--auto` は持たない |
+| op-intake (op-plan / op-architect / op-report と op-scan・op-patrol の対話モードの起票を含む) | どの入口でも、人間が一覧と本文を 1 回で承認する。scout の報告は confirmed のみで、scout は起票しない。`--auto` は持たない |
 
 起票を Critical / High に限る規則 (CLAUDE.md 不変則5) は finding の起票に適用する。op-plan / op-architect の計画 Issue は人間承認済みの作業指示で severity を持たない。finding の例外は次の 4 経路だけ。いずれも §2 以降は省略しない。
 
@@ -27,7 +26,7 @@ op-intake が scout の報告・人の Issue の正規化から起票すると�
 ## 2. 重複・衝突チェック (省略不可)
 
 ```bash
-op scan dedup --findings-json drafts.json --json   # --input-json で既存 Issue 素材を注入できる (REST での取り方は op-intake 手順 3)
+op scan dedup --findings-json drafts.json --json
 ```
 
 - fingerprint と `drafts.json` の形は `dedup-policy.md` のとおり (fingerprint は CLI で生成する)。
@@ -39,9 +38,8 @@ op scan dedup --findings-json drafts.json --json   # --input-json で既存 Issu
 
 - 本文を `op core marker-lint --strict` で検証してから起票する。
 - `op issue create` は 1 件ずつ直列に実行する (並列化・background 化禁止)。失敗を `||` で握り潰さない。
-- `op issue create` が GraphQL の 403 で失敗したときは、同じ本文を REST の `gh api` で起票してよい (op-intake skill の `references/github-rest.md`)。
-- 本文テンプレは `pr-templates.md`「Issue 本文 (指示書フル版)」/「バッチ版」。
-- marker とラベルは `pr-templates.md`「Issue 本文 hidden marker」/「domain → marker / ラベル表」に従う。
+- 本文テンプレは `issue-templates.md`「Issue 本文 (指示書フル版)」/「Issue 本文 (バッチ版)」。
+- marker とラベルは `issue-templates.md`「Issue 本文 hidden marker」/「domain → marker / ラベル表」に従う。
 
 ## 4. UI を含む Issue
 
@@ -50,4 +48,4 @@ op scan dedup --findings-json drafts.json --json   # --input-json で既存 Issu
 
 ## 5. 振り分けの材料
 
-本文の振り分けの材料節は `pr-templates.md`「振り分けの材料」。コーディネーターとスレッドはこの節と `op-depends-on` で振り分けを決める。
+本文の振り分けの材料節は `issue-templates.md`「振り分けの材料」。コーディネーターとスレッドはこの節と `op-depends-on` で振り分けを決める。

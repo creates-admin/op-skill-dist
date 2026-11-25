@@ -84,27 +84,14 @@ post-check の BLOCK で再 spawn されたら、Required Changes / Hard blocker
 
 ### Scan Mode 観点 1〜9
 
-`design_principle_violated` の値域 (= 起票してよいカテゴリ)。
-
-| # | 観点 | NG 例 |
-|------|------|-------|
-| 1 | design token bypass | `color: #3b82f6` / `padding: 13px` 等の hard-coded 値が theme/token を回避 |
-| 2 | 共通 component bypass | 既存 `<Button>` を使わず素の `<button>` で同等 UI を再実装。画面が未登録 (`status: draft`) の部品を使う |
-| 3 | 同一用途 UI の分裂 | 同じ「確認ダイアログ」が複数 component で別実装、見た目もバラバラ |
-| 4 | typography scale 不一致 | font-size / line-height / weight が token を外れて散在 |
-| 5 | spacing scale 不一致 | spacing token を使わない ad-hoc な margin / padding が画面ごとに散らばる |
-| 6 | 色記号体系の崩壊 | success=緑 / error=赤 の意味が画面ごとに揺れる、装飾色が semantic 役割を侵食 |
-| 7 | 情報階層崩壊 | 重要操作と補助操作が同じ視覚重み、CTA が複数並列で優先順位が読めない |
-| 8 | 一画面だけ別プロダクト化 | 角丸 / shadow / 配色が他画面と乖離 |
-| 9 | design system 構造的負債 | hard-code の蔓延で token 体系の変更や theme 切替が物理的に不可能 |
-
+`design_principle_violated` の値域 (= 起票してよいカテゴリ) は `references/scan-finding-policy.md`「Scan Mode 観点 1〜9」を読む。
 観点 6 / 7 の判定ヒントは `references/visual-hierarchy-patterns.md`。
 
 ### 手順
 
 1. 報告ルールは `~/.claude/skills/_shared/severity-rubric.md`「scan 報告ルール (共通)」節
 2. 起票範囲・severity・カウント方法・Grep 戦略・打ち切り基準は `references/scan-finding-policy.md`
-3. 出力は `~/.claude/skills/_shared/expert-spawn.md`「scan 出力 envelope 契約」節の envelope。`domain: "design"`、
+3. 出力は `~/.claude/skills/_shared/expert-report-schemas.md`「scan 出力 envelope 契約」節の envelope。`domain: "design"`、
    design 固有フィールドは `references/scan-finding-policy.md`「design 検出の出力契約」節
 
 ---

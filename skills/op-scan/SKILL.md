@@ -37,12 +37,12 @@ implementation gap / spec divergence)、`--all-experts` (両方)。
 
 | モード | 起動 | 起票 |
 |---|---|---|
-| 対話 (デフォルト) | `/op-skill:op-scan [scope]` | ユーザー承認後 |
+| 対話 (デフォルト) | `/op-skill:op-scan [scope]` | op-intake の手順で承認後 |
 | 自動 | `/op-skill:op-scan --auto [scope]` | 品質 gate + auto-policy 通過分のみ |
 | 観点限定 | `/op-skill:op-scan --domain debug,security` | 通常通り |
 | expert 拡張 | `/op-skill:op-scan --include-test` / `--all-experts` | 通常通り |
 | Issue 正規化 | `/op-skill:op-scan --from-issue #N` | severity フィルタ無効、派生 Issue を起票 |
-| merged PR follow-up | `/op-skill:op-scan --from-merged-pr <PR>` | plan モード承認後に follow-up Issue を起票 |
+| merged PR follow-up | `/op-skill:op-scan --from-merged-pr <PR>` | op-intake の手順で承認後に follow-up Issue を起票 |
 
 ### `--domain` の値 / scope
 
@@ -111,8 +111,8 @@ const auditOut = await Workflow({
 
 ### 各 expert の出力
 
-- `expert-spawn.md` の canonical schema に従う。`domain: refactor` / `domain: security` の domain extension field は
-  `expert-spawn.md`「domain extension」に従って Issue 本文へ転写する。必須 field が欠けていれば再 spawn するか `manual_review_bucket` に回す。
+- `expert-report-schemas.md` の canonical schema に従う。`domain: refactor` / `domain: security` の domain extension field は
+  `expert-report-schemas.md`「domain extension」に従って Issue 本文へ転写する。必須 field が欠けていれば再 spawn するか `manual_review_bucket` に回す。
 - `security.attack_path.reachable: false`、または `usable_security.legitimate_workflow_preserved: false` の mitigation を提案する security finding は起票しない。
 - `finding_type: needs_spec_decision` かつ `needs_human_decision.can_continue_without_decision: true` の refactor finding は不完全 finding として reject する。
 
@@ -147,12 +147,9 @@ op scan bulk-group --findings-json findings.json --json
 
 ### 2-2. fingerprint 生成 + 重複・衝突チェック
 
-fingerprint は `op core fingerprint` / `op core fingerprint-bulk` で生成し、`op scan dedup --findings-json drafts.json --json` で判定する
-(扱いは `filing-gate.md` §2)。`decision == "block"` は次の 3 通りに分ける:
-
-- `matched_existing` あり → 既存 Issue と重複。起票せず、最終報告に「既存 Issue #<`matched_existing.issue_number`> と重複」と記録する。
-- `matched_draft` あり → run 内重複 (先行 draft と fingerprint 完全一致)。起票せず先行 draft に統合し、最終報告に「先行 draft「<`matched_draft.draft_title`>」と統合」と記録する。
-- どちらも無い → 想定外として fail-closed。起票せず `blocking_reasons` を添えて、対話はユーザーに提示、`--auto` は `manual_review_bucket` へ。
+fingerprint は `op core fingerprint` / `op core fingerprint-bulk` で生成する。dedup は対話モードでは op-intake 手順 3、
+`--auto` では `op scan dedup --findings-json drafts.json --json` で行う (扱いは `filing-gate.md` §2)。`--auto` で `matched_existing` も
+`matched_draft` も無い `block` は `manual_review_bucket` へ入れる。
 
 ### 2-3. 並び替え
 
@@ -166,33 +163,8 @@ fingerprint は `op core fingerprint` / `op core fingerprint-bulk` で生成し�
 
 ### 対話モード (デフォルト)
 
-```
-## op-scan 検出結果
-
-### サマリ
-| expert | Critical | High | 既存重複 |
-|---|---|---|---|
-| security-expert | 1 | 0 | 0 |
-
-### 起票候補 (N 件)
-| # | severity | expert | title | files |
-|---|---|---|---|---|
-| 1 | critical | security | SQL Injection の可能性 | api/query.py:45 |
-
-### 既存 Issue と重複でスキップ (N 件)
-- #34 と同等: api/handler.py の null check 漏れ
-
-### run 内重複で統合 (N 件)
-- 先行 draft「<matched_draft.draft_title>」と fingerprint 完全一致: <title>
-
-### 要確認 (manual_review_bucket / 類似 Issue あり)
-- ...
-
-起票しますか?
-1. すべて起票  2. Critical のみ  3. 番号で個別選択 (例: 1,3)  4. キャンセル
-```
-
-承認前に起票しない。
+op-intake skill の手順 0 の作業ディレクトリを作り、フェーズ2 まで通した finding を canonical schema で `<INTAKE_DIR>/findings.json` に書いて、`--findings` の入口として手順 2〜6 で一覧の確認・承認・起票を行う。
+一覧の前に expert ごとの Critical / High の件数と、要確認 (`manual_review_bucket`・類似 Issue あり) を書く。
 
 ### 自動モード (`--auto`)
 
@@ -209,15 +181,15 @@ op scan eligibility --finding-json finding.json   # auto-policy #1〜#7
 
 ## フェーズ4: Issue 起票
 
-起票手順は `_shared/filing-gate.md` §3 (marker-lint → `op issue create` を 1 件ずつ直列)。
+対話モードは op-intake 手順 5、`--auto` は `_shared/filing-gate.md` §3 (marker-lint → `op issue create` を 1 件ずつ直列) で起票する。本文・marker・ラベルはどちらもこの節に従う。
 
-- 本文は `pr-templates.md`「Issue 本文 (指示書フル版)」。同一 bulk_group 5 件以上 (bulk-group 判定 pass) は「Issue 本文 (バッチ版)」。
-- additive 検出 (test 不足・機能追加): `recommendation` の実装計画 (`expert-spawn.md`「実装計画の埋め込み」) を指示書節に貼る。
+- 本文は `issue-templates.md`「Issue 本文 (指示書フル版)」。同一 bulk_group 5 件以上 (bulk-group 判定 pass) は「Issue 本文 (バッチ版)」。
+- additive 検出 (test 不足・機能追加): `recommendation` の実装計画 (`expert-report-schemas.md`「実装計画の埋め込み」) を指示書節に貼る。
 - UI を含む Issue: `filing-gate.md` §4。
 
 ### Issue 本文 hidden marker (op-patrol と共通)
 
-marker とラベルは `pr-templates.md`「Issue 本文 hidden marker」/「domain → marker / ラベル表」。値は canonical schema の
+marker とラベルは `issue-templates.md`「Issue 本文 hidden marker」/「domain → marker / ラベル表」。値は canonical schema の
 `recommended_runner` / `post_check_expert` を転写し、欠けていれば同表で補完する。
 
 #### domain=refactor 固有のラベル付与ルール
@@ -238,7 +210,7 @@ refactor finding は以下を追加で付与する (op-patrol も同じ表を使
 #### Marker Publish Validate
 
 各 `op issue create` の直前に `expert-spawn.md`「Marker Publish Validate」を行う
-(`op core marker-lint --body-file <本文> --source-hint issue-body --strict`)。block なら起票せず、対話はユーザーに提示、`--auto` は `manual_review_bucket` へ。
+(`op core marker-lint --body-file <本文> --source-hint issue-body --strict`)。block なら起票せず、`--auto` は `manual_review_bucket` へ (対話は op-intake 手順 5 で失敗に記録する)。
 
 ---
 
@@ -248,8 +220,7 @@ refactor finding は以下を追加で付与する (op-patrol も同じ表を使
 ## op-scan 完了
 
 ### 起票結果
-| # | Issue | severity | expert | title |
-|---|---|---|---|---|
+(対話モードは op-intake 手順 6 の表。`--auto` は | # | Issue | severity | expert | title |)
 
 ### 統計
 - 起票: N 件 / スキップ (重複): N 件 / manual_review_bucket: N 件
@@ -260,8 +231,6 @@ refactor finding は以下を追加で付与する (op-patrol も同じ表を使
 ### refute で偽陽性/過大判定 (起票しない)
 - [refuted] <expert> / "<title>" — evidence_excerpt: `<再 Read したコード片>` (<file:line-line>)
 - (なければ「なし」)
-
-次は `/op-skill:op-run` で Issue を実装できます。
 ```
 
 refute の限界の明示は `refute-contract.md` §7.2。

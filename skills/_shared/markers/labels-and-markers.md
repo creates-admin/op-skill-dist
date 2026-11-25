@@ -5,7 +5,7 @@ OP が GitHub Issue / PR に埋める hidden marker (`<!-- op-* -->`) と label 
 - marker の format / owner / example / lint rule: `op help marker <name>` (`--list` で一覧)
 - label の color / description: `op repo init --dry-run` で一覧
 - state 文書の JSON schema: `review-markers.md` / `patrol-markers.md` / `claim-markers.md`
-- Issue 本文にどの marker・ラベルを付けるか (domain 別): `pr-templates.md`「domain → marker / ラベル表」
+- Issue 本文にどの marker・ラベルを付けるか (domain 別): `issue-templates.md`「domain → marker / ラベル表」
 
 ---
 

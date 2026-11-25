@@ -112,7 +112,7 @@ Workflow({ name: "op-skill:op-spec-patrol-audit", args: {
 args 規約と `.result` の unwrap は `_shared/workflow-calling.md`。
 戻り `.result.features[].findings` / `.verdicts` のうち verdict=confirmed のみ採用する (refuted / downgrade は報告で可視化)。
 `.result.health` は巡回した feature の中身の内訳 (`content_mix`)、confirmed の重複・食い違い (refute 済み) とその `drift_counts`、散らばり (`scatter`)、refute の `verdicts`。
-返却の中身は expert-spec「7. health」。
+返却の中身は expert-spec「7. health」(JSON の形は expert-spec skill の `references/health-schema.md`)。
 
 ### Phase 5: route
 

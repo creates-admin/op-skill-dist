@@ -6,7 +6,7 @@
 2. 入力規模が運用上大きくなることが既知 (page_count / job_count / OCR block_count / file_count 等)
 3. 計測計画 (どう測れば確定できるか) を書ける
 
-満たさないものは返さない。ここに無いパターンは ignored_noise の可能性が高い。各見出しの bulk_group は SKILL.md の表の値。
+満たさないものは返さない。ここに無いパターンは ignored_noise の可能性が高い。各見出しの bulk_group は `scan-contract.md`「bulk_group」の表の値。
 
 ## algorithm (`perf-nested-loop-on2` / `perf-repeated-compile`)
 
@@ -67,4 +67,4 @@ dispose 漏れはバグとしては debug-expert、長時間のメモリ肥大�
 
 ## ignored_noise (報告しない)
 
-SKILL.md「起票しない」に加え: 10 要素以下が確実な UI helper / `String` vs `&str`、`u32` vs `usize` の好み。
+`scan-contract.md`「Severity Policy」の「起票しない」に加え: 10 要素以下が確実な UI helper / `String` vs `&str`、`u32` vs `usize` の好み。

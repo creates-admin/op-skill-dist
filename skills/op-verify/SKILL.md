@@ -104,7 +104,7 @@ op run base-sha --base-ref "origin/$BASE_REF" | jq -r '.payload.base_sha'   # �
    触ってよいもの: ハーネスのファイル、op-config.yaml の verify_harness 節、.gitignore、.claude/skills/verify/SKILL.md、計画で承認された依存の追加。
      アプリのコードやポートの固定をやめるための変更が要るなら実施せず needs_human_decision で返す。
    検証: `op verify conformance --dir <worktree_path>` が exit 0 になるまで直す。最後の出力 JSON を完了報告に含める。
-   完了報告は expert-spawn「修正完了報告 schema」(issue: null / cluster_id: "verify-init")。
+   完了報告は expert-report-schemas.md「修正完了報告 schema」(issue: null / cluster_id: "verify-init")。
    ```
 
 4. 完了後は `~/.claude/skills/_shared/apply-completion-verify.md` に従う

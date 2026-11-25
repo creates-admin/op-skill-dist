@@ -167,7 +167,7 @@ Agent({
     - 両側の意図を保って解消する。一方の変更を捨てる・仕様判断が要る衝突は解消せず needs_human_decision で返す
     - 解消後に検証コマンド (対象 repo の CLAUDE.md、無ければ `_shared/project-profile.md`) を実行し、pass したら merge commit を作る
     - rebase / reset / force-push / push はしない。衝突の解消に必要な箇所以外は編集しない
-    返却: 修正完了報告 schema (`_shared/expert-spawn.md`) + resolved_files[] + 衝突ごとの解消方針 1 行
+    返却: 修正完了報告 schema (`_shared/expert-report-schemas.md`) + resolved_files[] + 衝突ごとの解消方針 1 行
   """
 })
 ```

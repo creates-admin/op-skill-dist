@@ -5,7 +5,7 @@ export const meta = {
   phases: [{ title: "audit" }, { title: "refute" }],
 };
 
-// canonical scan-finding (expert-spawn.md)。必須は共通 5 field のみ、domain extension は additive。
+// canonical scan-finding (expert-report-schemas.md)。必須は共通 5 field のみ、domain extension は additive。
 const scanFindingSchema = {
   type: "object",
   required: ["findings"],
@@ -166,7 +166,7 @@ function buildAuditPrompt(e, a) {
     `today: ${a.today} (first_detected_at / last_seen_at 等の日付に使う)`,
     "",
     "報告ルールと実行レベル: `~/.claude/skills/_shared/severity-rubric.md`「scan 報告ルール (共通)」。",
-    "finding のフィールド必須性: `~/.claude/skills/_shared/expert-spawn.md`「フィールドの必須性」表。recommended_runner / post_check_expert は全件に入れる。",
+    "finding のフィールド必須性: `~/.claude/skills/_shared/expert-report-schemas.md`「フィールドの必須性」表。recommended_runner / post_check_expert は全件に入れる。",
     "domain には自分の専門領域を入れる。",
   ];
   if (a.mode === "from-issue") {

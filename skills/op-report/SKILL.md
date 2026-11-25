@@ -1,20 +1,19 @@
 ---
 name: op-report
-description: finding を scout の隔離 context で実在確認し、controller がまとめて重複判定・起票する薄い委任スキル。「これ起票して」「たまったやつ整理して」等のキーワードで起動。finding mode (1件) と handoff mode (会話履歴から複数抽出) の 2 モード。
+description: finding を scout の隔離 context で実在確認し、確認できたものを op-intake の手順でまとめて重複判定・起票する薄い委任スキル。「これ起票して」「たまったやつ整理して」等のキーワードで起動。finding mode (1件) と handoff mode (会話履歴から複数抽出) の 2 モード。
 effort: medium
 ---
 
 # op-report: 単一 finding 隔離起票スキル
 
-finding ごとに read-only の scout が隔離 context で調査・実在確認・本文ファイル作成を行い、controller は scout の返却をまとめて
-重複判定し、1 件ずつ直列に起票する。
+finding ごとに read-only の scout が隔離 context で調査・実在確認・本文ファイル作成を行い、controller は scout の返却を
+op-intake skill の `--report` の手順 3〜6 (重複判定・承認・直列の起票) に渡す。
 
 ## 3 原則
 
 1. 人間起動専用 — `_shared/invocation-mode.md`「Direct 固定 skill に op_managed が渡った場合」
 2. context 隔離 — 調査と本文作成は scout の隔離 context で完遂する。controller は本文ファイルを Read せず `--body-file` で渡す
-3. 確認 gate — 起票前にユーザーの承認を得る (finding の確認 / Task の選択)。`confirmed` の draft の起票前に追加の確認は挟まない。
-   例外: 3-1 で類似 (`match_priority == 4`) と判定された draft は、起票フェーズでまとめて 1 回だけ確認する (3-1b)
+3. 確認 gate — 承認は op-intake 手順 4 の一覧の確認 1 回 (handoff mode の Task の選択は spawn の前に行う)
 
 scout の実在確認 gate が `confirmed` なら severity で絞らず起票する (`_shared/filing-gate.md` §1 の例外)。
 
@@ -26,16 +25,8 @@ scout の実在確認 gate が `confirmed` なら severity で絞らず起票す
 
 ## フェーズ 0: 環境確認
 
-`_shared/common-setup.md`「フェーズ0 git/gh env check 標準手順」に従う (gh が未認証なら中断)。
-
-scout との受け渡しディレクトリを作る:
-
-```bash
-REPORT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/op-report-XXXXXX")" || { echo "REPORT_DIR を作れない"; exit 1; }
-echo "REPORT_DIR=$REPORT_DIR"
-```
-
-以降の fence と spawn prompt には REPORT_DIR の実パスを直書きする。本文ファイルは Task ごとに `<REPORT_DIR>/task-<No>.md` (絶対パス) とする。
+op-intake skill の手順 0 (環境確認と `INTAKE_DIR`・`REPO` の作成) を通す (gh が未認証なら中断)。
+以降の fence と spawn prompt には INTAKE_DIR の実パスを直書きする。本文ファイルは Task ごとに `<INTAKE_DIR>/draft-<No>.md` (絶対パス) とする。
 
 ## フェーズ 1: mode 判定
 
@@ -48,19 +39,7 @@ echo "REPORT_DIR=$REPORT_DIR"
 
 ## フェーズ 2a: finding mode
 
-1. controller が finding を整理して確認する:
-
-```
-以下の内容で Issue を起票してよいですか？
-
-タイトル案: <finding から生成したタイトル>
-内容: <finding の要約 1〜2 文>
-リポジトリ: <現在の git リポジトリ>
-
-起票しますか？ (y/n または修正を教えてください)
-```
-
-2. 承認されたら scout を 1 体 spawn し (Task No. は 1)、返却をフェーズ 3 へ渡す。
+controller が finding をタイトル案と要約 1〜2 文に整理し、scout を 1 体 spawn して (Task No. は 1)、返却をフェーズ 3 へ渡す。
 
 ## フェーズ 2b: handoff mode
 
@@ -86,76 +65,7 @@ No. | 概要 | 検出根拠
 
 ## フェーズ 3: 起票と結果 relay
 
-起票前ゲートは `_shared/filing-gate.md` §2〜§3。対象は scout の `result` が `confirmed` の Task だけ。
-
-### 3-1. 重複チェック (全 draft を 1 回)
-
-`confirmed` の各返却の `draft` から `{domain, title, files, symbols}` を Task No. 順に並べた配列を `<REPORT_DIR>/drafts.json` に書き、1 回だけ判定する:
-
-```bash
-op scan dedup --findings-json "<REPORT_DIR>/drafts.json" --json > "<REPORT_DIR>/dedup.json"
-```
-
-- `MISSING_REQUIRED_INPUT` は `warnings` の指摘どおり drafts.json を直して再実行する (手作業の検索で代替しない)。envelope が取れなければ中断してエラーを提示する。
-- `details.results[i]` (i = drafts.json の添字) の扱いは `filing-gate.md` §2 (対話経路)。`decision == "block"` は次の順で振り分ける:
-  - `matched_draft` あり → run 内重複。起票せず `merged` にする。統合先は `matched_draft.draft_index` (drafts.json の添字) を添字 → Task No. の対応表で引き直した Task。
-  - `matched_existing` あり → `match_priority` が 1〜3 は起票せず `duplicate` (既存 Issue = `matched_existing.issue_number`)。`matched_existing.match_priority == 4` は 3-1b (`matched_draft.match_priority` は常に 1 で 3-1b の対象外)。
-  - どちらも無い → 想定外として fail-closed。起票せず `failed` とする (`blocking_reasons` を添える)。
-- `matched_draft` が返らず `details.results[i].fingerprint` が他の draft と完全一致する draft は、Task No. が最小のものを代表として残し、残りは `merged` にする。
-
-### 3-1b. 類似の確認 (まとめて 1 回)
-
-`match_priority == 4` の draft (`merged` のフォロワーは対象外。フォロワーは代表と同じ判定を引き継ぐ) があれば、起票前に 1 回だけまとめて確認する:
-
-```
-以下はタイトルが既存 Issue と似ていますが、内容は別の課題かもしれません。
-
-No. | タイトル案 | 類似する既存 Issue
-----|-----------|------------------
-1   | <draft.title> | #<matched_existing.issue_number> <matched_existing.existing_title>
-
-起票しますか？ (起票する番号を指定 / "全部" / "なし")
-```
-
-指定された draft は 3-2 へ進める。指定されなかった draft は起票せず `similar_skipped` とする (類似する既存 Issue = `matched_existing.issue_number`)。
-
-### 3-2. 起票 (1 件ずつ直列)
-
-残った draft ごとに、dedup envelope の fingerprint を本文ファイルの先頭に差し込み、lint してから起票する:
-
-```bash
-BODY="<REPORT_DIR>/task-<No>.md"
-FINAL="<REPORT_DIR>/task-<No>.final.md"
-test -s "$BODY" &&
-  { printf '<!-- op-fingerprint: %s -->\n' "<details.results[i].fingerprint>"; cat "$BODY"; } > "$FINAL" &&
-  op core marker-lint --body-file "$FINAL" --source-hint issue-body --strict &&
-  op issue create --title "<draft.title>" --body-file "$FINAL" --label "<draft.labels を , で連結>" --ensure-labels
-```
-
-- 本文ファイルが無い・空、または marker-lint が `pass` 以外なら起票せず `lint_blocked` とし、次の draft へ進む。
-- Issue 番号と URL は envelope の `details.issue_number` / `details.url` から取る。起票失敗は `failed` として記録し次へ進む。
-
-### 3-3. 結果 relay
-
-| result | 出どころ | controller の応答 |
-|--------|---------|-----------------|
-| `filed` | 3-2 | 「起票しました: <Issue URL>」 |
-| `duplicate` | 3-1 | 「既存 Issue と重複しています: #<matched_existing.issue_number>」 |
-| `similar_skipped` | 3-1b | 「タイトルが類似する既存 Issue #<matched_existing.issue_number> (<matched_existing.existing_title>) があるため見送りました」 |
-| `merged` | 3-1 | 「No.<統合先> と同じ内容のため 1 件にまとめました。統合先の結果: <統合先 Task の応答文をそのまま埋め込む>」 |
-| `lint_blocked` / `failed` | 3-1 / 3-2 | 「起票できませんでした: <blocking_reasons / エラー / orphan URL を 1 行>」 |
-| `not_confirmed` | scout | 「実在確認できませんでした: <evidence を 1〜2 行に要約>」 |
-| `needs_human_decision` | scout | 「判断が必要です: <options を箇条書き>」→ ユーザーに選んでもらう |
-
-handoff mode は集約表で出す:
-
-```
-No. | 概要 | result | URL / 補足
-----|------|--------|----------
-1   | <Task 1> | filed | <URL>
-2   | <Task 2> | not_confirmed | <理由 1行>
-3   | <Task 3> | merged | No.1 と統合。統合先の結果: <統合先 Task の応答文>
-```
+scout の返却を op-intake skill の `--report` の手順 3〜6 に渡す。重複の振り分け・類似の確認・fingerprint の差し込み・結果の伝え方は op-intake の `references/scout-report.md`。
 
 ## scout spawn テンプレート
 
@@ -185,11 +95,12 @@ repo_root: <git rev-parse --show-toplevel の結果>
 
 # 本文ファイル
 
-body_file: <REPORT_DIR>/task-<No>.md   # 絶対パス。書き込んでよいのはこのファイルだけ
+body_file: <INTAKE_DIR>/draft-<No>.md   # 絶対パス。書き込んでよいのはこのファイルだけ
 
 # 指示
 
 expert-scout の手順で実在確認 gate を通し、confirmed なら body_file に本文を書き、構造化返却スキーマで result と draft を返す。
+本文に `~/.claude/skills/_shared/issue-templates.md`「振り分けの材料」節を書く。
 GitHub への書き込み (起票・コメント) はしない。
 
 You must not ask interactive questions.

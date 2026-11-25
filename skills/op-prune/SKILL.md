@@ -119,7 +119,7 @@ op run worktree create --task-prefix "prune-<comments|tests>" --base-ref "<BASE_
 ```
 作業ディレクトリ: <worktree_path> (branch <branch>、base <BASE_SHA>)。push はしない。
 指示書: 下の承認済み items が Issue 指示書に当たる。触ってよいファイル = items の file、変更は items の action と recommendation に閉じる。
-完了報告は expert-spawn「修正完了報告 schema」(issue: null / cluster_id: "<area>")。
+完了報告は expert-report-schemas.md「修正完了報告 schema」(issue: null / cluster_id: "<area>")。
 comments: finding_type: immediate_refactor / execution_mode: direct_apply / direct_apply_safe: true。
           refactor-expert「Mechanical Refactor Guard」を守る。diff はコメント行と空行だけ。
 tests:    本体コードは commit しない。strengthen / add は対象コードに一時的に故障を入れ (add は fix commit の逆適用でよい) テストが落ちることを確かめ、

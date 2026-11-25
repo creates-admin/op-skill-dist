@@ -7,7 +7,7 @@ description: debug-expert に preload される方法論。
 
 | mode / 状況 | Read する references |
 |---|---|
-| scan (detect) | `references/patterns.md`「catalog 索引 (top 20 — active stack 集中版)」節 |
+| scan (detect) | `references/patterns.md`「catalog 索引 (top 20 — active stack 集中版)」節 / `references/scan-contract.md` §2 |
 | scan で patrol_sample / bulk_group 付与 | `references/scan-contract.md` §1 / §3 |
 | apply (fix) で再現テストを書く | `references/tools.md`「再現テストの言語別最小テンプレ」節 |
 
@@ -15,29 +15,7 @@ description: debug-expert に preload される方法論。
 
 ## Severity Policy (報告閾値)
 
-報告ルールは `~/.claude/skills/_shared/severity-rubric.md`「scan 報告ルール (共通)」節 (scan 前に Read)。debug 固有の基準:
-
-### Critical
-
-- データ破壊 (保存済み内容の欠落 / 上書き / 不可逆な変更)
-- 権限突破 / 任意パス書き込み / path traversal
-- プロセスクラッシュ (panic, SIGABRT, OOM, 無限ループ)
-- 本番操作不能 (起動失敗、フォールバック不在のフリーズ)
-- 外部プロセス誤起動 / sidecar 暴走
-- セキュリティ境界の破綻 (capability 漏れ、unsafe な FFI 境界)
-
-### High
-
-- 主要機能が無音で失敗する (画面上は成功、実は処理されていない)
-- 非同期処理の取りこぼし (`spawn` 後に handle を捨てる、await 漏れ)
-- ファイル入出力の失敗を検知できない (`unwrap_or_default` で握りつぶし)
-- 日本語パス / 空入力 / 大量件数 / Windows UNC で壊れる
-- Rust panic が Tauri command 経由で UI まで伝播
-- Tauri invoke の payload schema 不一致 (silent serde 失敗)
-- Flutter で dispose 後に setState / Stream 受信
-- Vue state と Rust backend state の不整合 (二重管理 / 競合)
-
-Python / FastAPI は `pyproject.toml` / `requirements.txt` / FastAPI import がある repo でのみ報告する。
+scan で finding を返す前に `references/scan-contract.md` §2 を読む。
 
 ---
 
@@ -56,23 +34,7 @@ Python / FastAPI は `pyproject.toml` / `requirements.txt` / FastAPI import が�
 
 ## Repro Lock (再現条件のロック)
 
-修正前に可能な限り埋める。分からなかった項目はそう明記する。
-
-```yaml
-repro_lock:
-  symptom:           # 何が起きるか
-  repro_command:     # 再現コマンド or テスト名
-  repro_steps:       # GUI なら手順、CLI ならコマンド列
-  input_fixture:     # 入力データの位置と内容
-  expected:
-  actual:
-  failure_frequency: # always | flaky (N/M 回) | rare | unknown
-  environment: { os, rust_version, node_version, flutter_version, tauri_version }
-  timezone:          # DST / TZ 依存バグ用
-  locale:            # NFC/NFD / 文字種 / sort
-  seed:
-  notes:             # ネットワークドライブ / UNC / 日本語パス / 初回起動 / 大量件数 等
-```
+修正前に可能な限り埋める。分からなかった項目はそう明記する。項目は `references/repro-lock.md` を読む。
 
 Tauri / Flutter / ファイル処理では条件依存性を最初に確認する: Windows だけ / 日本語・NFD・UNC パスだけ / ネットワークドライブだけ /
 ファイルダイアログ経由だけ / 初回起動・config 未存在時だけ / 大量件数・巨大ファイルだけ。
@@ -91,7 +53,7 @@ Tauri / Flutter / ファイル処理では条件依存性を最初に確認す�
 
 ### scan (detect) モード — read-only
 
-- scope mode は `~/.claude/skills/_shared/expert-spawn.md`「scan scope mode 契約 (3 モード)」節。patrol_sample では対象を選ぶ前に `references/scan-contract.md` §1 を Read する。
+- scope mode は `~/.claude/skills/_shared/expert-report-schemas.md`「scan scope mode 契約 (3 モード)」節。patrol_sample では対象を選ぶ前に `references/scan-contract.md` §1 を Read する。
 - 静的証拠 (コード引用・呼出経路) だけで Critical / High と断定できるものだけを findings に入れる。入力データや実行条件に依存するもの、React / Go 由来、規約どおりのコードは捨てる。
 - 出力値: `domain: "debug"` / `recommended_runner: "debug-expert"` / `post_check_expert`: security 境界が絡めば `security-expert`、それ以外は `null` /
   `bulk_group`: 付与前に `references/scan-contract.md` §3 を Read。

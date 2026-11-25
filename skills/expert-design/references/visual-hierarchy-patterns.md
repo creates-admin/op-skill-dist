@@ -1,7 +1,7 @@
 # Visual Hierarchy Patterns
 
 「重要度」と「視覚重み」が一致しているかの判断基準。Apply の実装基準であり、scan では観点 6 (色記号崩壊) /
-観点 7 (情報階層崩壊) の判定ヒントとして使う (起票カテゴリは SKILL.md の観点 1〜9)。
+観点 7 (情報階層崩壊) の判定ヒントとして使う (起票カテゴリは `scan-finding-policy.md`「Scan Mode 観点 1〜9」)。
 状態表現・危険操作の保護・多重符号化は ux-ui-audit-expert の基準 (expert-ux-ui-audit skill の `recovery-and-states.md` /
 `a11y-checklist.md`) に従う。
 

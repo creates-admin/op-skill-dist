@@ -5,7 +5,7 @@ export const meta = {
   phases: [{ title: "audit" }, { title: "refute" }],
 };
 
-// canonical scan-finding (expert-spawn.md)。scanFindingSchema / refuteVerdictSchema は op-scan-audit と同一 (import 不可のため複製)。
+// canonical scan-finding (expert-report-schemas.md)。scanFindingSchema / refuteVerdictSchema は op-scan-audit と同一 (import 不可のため複製)。
 const scanFindingSchema = {
   type: "object",
   required: ["findings"],
@@ -247,7 +247,7 @@ function buildAuditPrompt(e, region, a) {
     "同一用途 UI が複数実装に分裂しユーザーに同じ操作と認識されない (操作ミスの実害が観測可能)。",
     "「報告しない判断」を恐れない。警備員は「異常なし」を報告できる。",
     "",
-    "finding のフィールド必須性: `~/.claude/skills/_shared/expert-spawn.md`「フィールドの必須性」表。recommended_runner / post_check_expert は全件に入れる。",
+    "finding のフィールド必須性: `~/.claude/skills/_shared/expert-report-schemas.md`「フィールドの必須性」表。recommended_runner / post_check_expert は全件に入れる。",
     "domain には自分の専門領域を入れる。",
   ].join("\n");
 }

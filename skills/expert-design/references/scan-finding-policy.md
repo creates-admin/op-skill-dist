@@ -3,6 +3,22 @@
 scan / patrol で何を起票してよいかの基準。起票範囲は観測可能な design system 破綻に絞る。
 共通の報告ルールは `~/.claude/skills/_shared/severity-rubric.md`、ux-ui ドメインの基準は expert-ux-ui-audit skill。
 
+## Scan Mode 観点 1〜9
+
+`design_principle_violated` の値域 (= 起票してよいカテゴリ)。
+
+| # | 観点 | NG 例 |
+|------|------|-------|
+| 1 | design token bypass | `color: #3b82f6` / `padding: 13px` 等の hard-coded 値が theme/token を回避 |
+| 2 | 共通 component bypass | 既存 `<Button>` を使わず素の `<button>` で同等 UI を再実装。画面が未登録 (`status: draft`) の部品を使う |
+| 3 | 同一用途 UI の分裂 | 同じ「確認ダイアログ」が複数 component で別実装、見た目もバラバラ |
+| 4 | typography scale 不一致 | font-size / line-height / weight が token を外れて散在 |
+| 5 | spacing scale 不一致 | spacing token を使わない ad-hoc な margin / padding が画面ごとに散らばる |
+| 6 | 色記号体系の崩壊 | success=緑 / error=赤 の意味が画面ごとに揺れる、装飾色が semantic 役割を侵食 |
+| 7 | 情報階層崩壊 | 重要操作と補助操作が同じ視覚重み、CTA が複数並列で優先順位が読めない |
+| 8 | 一画面だけ別プロダクト化 | 角丸 / shadow / 配色が他画面と乖離 |
+| 9 | design system 構造的負債 | hard-code の蔓延で token 体系の変更や theme 切替が物理的に不可能 |
+
 ## UI surface が無い scope は即終了
 
 UI surface が 1 つも無ければ、すぐに `{"findings": []}` を返す。
@@ -28,7 +44,7 @@ UI surface が 1 つも無ければ、すぐに `{"findings": []}` を返す。
   - 一画面だけ別プロダクト化した design 不一致
   - 見た目優先の実装が原因の contrast 破綻 / focus 不可視
 
-`design_principle_violated` (SKILL.md の観点 1〜9) と `bypass_count` / `affected_screens` の観測値を示せないなら起票しない。
+`design_principle_violated` (「Scan Mode 観点 1〜9」節) と `bypass_count` / `affected_screens` の観測値を示せないなら起票しない。
 
 ## 起票してはいけない
 
@@ -122,9 +138,9 @@ bulk_group ごとに、まず project root から Grep で候補を網羅して�
 
 ## design 検出の出力契約
 
-canonical schema と envelope は `~/.claude/skills/_shared/expert-spawn.md`。`domain: "design"`。design 固有:
+canonical schema と envelope は `~/.claude/skills/_shared/expert-report-schemas.md`。`domain: "design"`。design 固有:
 
-- `design_principle_violated` (必須): SKILL.md の Scan Mode 観点 1〜9 (複数なら ` / ` 区切り)。例 `観点 1: design token bypass`
+- `design_principle_violated` (必須): 「Scan Mode 観点 1〜9」節 (複数なら ` / ` 区切り)。例 `観点 1: design token bypass`
 - `bulk_group`: 上記 `design:*`
 - `bypass_count` と `affected_screens` の両方 + 上記カウンタ 4 種
 - `recommended_runner: designer-expert` 固定

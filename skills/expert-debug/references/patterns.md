@@ -1,6 +1,6 @@
 # expert-debug バグパターン (active stack)
 
-検出兆候の正本。報告閾値は SKILL.md の Severity Policy。
+検出兆候の正本。報告閾値は `scan-contract.md` §2 (Severity Policy)。
 
 ## catalog 索引 (top 20 — active stack 集中版)
 

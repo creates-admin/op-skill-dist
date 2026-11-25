@@ -1,26 +1,24 @@
 ---
 name: op-plan
-description: 自然言語要望から対話で計画を立て、人間承認後に Issue を起票して op-run を起動する主経路スキル。「op-plan」「機能追加」「実装したい」「計画立て」等のキーワードで起動。ADR 必要な大規模設計は op-architect を使う。
+description: 自然言語要望から対話で計画を立て、人間承認後に op-intake の手順で Issue を起票する主経路スキル。「op-plan」「機能追加」「実装したい」「計画立て」等のキーワードで起動。ADR 必要な大規模設計は op-architect を使う。
 effort: max
 ---
 
-# op-plan: 自然言語要望 → 計画 → Issue 起票 → op-run
+# op-plan: 自然言語要望 → 計画 → Issue の下書き
 
-ユーザーの要望 (「〇〇を追加したい」「△△を直したい」) を対話で計画に固め、承認後に Issue を起票して op-run へ渡す。
+ユーザーの要望 (「〇〇を追加したい」「△△を直したい」) を対話で計画に固めて Issue の下書きにし、起票は op-intake skill の手順で行う。
 
 - Direct Mode 固定 (`_shared/invocation-mode.md`「Direct 固定 skill に op_managed が渡った場合」)。
-- 自動モードは持たない。起票 (フェーズ6) と op-run 起動 (フェーズ8) には人間承認が要る。
-- 実装は op-run、ADR は op-architect が担う。
-- 既存資産の重複実装 (silent fork) を防ぐ audit (フェーズ3) を省略しない。
-- 起票前ゲートは `_shared/filing-gate.md` に従う。
+- 自動モードは持たない。人間の承認は op-intake 手順 4 の一覧の確認 1 回。
+- ADR は op-architect が担う。
+- 既存資産の重複実装 (silent fork) を防ぐ audit (フェーズ3) は、規模が単一ファイルで新しいパスを作らない要望だけ省いてよい。
 
 ## 実行モード
 
 | 起動 | 挙動 |
 |---|---|
-| `/op-skill:op-plan [要望]` | 既定。フェーズ -1〜8 |
-| `--no-op-run` | 起票で終了 (フェーズ8 skip) |
-| `--dry-run` | 承認後も起票せず、`op issue create` コマンドを表示して終了 |
+| `/op-skill:op-plan [要望]` | 既定。フェーズ -1〜6 |
+| `--dry-run` | op-intake の `--dry-run` として扱う (承認後も起票しない) |
 | `--from-record docs/playground/<id>.md` | op-explore の decision record から開始 (下記) |
 | `--survey` / `--no-survey` | フェーズ2.5 の op-survey を強制 / skip |
 
@@ -31,16 +29,13 @@ effort: max
 3. 決定事項・意図を本文に、振る舞いを success_criteria / 必須検証項目に写す。UI issue の `デザインモック:` 行には record の URL を引き継ぐ (フェーズ5 で作り直さない)。
 4. record が不足・不整合ならフェーズ1 に戻る。
 
-参照: `_shared/common-setup.md` / `_shared/github-channel.md` / `_shared/dedup-policy.md` / `_shared/read-economy.md`。
+参照: `_shared/common-setup.md` / `_shared/github-channel.md` / `_shared/read-economy.md`。
 
 ---
 
 ## フェーズ -1: プランモード自動遷移
 
-起動直後に `EnterPlanMode` を呼ぶ (既に plan mode なら no-op)。フェーズ0〜6 は plan mode 下で read-only に進め、
-GitHub への書き込み (`op issue create` / `op issue edit-body` / `--ensure-labels` のラベル作成) はフェーズ7 に集約する。
-ユーザーが拒否した / tool が無い場合は read-only を自律で守って続行し、
-フェーズ6 は ExitPlanMode の代わりに「1. 起票する 2. 修正 3. キャンセル」を対話で確認する。
+場所の見分け方は op-intake skill 手順 0 の表に従う。ローカルで `EnterPlanMode` があれば起動直後に呼び、フェーズ0〜5 を read-only で進める。GitHub への書き込みは op-intake 手順 5 まで行わない。
 
 ## フェーズ0: 環境確認
 
@@ -88,7 +83,7 @@ GitHub への書き込み (`op issue create` / `op issue edit-body` / `--ensure-
 
 ## フェーズ3: 既存資産 audit (silent fork 防止)
 
-feature-expert を read-only audit で spawn し、類似実装の有無を確認する:
+規模が単一ファイルで新しいパスを作らない要望では省いてフェーズ4 へ進む。それ以外は feature-expert を read-only audit で spawn し、類似実装の有無を確認する:
 
 ```
 Agent({
@@ -134,7 +129,7 @@ risk が high なら 2 を推奨する。結果はメモに追加し、フェー
 - domain (fingerprint の第 1 segment): feature / refactor / debug / optimize / design / ux-ui / security / test
 - apply 担当 (`op-run-expert`): UI の見た目 (visual / token / component) 中心なら designer-expert (domain `design`)、
   新規画面でも業務ロジック・API・store 中心なら feature-expert (domain `feature`)。本規則は op-architect も使う
-- `op-post-check-expert` とラベル: `_shared/pr-templates.md`「domain → marker / ラベル表」。UI 影響の有無は
+- `op-post-check-expert` とラベル: `_shared/issue-templates.md`「domain → marker / ラベル表」。UI 影響の有無は
   `_shared/project-profile.md`「UI 影響判定 path パターン」で判定する
 - depends_on (先に完了が必要な issue の index)
 
@@ -148,34 +143,11 @@ risk が high なら 2 を推奨する。結果はメモに追加し、フェー
 
 ### 4-2. Issue draft の骨格
 
-`_shared/pr-templates.md`「Issue 本文 (指示書フル版)」を骨格にし、各節の中身は自然文で書く。
+`_shared/issue-templates.md`「Issue 本文 (指示書フル版)」を骨格にし、各節の中身は自然文で書く。
 フェーズ3 の audit 結果は「触ってよいファイル」「既知の落とし穴 / 注意点」に溶け込ませる。marker は
-`pr-templates.md`「Issue 本文 hidden marker」に従い、`op-fingerprint` は 4-4 で生成する。依存がある issue だけ
-`op-depends-on` と prose `## 依存` (`- depends on #N (先に完了が必要)`) を書き、番号はフェーズ7 で解決する。
+`issue-templates.md`「Issue 本文 hidden marker」に従い、`op-fingerprint` は op-intake 手順 2 で生成する。依存がある issue だけ
+`op-depends-on` と振り分けの材料の「依存」を `#issue[<key>]` で書き (key は 4-1 の index)、番号は op-intake 手順 5 で埋める。
 UI issue にはフェーズ5 で `デザインモック: <URL>` 行を足す。ラベルは `auto-report` + 上記の表の `pro-*-expert`。
-
-### 4-4. fingerprint 生成 + dedup 判定
-
-```bash
-op core fingerprint --domain <domain> --title "<title>" --file <primary_file> [--symbol <symbol>] --plain
-op scan dedup --findings-json drafts.json --json   # drafts.json = [{domain, title, files, symbols}, ...] (draft 全件)
-```
-
-扱いは `_shared/filing-gate.md` §2。op-plan 固有の扱い:
-
-- `decision == "block"` かつ `matched_draft` あり (run 内重複) → 「計画内の draft 同士が同じ fingerprint」と、先行 draft (`matched_draft.draft_title`) と draft i の title を並べて示し、「統合する (draft i を外す) / title を変えて別 issue に分ける / キャンセル」をユーザーに確認する。
-- `decision == "block"` かつ `matched_existing` あり (既存 Issue `matched_existing.issue_number` と重複) → 「続行 / 既存 Issue にコメント追加 / この issue を外す / キャンセル」をユーザーに確認する。
-- envelope が取れない / `decision == "block"` なのに `matched_existing` も `matched_draft` も無い → fail-closed でエラーを提示し中断する。
-
-### 4-6. 分解 align gate
-
-draft 群 (dedup 通過後) を `| # | title | expert | post-check | UI (surface) | depends_on |` の表で提示し、分解そのものを人間と合わせる:
-
-1. この分解で進む
-2. issue の追加 / 削除 / 統合 / 順序変更を指示する → フェーズ4 をやり直して再提示
-3. 設計から見直す → フェーズ1 へ
-
-UI 列の surface は 5-0 のグルーピング結果。別画面が束ねられていないかもここで確認してもらう。
 
 ---
 
@@ -193,7 +165,7 @@ UI issue が無ければフェーズ6 へ進む。画面は `_shared/design-syst
   同じ画面ディレクトリ (`pages/<x>/` / `routes/<x>/` / `views/<x>/` の `<x>`) に属する。推移的に閉じる。
 - lead = surface 内で index が最小の issue。本文に `デザインモック: <URL>` を書く。
 - follower = 残りの issue。本文に `デザインモック: <URL>` と `参照: issue[<lead_index>] (同一 surface の lead)` を書く。
-  `issue[k]` はフェーズ7 で `#N` に解決する。
+  `issue[k]` は op-intake 手順 5 で `#N` に置き換える。
 
 ### 5-1. モック作成と合意
 
@@ -203,81 +175,9 @@ plan mode で Artifact の作成・更新が権限でブロックされた場合
 
 ---
 
-## フェーズ6: ユーザー承認 gate (ExitPlanMode)
+## フェーズ6: 起票 (op-intake に渡す)
 
-承認前に起票しない。ExitPlanMode を呼ぶ直前に、システム指定の plan file へ issue ごとに次を書き出す:
+フェーズ4 の draft を下書きにして、op-intake skill の手順 0 の作業ディレクトリ (`INTAKE_DIR`・`REPO`) を作り、手順 2〜6 で本文・一覧の確認・承認・起票・引き渡しを行う。
 
-```markdown
-# op-plan: 起票予定 Issue
-
-## [<index>] <title>
-- Labels: auto-report, pro-<expert>[, pro-ux-ui-audit-expert]
-- depends_on: <index 列 or なし>
-- デザインモック: <URL or なし>
-
-<Issue 本文全文>
-
-## 起票後の実行ステップ
-1. フェーズ7: `op issue create` で直列起票 → 依存 / 参照の番号解決
-2. フェーズ8: op-run 起動の確認
-```
-
-`ExitPlanMode` を呼び、「Approve and accept edits」を推奨として案内する (他の承認オプションでも司令官の手順は同じ)。
-「Keep planning with feedback」の場合:
-
-- 文言の修正 → plan file を直して再度 ExitPlanMode
-- 見た目への指摘 → 当該 surface のモックを更新 (フェーズ5)
-- 分解・scope・expert の変更 → フェーズ4 から (4-6 を再提示)
-- 設計レベルの変更 → フェーズ1 から
-
-`--dry-run` なら plan file に「dry-run: 起票しない」と明記し、承認後はフェーズ7 のコマンドを表示するだけで終了する。
-
----
-
-## フェーズ7: Issue 起票
-
-`_shared/filing-gate.md` §3 に従う。本フェーズの手順は op-architect フェーズ5 も使う。
-
-### 7-1. ラベル確認
-
-新規ラベルが出る場合は `op issue create --title <t> --label <csv> --body-file <f> --ensure-labels --dry-run` の
-`labels_would_create` を提示し、承認を得てから本起票する。
-
-### 7-2. Marker Publish Validate
-
-起票・本文更新の直前に毎回実行し、`decision` が `pass` 以外なら起票しない:
-
-```bash
-op core marker-lint --body - --source-hint issue-body --strict < <body.md>
-```
-
-### 7-3. 起票と番号解決 (Pass 1 / Pass 2)
-
-**Pass 1**: 依存先が先になる順 (トポロジカル順) に 1 件ずつ直列で起票する。
-
-```bash
-op issue create --title "<title>" --label "<csv>" --body-file <body.md> --ensure-labels
-```
-
-- 番号は envelope の `details.issue_number` から取る (タイトル検索で逆引きしない)。draft 識別子 → 番号の対応表を記録する
-  (Bash 呼び出しをまたぐ場合は一時ファイル経由、`_shared/bash-fence-convention.md`)。
-- 依存先の番号が確定済みなら、この時点で `op-depends-on` marker と `## 依存` を実番号で書く。
-- 起票失敗は記録して次へ進む。
-
-**Pass 2**: Pass 1 で未解決の参照 (follower の `参照: issue[k]` で lead が後から起票されたもの等) がある issue だけ本文を更新する。
-
-- `issue[k]` を `#N` に置換し、`op-depends-on` / `## 依存` を実番号で埋める。
-- 参照先 / 依存先が起票失敗していたら、その参照を外して失敗一覧に記録する。
-- 更新後の本文を 7-2 で検証し、`op issue edit-body --number <N> --body-file <final.md>` で直列に更新する。
-
-1 件でも失敗したら「作成済み / 未作成 / 本文更新失敗」を分けて報告する。作成済み Issue の自動 close (rollback) はしない。
-
----
-
-## フェーズ8: op-run 起動承認
-
-`--no-op-run` なら skip して終了する。起票した番号を示し「1. op-run を起動する / 2. 起動コマンドだけ表示 / 3. 終了」を確認する。
-
-- 1 → `Skill({ skill: "op-skill:op-run", args: "<N1> <N2>" })` (番号は空白区切り。`--auto` 等の op-run フラグも渡せる)。
-- 2 → `/op-skill:op-run <N1> <N2>` を表示して終了。
-- depends_on のある issue 群は `/op-skill:op-loop --numbers <N1> <N2> …` で依存順に駆動できることを案内する (自動 handoff はしない)。
+- 一覧の表に UI 列 (5-0 の surface) を足し、別画面が束ねられていないかも確かめてもらう。
+- 承認時の直し: 文言は本文を直す、見た目は当該 surface のモック (フェーズ5)、分解・scope・expert はフェーズ4、設計から見直すならフェーズ1 に戻る。

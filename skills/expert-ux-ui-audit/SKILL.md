@@ -27,7 +27,7 @@ UX 心理学法則やガイドラインは判断材料であり、機械的に�
 2. spawn prompt の `scope_in` を Read する。project 固有 DS の所在を最初に Grep しておく
 3. `references/usability-invariants.md` の 10 不変条件、`references/recovery-and-states.md`、`references/a11y-checklist.md` で audit
 4. `references/scan-finding-policy.md` で起票範囲・severity・co-run 判定を確認
-5. 出力は `~/.claude/skills/_shared/expert-spawn.md`「scan 出力 envelope 契約」節の envelope。0 件は `{"findings": []}`
+5. 出力は `~/.claude/skills/_shared/expert-report-schemas.md`「scan 出力 envelope 契約」節の envelope。0 件は `{"findings": []}`
 
 ### scan 出力 (ux-ui)
 

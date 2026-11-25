@@ -61,7 +61,7 @@ scan / patrol の報告ルールと実行レベルの正本。`agents/*.md` / `s
 - Critical / High のみ報告する。Medium 以下は検出しても報告しない。
 - finding は静的証拠 (コード引用・呼び出し経路) で裏付ける。
 - 「〜の可能性がある」「〜かもしれない」は禁止。例外は「「可能性がある」を許可する条件」節を全て満たす場合のみ。
-- 検出 0 件は `{"findings": []}` で返す (自然文で「問題なし」と書かない)。envelope 形状は `_shared/expert-spawn.md`「scan 出力 envelope 契約」節。
+- 検出 0 件は `{"findings": []}` で返す (自然文で「問題なし」と書かない)。envelope 形状は `_shared/expert-report-schemas.md`「scan 出力 envelope 契約」節。
 - 対象 repo で無効なスタックの検出は報告しない (ignored_noise。定義は `_shared/project-profile.md`「Out of scope」節)。
 - 対象 repo の CLAUDE.md 規約に従っているコードは指摘しない。規約そのものを批判しない
   (`_shared/project-profile.md`「対象 repo 規約への準拠 (worker 共通)」節)。

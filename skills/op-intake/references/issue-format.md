@@ -2,7 +2,7 @@
 
 ## 骨格
 
-| 入口 | 骨格 (`_shared/pr-templates.md`) |
+| 入口 | 骨格 (`_shared/issue-templates.md`) |
 |---|---|
 | 監査の finding・人の Issue の正規化・scout の報告 | 「Issue 本文 (指示書フル版)」(バッチは「バッチ版」) |
 | 要望から (計画 Issue) | 「Issue 本文 (指示書フル版)」を次のとおり読み替える |
@@ -13,12 +13,12 @@
 - `### scan が立てた仮説` と `### 除外した仮説` の代わりに `### 方針` (どう作るか。採らなかった案があれば理由を 1 行) を書く。op-architect 由来は ADR を方針に書く (op-architect フェーズ5-1)。
 - それ以外の節は見出しを変えずに書く。
 
-節の順: marker → `## 概要` → (`デザインモック:` 行) → `## 背景` か `## 検出根拠`・`## 観測された挙動 / Evidence` → `## 振り分けの材料` → `---` → `## 🤖 apply agent への指示書` の各節 → (`## 依存`) → `## 関連` → `---` と footer。
+節の順: marker → `## 概要` → (`デザインモック:` 行) → `## 背景` か `## 検出根拠`・`## 観測された挙動 / Evidence` → `## 振り分けの材料` → `---` → `## 🤖 apply agent への指示書` の各節 → `---` → `## 関連` → `---` と footer。
 footer は `🤖 op-intake による自動起票`。
 
 ## 振り分けの材料
 
-見出しと 4 項目の形は `pr-templates.md`「振り分けの材料」。埋め方:
+見出しと 4 項目の形は `issue-templates.md`「振り分けの材料」。埋め方:
 
 - 触るファイル: 「触ってよいファイル」を短くまとめる。呼び出し元の数など、大きさの根拠になる数を添える。
 - 画面: モックがあればその surface の名前。
@@ -26,8 +26,8 @@ footer は `🤖 op-intake による自動起票`。
 
 ## marker とラベル
 
-- marker は `pr-templates.md`「Issue 本文 hidden marker」、`op-run-expert` / `op-post-check-expert` とラベルは同「domain → marker / ラベル表」。
-- `severity:*` は finding (Critical / High) に付ける。計画 Issue には付けない。scout の報告と正規化は `pr-templates.md` の表の下の決まりと op-scan skill の `references/from-issue-mode.md` §5。
+- marker は `issue-templates.md`「Issue 本文 hidden marker」、`op-run-expert` / `op-post-check-expert` とラベルは同「domain → marker / ラベル表」。
+- `severity:*` は finding (Critical / High) に付ける。計画 Issue には付けない。scout の報告と正規化は `issue-templates.md` の表の下の決まりと op-scan skill の `references/from-issue-mode.md` §5。
 - 振り分けの材料・鎖・スレッドを表す marker は足さない (marker は `labels-and-markers.md` の 11 種だけ)。
 
 ## 必須検証項目

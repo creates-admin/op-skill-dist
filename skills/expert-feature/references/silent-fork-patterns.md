@@ -1,6 +1,6 @@
 # expert-feature silent fork / implementation gap パターン
 
-Issue 化の前に SKILL.md の severity / confidence / `asset_map` / `needs_human_decision` 判定を通す。
+Issue 化の前に `scan-contract.md` の severity / confidence / `asset_map` / `needs_human_decision` 判定を通す。
 
 ## catalog 索引 + enum 対応表
 

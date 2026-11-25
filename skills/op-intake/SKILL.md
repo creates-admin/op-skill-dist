@@ -9,7 +9,7 @@ effort: high
 下書きを作り、一覧で人に確認してもらい、承認後に 1 件ずつ直列に起票する。
 
 - Direct Mode 固定 (`_shared/invocation-mode.md`「Direct 固定 skill に op_managed が渡った場合」)。`--auto` は持たない。
-- 起票前ゲートの芯は `_shared/filing-gate.md`。本文の形は `_shared/pr-templates.md`、marker は `_shared/markers/labels-and-markers.md`、fingerprint と dedup は `_shared/dedup-policy.md`。
+- 起票前ゲートの芯は `_shared/filing-gate.md`。本文の形は `_shared/issue-templates.md`、marker は `_shared/markers/labels-and-markers.md`、fingerprint と dedup は `_shared/dedup-policy.md`。
 - 起票した Issue の実装はしない。実装の振り分けは手順 6 で渡す。
 
 ## 実行モード
@@ -54,24 +54,21 @@ echo "INTAKE_DIR=$INTAKE_DIR REPO=$REPO"
 
 `references/issue-format.md` に従い、1 件ずつ本文ファイル `<INTAKE_DIR>/draft-<key>.md` を書く (`<key>` は A, B… か 1, 2…)。
 
-- `## 振り分けの材料` 節の形は `pr-templates.md`「振り分けの材料」。
+- `## 振り分けの材料` 節の形は `issue-templates.md`「振り分けの材料」。
 - fingerprint は CLI で生成して先頭に置く (手書きしない):
 
 ```bash
 op core fingerprint --domain <domain> --title "<title から [<expert>] を除いた要約>" --file <触るファイルの先頭> [--symbol <symbol>] --plain
 ```
 
-- 依存先がこの run の下書きなら `<!-- op-depends-on: #issue[<key>] -->` と `## 依存` の `- depends on #issue[<key>] (先に完了が必要)` を書き、番号は手順 5 で埋める。
+- 依存先がこの run の下書きなら `<!-- op-depends-on: #issue[<key>] -->` と振り分けの材料の「依存」に `#issue[<key>]` を書き、番号は手順 5 で埋める。
 
 ## 手順 3: 一覧確認 (重複・鎖・スレッド)
 
-1. 全下書きを `[{domain, title, files, symbols}]` の配列で `<INTAKE_DIR>/drafts.json` に書き (値は手順 2 で fingerprint に渡したものと同じ)、既存 Issue の素材を REST で取って 1 回だけ判定する (どこでもこの形で実行する):
+1. 全下書きを `[{domain, title, files, symbols}]` の配列で `<INTAKE_DIR>/drafts.json` に書き (値は手順 2 で fingerprint に渡したものと同じ)、1 回だけ判定する:
 
 ```bash
-gh api -X GET search/issues --paginate --slurp \
-  -f q='repo:<owner>/<repo> is:issue is:open label:auto-report' -f per_page=100 \
-  | jq '{items: [.[].items[]]}' > "<INTAKE_DIR>/existing.json" &&
-op scan dedup --findings-json "<INTAKE_DIR>/drafts.json" --input-json "<INTAKE_DIR>/existing.json" --json > "<INTAKE_DIR>/dedup.json"
+op scan dedup --findings-json "<INTAKE_DIR>/drafts.json" --repo "<owner>/<repo>" --json > "<INTAKE_DIR>/dedup.json"
 ```
 
 2. `details.results[i]` の扱いは `filing-gate.md` §2 (対話経路)。envelope が取れない・`block` なのに `matched_existing` も `matched_draft` も無いときは中断して人に見せる。
@@ -99,10 +96,10 @@ op issue create --title "<title>" --label "<ラベルを , で連結>" --body-fi
 ```
 
 - marker-lint が `pass` 以外なら起票せず失敗に記録して次へ進む。
-- `op issue create` が `HTTP 403` と `GraphQL` を含むエラーで失敗したら、同じ本文を `references/github-rest.md`「起票」で起票する。
-- 番号は envelope の `details.issue_number` (REST なら応答の `number`) を使い (タイトル検索で逆引きしない)、`<key> → #N` を `<INTAKE_DIR>/numbers.txt` に追記する。
+- 番号は envelope の `details.issue_number` を使い (タイトル検索で逆引きしない)、`<key> → #N` を `<INTAKE_DIR>/numbers.txt` に追記する。
+- `op issue create` が失敗したら再実行せず、`op issue list --repo "<owner>/<repo>" --state all --limit 20 --plain` にこの run で作られたタイトルの完全に一致する Issue があるかを確かめ、あれば本文の `op-fingerprint` が下書きと同じかを見てから作成済みか未作成かを決める。
 - 依存先が起票に失敗した Issue は起票しない (未作成に記録する)。
-- 本文の地の文に後から起票する Issue への参照 (`参照: issue[<key>]` 等) が残った Issue だけ、全件の起票後に置き換えた本文を marker-lint してから `op issue edit-body --number <N> --body-file <file>` (403 なら `references/github-rest.md`「本文の更新」) で直す。参照先が起票に失敗していたら、その参照を外して失敗に記録する。
+- 本文の地の文に後から起票する Issue への参照 (`参照: issue[<key>]` 等) が残った Issue だけ、全件の起票後に置き換えた本文を marker-lint してから `op issue edit-body --number <N> --body-file <file>` で直す。参照先が起票に失敗していたら、その参照を外して失敗に記録する。
 - 入口ごとの起票後の作業 (元 Issue へのコメント等) は `references/entries.md`。
 - 1 件でも失敗したら「作成済み / 未作成 / 本文の更新に失敗」を分けて報告する。作成済みの Issue を自動で閉じない。
 

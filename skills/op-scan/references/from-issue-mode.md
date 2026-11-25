@@ -11,8 +11,8 @@
 
 ## 1. 元 Issue 取得
 
-`op issue view "$ISSUE_NUM" --include meta --json` で title / body / labels / state を取得する。
-`closed` または `superseded-by-scan` ラベル付きならエラーで中断する (二重正規化防止)。
+`gh api "repos/<owner>/<repo>/issues/$ISSUE_NUM" --jq '{title, body, state, pull_request, labels: [.labels[].name]}'` で取得する。
+`pull_request` がある (PR の番号)・`closed`・`superseded-by-scan` ラベル付きならエラーで中断する (二重正規化防止)。
 
 ## 2. scope 推定
 
@@ -57,10 +57,9 @@ severity 制約の緩和と引き続き禁止する事項は workflow の from-i
 
 ## 5. 派生 Issue 起票
 
-- 起票前ゲートは `_shared/filing-gate.md` (severity 例外は同 §1)。`op scan dedup` で既存 open Issue と重複したら起票せず、
-  元 Issue に「既存 #N と同等のため、そちらで進めてください」とコメントする。
-- 対話モードは人間承認後に起票する。`--auto` でも派生 Issue は起票する (`auto-policy.md`「例外」)。
-- 本文は `pr-templates.md`「Issue 本文 (指示書フル版)」、marker は同「Issue 本文 hidden marker」。本文に「元 Issue: #<番号>」を自然文で書く。
+- 対話モードは op-intake skill の `--from-issue` の入口で受け、手順 0 の作業ディレクトリを作って手順 2〜6 で起票する。`--auto` は `_shared/filing-gate.md` §2・§3 で起票する (派生 Issue は `--auto` でも起票する。`auto-policy.md`「例外」)。severity 例外は同 §1。
+- `op scan dedup` で既存 open Issue と重複したら起票せず、元 Issue に「既存 #N と同等のため、そちらで進めてください」とコメントする。
+- 本文は `issue-templates.md`「Issue 本文 (指示書フル版)」、marker は同「Issue 本文 hidden marker」。本文に「元 Issue: #<番号>」を自然文で書く。
 - ラベル: `auto-report`、`derived-from-issue`、`severity:critical|high|medium|low|n/a`、元 Issue から継承できるもの (`module:xxx` / `bug` / `feature` 等)。
 - 検出が複数なら、元 Issue の意図に最も近い 1 件だけを派生 Issue にする (元 1 : 派生 1)。
   他は通常の op-scan 起票として扱う (`derived-from-issue` なし、Critical/High のみ)。
@@ -83,5 +82,4 @@ op issue edit-labels "$ISSUE_NUM" --add "superseded-by-scan"
 
 ## 7. 完了報告
 
-元 Issue (superseded-by-scan 付与済み) / 推定 scope とその信号 / 起動 expert / 派生 Issue / 副次検出を列挙し、
-`/op-skill:op-run` で派生 Issue を実装できると案内する。
+元 Issue (superseded-by-scan 付与済み) / 推定 scope とその信号 / 起動 expert / 派生 Issue / 副次検出を列挙する。対話モードは op-intake 手順 6 の表に添える。

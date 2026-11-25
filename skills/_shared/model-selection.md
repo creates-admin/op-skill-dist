@@ -63,7 +63,7 @@ OP skill が spawn する expert にどの model を割り当てるかの正本�
 
 ## §5.5 code-review effort-level 自動派生
 
-controller は apply spawn の `code_review_effort` を次で決め、apply spawn prompt に渡す。値は `expert-spawn.md` 修正完了報告 schema の
+controller は apply spawn の `code_review_effort` を次で決め、apply spawn prompt に渡す。値は `expert-report-schemas.md` 修正完了報告 schema の
 `code_review_effort` に入り、agent は `Skill({skill: "op-skill:op-code-review", args: "effort: <effort>"})` で呼ぶ
 (`auto` / `null` なら effort 引数なし = skill 既定 high)。invoke 手順の正本は `apply-completion-checklist.md` §2。
 

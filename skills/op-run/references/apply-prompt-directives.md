@@ -65,7 +65,7 @@ ClusterOrchestrator はフェーズ2 で `common` 節 + 当該 expert の節の�
   assumptions[] / needs_human_decision / blocked_actions[] に入れて decision="deferred" で返す
 * 判定 none → revert して decision="reverted"、unstable → revert して decision="deferred"
 * 1 PR = 1 bottleneck。別の bottleneck は remaining_issues[] に列挙し、本 PR に含めない (Issue コメントは書かない)
-* 完了報告は `op help payload apply-report` 形式 + 修正完了報告 (`_shared/expert-spawn.md`)
+* 完了報告は `op help payload apply-report` 形式 + 修正完了報告 (`_shared/expert-report-schemas.md`)
 * コミットメッセージに Before / After / improvement / significance / decision を書く
 ```
 

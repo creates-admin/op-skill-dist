@@ -55,15 +55,7 @@ PR コメント + 構造化返却。PR 全体の lens (Workflow / UX / Test / Co
 
 ## 出力契約
 
-| mode | 正本 |
-|---|---|
-| scan / patrol | envelope は `~/.claude/skills/_shared/expert-spawn.md`「scan 出力 envelope 契約」。field・必須性・enum は `op help payload security-finding --json` |
-| refute | `~/.claude/skills/_shared/refute-contract.md` §6 |
-| apply | `~/.claude/skills/_shared/expert-spawn.md`「修正完了報告 schema」+ `apply-policy.md`「完了報告の security 追加 field」 |
-| post-check | `post-check-policy.md`「出力」の返却 field |
-
-拡張 field の判定基準: `security` / `threat_model` は `source-sink-analysis.md`、`usable_security` は `usable-security.md`、
-`post_check` は `post-check-policy.md` 観点 8。
+返す前に `references/report-schema.md` を読む。
 
 ## 他 expert との責務分離
 
@@ -88,7 +80,7 @@ PR コメント + 構造化返却。PR 全体の lens (Workflow / UX / Test / Co
 | `references/usable-security.md` | mitigation ladder / 許可・禁止される deny / usable_security field / user-selected path | 修正方針の提示・apply・post-check 観点 7 |
 | `references/apply-policy.md` | apply 可否マトリクス / apply してよい・いけない変更 / 手順 / 完了報告の security 追加 field | apply |
 | `references/post-check-policy.md` | 8 観点 / 判定 4 種 / aux UX post-check / 返却 field | post-check |
-| `references/report-schema.md` | scan payload の正本 pointer | 出力時 |
+| `references/report-schema.md` | mode 別の出力契約 / scan payload の正本 pointer | 出力時 |
 | `references/tauri-ipc.md` | IPC 入力 / WebView 設定 / capability・permission 最小化 | IPC / capability finding |
 | `references/path-file-io.md` | 境界別の scope / Windows path 境界 15 種 | file IO / path finding |
 | `references/shell-process.md` | 起動経路 / InDesign COM・ExtendScript | shell / 外部アプリ finding |

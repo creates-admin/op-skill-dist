@@ -90,7 +90,7 @@ exploration-only spawn (investigation / post-check / review) は `commits_added:
 
 ## 6. 完了報告 schema
 
-schema の正本は `expert-spawn.md`「修正完了報告 フィールドの必須性」表 (`op help payload apply-report` でも確認できる)。
+schema の正本は `expert-report-schemas.md`「修正完了報告 フィールドの必須性」表 (`op help payload apply-report` でも確認できる)。
 
 ## 7. Marker Publish が発生する場合の追加契約
 

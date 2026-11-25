@@ -14,5 +14,5 @@
 
 - 既読の Issue / PR 本文・ファイルを再 Read しない (R1/R2)。
 - Issue / PR は `op issue list` / `op issue view` / `op pr view` の meta (number / title / labels / state) で扱い、full body は真に必要なフェーズでのみ取得する。
-- subagent の completion_report は要点に圧縮して保持する (producer 側の長さ制約は `expert-spawn.md`「修正完了報告 schema」節)。
+- subagent の completion_report は要点に圧縮して保持する (producer 側の長さ制約は `expert-report-schemas.md`「修正完了報告 schema」節)。
 - 読まなさすぎに退行しない: 未読ファイルの確認や gate 判定に要る fetch は省略しない (R4)。

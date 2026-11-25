@@ -1,6 +1,6 @@
 # op-scan `--from-merged-pr` モード (follow-up Issue 半自動起票)
 
-merged PR の完了報告・review 結果・post-check Notes から follow-up を抽出し、plan モード承認後に Issue を起票する。
+merged PR の完了報告・review 結果・post-check Notes から follow-up を抽出し、op-intake の手順で承認を得て Issue を起票する。
 
 ```
 /op-skill:op-scan --from-merged-pr <PR>
@@ -10,11 +10,11 @@ merged PR の完了報告・review 結果・post-check Notes から follow-up �
 /op-skill:op-scan --from-merged-pr <PR> --no-trace      # 親 PR への trace コメントを省略
 ```
 
-## Phase -1: プランモード遷移
+## Phase -1: 場所と環境
 
-起動直後に `EnterPlanMode` を呼ぶ (op-plan のプランモード運用と同じ)。Phase 0〜5 は read-only
-(Read / Grep / Glob と read-only な `op` CLI のみ)。`op issue create` / `op issue comment` / `op pr comment` などの write は
-Phase 6 の承認まで行わない。ユーザーが plan mode を拒否しても同じ規律で続行する。
+op-intake skill の手順 0 (場所の見分け・作業ディレクトリ) を通す。ローカルで `EnterPlanMode` があれば起動直後に呼ぶ。
+Phase 0〜2 は read-only (Read / Grep / Glob と read-only な `op` CLI のみ)。`op issue create` / `op issue comment` / `op pr comment` などの write は
+op-intake 手順 4 の承認まで行わない。
 
 ## Phase 0: PR 状態確認
 
@@ -49,43 +49,16 @@ op review state pull --pr "$PR_NUM" > review-state.json
 | `assumptions` (未解消) / `blocked_actions` | low | apply expert の domain |
 | `followup_section` (`残存リスク / follow-up` 節の bullet) | low | 親 PR の fingerprint 第 1 segment (取れなければ `unknown`) |
 
-## Phase 3: fingerprint + 重複・衝突チェック
+## Phase 3: 起票 (op-intake に渡す)
 
-draft ごとに `op core fingerprint` で fingerprint を生成し、全 draft を 1 回で判定する:
+draft が 0 件なら Phase 4 へ進む。draft を op-intake skill の `--drafts` の入口で受け (fingerprint は同手順 2 のコマンドで作る)、手順 3〜6 (dedup・一覧の確認・承認・直列の起票) で起票する。
 
-```bash
-op scan dedup --findings-json drafts.json --json
-```
-
-`.details.results[i].decision` が `pass` の draft だけ次へ進める。`block` は `matched_existing` ありなら「既存 Issue と重複」
-(`matched_existing.issue_number`)、`matched_draft` ありなら run 内重複 (`matched_draft.draft_index` = drafts.json の添字の先行 draft と
-fingerprint 完全一致) としてスキップする。どちらも無い block・それ以外・取得失敗は fail-closed で block 扱いにする。
-類似 (warn) は plan file に併記して Phase 6 で人間が判断する
-(`_shared/filing-gate.md` §2)。draft が 0 件なら Phase 3 以降を skip する。
-
-## Phase 4: plan file 書き出し
-
-`~/.claude/plans/op-scan-followup-PR<N>-<YYYYMMDD-HHMMSS>.md` に書く:
-
-1. 対象 PR (番号 / タイトル / 実行日時)
-2. サマリ表: `# / タイトル / domain / severity / fingerprint / 類似 Issue`
-3. 起票予定 Issue 詳細 (各 draft を `<details>` で折りたたみ、Labels / Body 全文)
-4. スキップ (重複) 表: `fingerprint / 重複先`。重複先は既存 Issue なら `#<matched_existing.issue_number>`、run 内重複なら
-   `run 内 draft <matched_draft.draft_index> (<matched_draft.draft_title>)`
-
-## Phase 5: ExitPlanMode 承認
-
-`ExitPlanMode` を呼ぶ。推奨は「Approve and accept edits」。「Keep planning with feedback」なら plan file を直して再度呼ぶ。
-承認されるまで起票しない。
-
-## Phase 6: 起票
-
-承認された draft を 1 件ずつ直列に起票する (`filing-gate.md` §3: marker-lint → `op issue create --title <t> --label <csv> --body-file <tmp>`)。
-
-- marker: `pr-templates.md`「Issue 本文 hidden marker」。本文に「親 PR: #<N>」を自然文で書く。severity の例外は `filing-gate.md` §1。
+- marker: `issue-templates.md`「Issue 本文 hidden marker」。本文に「親 PR: #<N>」を自然文で書く。Medium / Low も起票する (`filing-gate.md` §1 の例外)。
 - ラベル: `auto-report`、`derived-from-pr`、`severity:<critical|high|medium|low>`、apply 担当の `pro-<expert>-expert`。
+- 一覧の表に `domain / severity / fingerprint` の列を足す。
+- `--dry-run` は op-intake の `--dry-run` として扱い、Phase 4 の親 PR への trace コメントもしない。
 
-## Phase 7: 完了報告 + 親 PR trace コメント
+## Phase 4: 完了報告 + 親 PR trace コメント
 
 ```
 ## op-scan --from-merged-pr 完了
@@ -96,8 +69,6 @@ fingerprint 完全一致) としてスキップする。どちらも無い block
 - 起票: #<M> "<タイトル>" (medium, <fingerprint>) ...
 - スキップ (既存 Issue と重複): <fingerprint> → 既存 #<matched_existing.issue_number>
 - スキップ (run 内重複): <fingerprint> → run 内 draft <matched_draft.draft_index> (<matched_draft.draft_title>)
-
-次は `/op-skill:op-run` で起票した Issue を実装できます。
 ```
 
 `--no-trace` でなければ、起票した Issue 一覧とスキップ件数 (既存 Issue と重複 / run 内重複 を分けて数える) を一時ファイルに書き

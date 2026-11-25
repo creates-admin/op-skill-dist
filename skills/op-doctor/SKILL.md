@@ -57,7 +57,7 @@ OK / WARN / FAIL と severity は controller がフェーズ3で判定する。
 | コマンド失敗 / toolchain 互換の深い推論が要る | `op-skill:debug-expert` (失敗コマンドと出力、`toolchains[]` を渡す) |
 | tool install policy / org policy 等の方針判断 | spawn せず `needs_human_decision` |
 
-spawn prompt は `~/.claude/skills/_shared/spawn-prompt-common.md` §1〜§5 (exploration-only variant) を含め、返却は `expert-spawn.md` の canonical schema。
+spawn prompt は `~/.claude/skills/_shared/spawn-prompt-common.md` §1〜§5 (exploration-only variant) を含め、返却は `expert-report-schemas.md` の canonical schema。
 env-expert は spawn しない。routing 値に env-expert が出たら `~/.claude/skills/_shared/planned-experts.md` の substitute に normalize する。
 
 ## フェーズ3: OP Doctor Report
@@ -88,4 +88,4 @@ env-expert は spawn しない。routing 値に env-expert が出たら `~/.clau
 ## フェーズ4: 起票
 
 起票は `~/.claude/skills/_shared/filing-gate.md` に従う (対話は Report 提示後の承認、`--auto` は同 §1)。Critical / High のみ起票し、Medium 以下は Report に記すだけ。
-marker とラベルは `pr-templates.md`「domain → marker / ラベル表」(deps 系は `security`、toolchain / command / CI / ハーネス系は `debug` の domain で扱う)。
+marker とラベルは `issue-templates.md`「domain → marker / ラベル表」(deps 系は `security`、toolchain / command / CI / ハーネス系は `debug` の domain で扱う)。
