@@ -48,10 +48,10 @@ op pr list --label <name>                                                       
 ```bash
 git fetch origin
 git fetch origin "+refs/pull/<N>/head:refs/remotes/origin/pr/<N>"
-op pr view <N> --include meta        # isDraft / mergeable / headRefName / headRefOid / baseRefName / headRepositoryOwner
+op pr view <N> --include meta        # is_draft / mergeable / head_ref_name / head_ref_oid / base_ref_name / head_repository_owner_login (以下 headRefName 等と書く)
 op pr view <N> --include files       # 変更ファイル
 op pr view <N> --include body-comments-commits   # 本文 (Fixes #M) / コメント
-gh api 'repos/{owner}/{repo}/commits/<headRefOid>/check-runs?per_page=100' --jq '.check_runs[] | {name, status, conclusion}'   # CI
+# CI: headRefOid の check-runs (op-thread の `references/github-rest.md`「チェック」)
 op review state pull --pr <N>        # details.found / state.attempts[] 最新の review_result・reviewed_head_sha
 op issue view <M> --include meta     # 紐づく Issue の成功条件・labels
 git merge-tree --write-tree origin/<base> origin/pr/<N> >/dev/null   # exit 1 = conflict
@@ -62,7 +62,7 @@ git diff --stat origin/<base>...origin/pr/<N>
 
 | 観点 | 見るもの |
 |---|---|
-| CI | 全 check の bucket。fail / pending / CI なし を区別する |
+| CI | 全 check を緑 / 赤 / 実行中 / CI なし に分ける (見分け方は op-thread の `references/github-rest.md`「チェック」) |
 | conflict | `merge-tree` の結果と `mergeable`。conflict 自体は保留理由にならない (フェーズ4 で解消する) |
 | draft | draft は保留 (ready 化は人間が行う) |
 | review | `pro-reviewed` / `pro-review-blocked` / `pro-review-needs-fix` / `needs:human-decision` ラベル、state の最新 `review_result` と `reviewed_head_sha == headRefOid` か。op-run 由来でない PR は `found: false` になるので「review 記録なし」と明示する |
@@ -208,19 +208,30 @@ Agent({
 
 ### 4-3. CI 待ち
 
+CI が無い repo でフェーズ3 に「CI なし」と承認済みなら読まずに 4-4。それ以外は push 後の head の check-runs を読む
+(見分け方は op-thread の `references/github-rest.md`「チェック」)。4-1 の update-branch の後は、
+`op pr view <N> --include meta` の `head_ref_oid` がフェーズ2 から変わったのを確かめてから読む。
+
+下の読み直しを `run_in_background` で起動し、完了通知を待つ。
+
 ```bash
-# run_in_background で起動し完了通知を待つ。<head sha> は push 後の head
+# <head sha> は push 後の head。出力は pass / fail / none / pending / error
 for i in $(seq 1 15); do
-  R=$(gh api 'repos/{owner}/{repo}/commits/<head sha>/check-runs?per_page=100' --jq '[.check_runs[] | .conclusion // "pending"]
-    | if any(. == "pending") then "pending" elif all(. == "success" or . == "skipped" or . == "neutral") then "pass" else "fail" end')
+  C=$(gh api --paginate 'repos/{owner}/{repo}/commits/<head sha>/check-runs' --jq '.check_runs[] | .conclusion // "pending"') || { R=error; break; }
+  if [ -z "$C" ]; then if [ "$i" -ge 3 ]; then R=none; else R=pending; fi
+  elif echo "$C" | grep -qx pending; then R=pending
+  elif echo "$C" | grep -qvxE 'success|skipped|neutral'; then R=fail
+  else R=pass; fi
   [ "$R" != pending ] && break
-  sleep 60
+  [ "$i" -lt 15 ] && sleep 60
 done
 echo "$R"
 ```
 
-`pass` → 4-4。`fail` → 保留。15 分で `pending` のまま → 保留。CI が無い repo はフェーズ3 で
-「CI なし」と承認済みならそのまま 4-4。
+- `pass` → 4-4。`fail` → 保留。
+- `none` (3 分たっても check-runs が 0 件。paths で絞った CI など) → 4-4。完了報告に「CI が走らなかった」と書く。
+- `pending` (15 分たっても実行中) → 保留。
+- `error` (`gh api` の失敗) → もう一度起動し、続けて `error` なら保留。
 
 ### 4-4. マージ
 

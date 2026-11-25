@@ -35,7 +35,7 @@ SKILL.md の「テスト削除の 3 段階モデル」の実装。quarantine / d
 
 ### 安全弁 (apply 前)
 
-- `git blame` / `git log --diff-filter=A` で追加コミットを特定し、`gh search issues` / `gh search prs` で追加意図を復元する
+- `git blame` / `git log --diff-filter=A` で追加コミットを特定し、`gh api -X GET search/issues -f q='repo:<owner>/<repo> is:pr <commit sha か語>'` (Issue は `is:issue`) で追加意図を復元する
 - 同等カバレッジは、対象テストを skip 化して coverage を再計測し、低下がないことで確認する
 - 追加意図が分からなければ削除せず、`needs_human_decision.required: true` (decision_type: "deletion") で返す
 

@@ -106,5 +106,5 @@ Tier1 の `deleted` / `failed` / `skipped_protected`、Tier2 の close 済 / 保
 | 対象 | 復元 |
 |------|------|
 | 削除した worktree | branch `auto/<task-id>` が残っていれば `git worktree add` で再生成 (push 済なら GitHub の "Restore branch" も可) |
-| close した PR | `gh pr reopen <N>` または GitHub UI |
-| close した Issue | `gh issue reopen <N>` または GitHub UI |
+| close した PR | `gh api -X PATCH 'repos/{owner}/{repo}/pulls/<N>' -f state=open` または GitHub UI |
+| close した Issue | `gh api -X PATCH 'repos/{owner}/{repo}/issues/<N>' -f state=open` または GitHub UI |

@@ -71,9 +71,9 @@ scan / patrol の報告ルールと実行レベルの正本。`agents/*.md` / `s
 
 scan / patrol / detect モードは Level 0 のみ (Level の定義は `project-profile.md`「Verification Ladder」)。
 
-- 許可: Read / Grep / Glob、`git log` / `blame` / `diff` / `ls-files`、`gh issue list` / `view` / `gh search` 等の read-only GitHub 操作
+- 許可: Read / Grep / Glob、`git log` / `blame` / `diff` / `ls-files`、`op issue view` / `list`、`gh api` の GET (`-f` を付けるときは `-X GET` を明示する。`search/issues` を含む) 等の read-only GitHub 操作
 - 禁止: ファイル編集 / commit / push、ビルド・テスト・型チェック・lint 実行 (`cargo check` / `vue-tsc` / `flutter analyze` 等)、
-  依存の追加・削除 / migration / snapshot 生成 / 設定ファイル変更、`gh issue create` / `edit` / `comment` 等の write GitHub 操作
+  依存の追加・削除 / migration / snapshot 生成 / 設定ファイル変更、`op issue create` / `comment` / `edit-*`、`gh api -X POST` / `PATCH` 等の write GitHub 操作
 
 例外: spawn 入力に `allow_level_1: true` が明示された場合のみ lint / typecheck を実行してよい。
 Level 1 以上は apply / investigation Issue / 司令官が明示した verification task で実行する。

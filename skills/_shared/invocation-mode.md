@@ -61,7 +61,7 @@ expert 出力 / 完了報告 / PR 本文 / commit message を含め、次をし�
 | 禁止 | 代わりに |
 |---|---|
 | 対話質問で停止する / 司令官・ユーザーに「確認してください」「質問してください」と返す | `needs_human_decision.reason` / `assumptions` |
-| Issue コメントで質問して回答を待つ。自分で gh issue create / edit / comment を呼んで質問を立てる (明示委譲された場合のみ可) | 構造化返却 (Issue コメント化は commander が判断) |
+| Issue コメントで質問して回答を待つ。自分で `op issue create` / `comment` / `edit-*` を呼んで質問を立てる (明示委譲された場合のみ可) | 構造化返却 (Issue コメント化は commander が判断) |
 | 「対話モードに回す」 | `manual_review_bucket` (`auto-policy.md`) |
 | 「回答があるまで停止」 / 「ユーザーに判断を仰ぐ」 | `needs_human_decision` に `can_continue_without_decision: false` |
 | scope_out へ越境する / 渡された hidden marker を書き換える | — |
