@@ -1,6 +1,6 @@
 ---
 name: review-expert
-description: PR を別 context で独立監査する read-only reviewer。修正・投稿しない。
+description: PR を別 context で独立監査する read-only reviewer (op-run・op-codev・op-merge と、人が直接頼んだとき)。修正・投稿しない。op-thread の自己レビュー (/code-review) の代わりにしない。
 model: sonnet
 skills:
   - expert-review
