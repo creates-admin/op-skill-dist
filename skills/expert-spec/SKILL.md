@@ -93,7 +93,13 @@ spawn prompt が `mode: consolidate` のときは、`consolidate_from` の層の
 
 - `section` は `.claude/rules/<layer>.md#<節>` (移し元) で書く
 - A・B に `move` を許す。`move_to` は `.claude/rules/<feature>.md#<節>` で、文言は変えない。移し先の段は `_schema.md`「段と置き場所」の判定手順で決める
-- `pointer_needed` は、その決まりが効くファイルに移し先の正本の `paths` が当たらない (共有ファイルにも効く) とき true。当たる正本は op-codev SKILL.md 1.5-1 と同じく `op spec-patrol list-specs` と jq で引く
+- `pointer_needed` は、その決まりが効くファイルに移し先の正本の `paths` が当たらない (共有ファイルにも効く) とき true。当たる正本は次で引く (出力なし = 当たる正本が無い)
+
+```bash
+op spec-patrol list-specs --rules-dir .claude/rules | jq -r --arg t "<対象 path>" '
+  .details.specs[] | select(any(.paths[]; (sub("/\\*\\*$";"") | sub("\\*.*$";"")) as $p
+    | $p != "" and ($t | startswith($p)))) | .feature'
+```
 
 ## 7. health (正本をまたぐ重複・食い違い・散らばり)
 

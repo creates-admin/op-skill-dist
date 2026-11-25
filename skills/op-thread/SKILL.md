@@ -48,6 +48,7 @@ description: Issue 番号から、実装 → 検証 → /code-review → draft P
    `/code-review` が skill の一覧に無いか、呼んで失敗したときだけ、built-in の `general-purpose` の Agent (別の context) に差分の correctness レビューを頼む。prompt に「編集・コミット・push をしない」と書き、`op-skill:*` の expert は使わない。それもできなければ PR 本文に書いて人に上げる。
 2. 指摘は `references/watch-pass.md`「レビューの指摘」と同じ扱いで直す。
 3. 直したら Step 3 のうち関係するものを再実行する。
+4. Issue に `op-post-check-expert` があれば `references/post-check.md` を行う。
 
 ## Step 5. push と draft PR
 

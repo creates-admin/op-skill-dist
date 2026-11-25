@@ -25,41 +25,14 @@ domain_tags:
 
 ## §5.1 `fable_escalation`
 
-Fable escalation gate (`model-selection.md` §7.2) を抑止する方向にだけ設定できる。事前承認は表現できない。
+Fable (`model-selection.md` §7.2) を止める方向にだけ設定できる。事前承認は表現できない。
 
 | key | 型 | default | 意味 |
 |---|---|---|---|
-| `enabled` | bool | `true` | `false` で `model-selection.md` §7.2 F4 の候補判定を skip し、Fable 昇格を一切提案しない |
+| `enabled` | bool | `true` | `false` で人間の指定があっても Fable を使わない (`model-selection.md` §7.2 F4) |
 
 - 環境変数 `OP_FABLE_DISABLE=1` は同じ効果の kill switch (env が優先)。
-- `enabled: true` は「提案してよい」であって承認済みではない。承認は常に会話 gate (§7.2 F5)。
-
-## §6.2 `review` (review depth proportional lens gating)
-
-op-run フェーズ4 global review の lens 数を PR の変更規模で流動化する。lens 選択は controller (`global-review-spawn.md` §4-2-a) が行い、ClusterOrchestrator が review-expert spawn prompt に注入する。controller は `eval "$(op model decide-review --emit-env)"` で本節を `OP_REVIEW_PROPORTIONAL_LENS` / `OP_REVIEW_SMALL_MAX_LOC` / `OP_REVIEW_MEDIUM_MAX_LOC` に解決する (env var > config > 既定、config 不在時は既定)。
-
-```yaml
-review:
-  proportional_lens:
-    enabled: true
-    tiers:
-      small_max_loc: 100
-      medium_max_loc: 500
-  lens_bundles:
-    - ["compatibility", "release"]
-    - ["workflow-ux", "refactor-maintainability"]
-```
-
-| key | 型 | default | 意味 |
-|---|---|---|---|
-| `proportional_lens.enabled` | bool | `true` | `false` (または env `OP_REVIEW_PROPORTIONAL_LENS=false`) で 7-lens 完全分割に戻す |
-| `proportional_lens.tiers.small_max_loc` | int | `100` | `≤` で core 3 lens (security/spec/test-regression) 単独、non-core は skip |
-| `proportional_lens.tiers.medium_max_loc` | int | `500` | small 超過〜本値以下で core 3 + `compatibility`+`release` bundle + (該当 domain を触る場合のみ) `workflow-ux`。超過は 7 lens 完全分割 |
-| `lens_bundles` | list[2-elem list[string]] | `[["compatibility","release"],["workflow-ux","refactor-maintainability"]]` | bundle 可能ペア (最大 2 lens)。1 worker が 2 lens を担当し各 finding に lens key を自己申告する |
-
-- core lens (`security` / `spec` / `test-regression`) は規模に関わらず必須・単独。core lens を含むペアや 3 lens 以上のペアは却下される。
-- sensitive PR (`model-selection.md` §7.1.3) は skip/bundle 無効 = 7-lens フル + Opus 維持。
-- Fix Loop 2 round 目以降の差分 lens 化は `review-fix-loop.md`。
+- `enabled: true` は承認済みではない。Fable を使うのは人間が自分から指定したときだけ (§7.2 F4)。
 
 ## §11 `design_system_baseline`
 
@@ -124,7 +97,7 @@ verify_harness:
 | `targets` | list[string] | yes | start の JSON の `targets` に非 null の URL を必ず含める target 名 |
 | `runtime` | enum | `linux` | ハーネスを動かす実行先。`linux` / `windows` |
 | `driver` | enum | `playwright` | 操作手段。`playwright` / `webdriver`。start の JSON の `driver` と一致する |
-| `windows_paths` | list[string (glob)] | `[]` | diff がかかったら `runtime` に関わらず Windows で検証する path。`runtime: windows` で非空なら runtime verify 段はこの path に当たる diff でだけ起動する (正本は `skills/op-run/references/runtime-verify-dispatcher.md` 1 章) |
+| `windows_paths` | list[string (glob)] | `[]` | diff がかかったら `runtime` に関わらず Windows で検証する path。`runtime: windows` で非空なら runtime verify 段はこの path に当たる diff でだけ起動する (正本は op-verify skill の `references/runtime-verify-dispatcher.md` 1 章) |
 | `windows` | object | `runtime: windows` なら yes | Windows Sandbox で検証するときの宣言 (下表)。`op verify windows lease` のオプションはここから組む |
 
 ```yaml

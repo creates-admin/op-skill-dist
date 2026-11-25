@@ -4,13 +4,7 @@
 Utility Worker の verify-runner (`agents/verify-runner.md` / `expert-verify` skill) にブラウザ / アプリを実機で操作させ、
 結果を確かめて記録する。根拠は ADR-0034。
 
-本書の「controller」は次のどれかを指す。どの controller も 1〜5 章をそのまま使い、6 章は op-run だけが使う。
-
-| controller | 段の位置 |
-|---|---|
-| op-run の ClusterOrchestrator (CO) | `cluster-orchestrator-directives.md` フェーズ5.7 (post-check の後、global review の前) |
-| op-codev | verify フェーズ |
-| op-verify | 本体 |
+本書の「controller」は op-verify (通常モード、`run.md`) を指す。
 
 verify-runner がするのは実機操作と証跡の保存だけ (コード編集・commit・push・GitHub write・UX 監査をしない)。
 spawn・Windows の貸し借り・probe・stop の引き取り・結果の判定・記録は controller が行う。
@@ -18,8 +12,8 @@ Level 5 (E2E / 実機) を apply で実施しない規約 (`_shared/project-prof
 
 ## 1. 起動条件
 
-検証対象 checkout (op-run では apply worktree、`CHECKOUT=$WORKTREE_PATH`) のルートの `op-config.yaml` を Read し、
-base からの diff (op-run では `git -C "$WORKTREE_PATH" diff --name-only "$OP_RUN_BASE_SHA...HEAD"`) が次のどちらかに当たれば段を実行する。
+検証対象 checkout (`CHECKOUT`) のルートの `op-config.yaml` を Read し、
+base からの diff (`git -C "$CHECKOUT" diff --name-only "$BASE_SHA...HEAD"`) が次のどちらかに当たれば段を実行する。
 
 - `_shared/project-profile.md`「UI 影響判定 path パターン」(除外パスの優先・単語単独マッチの禁止・title / rationale での補完を含む)
 - `verify_harness.windows_paths` (`_shared/op-config-schema.md` §14) の glob
@@ -50,7 +44,7 @@ lease のオプションは `verify_harness.windows` (`_shared/op-config-schema.
 `windows` 節が無ければ fence を実行せず、`WINDOWS_REQUIRES_RUNTIME=windows unavailable`、`WINDOWS_DETAIL=verify_harness.windows が宣言されていない` で 1.2 へ進む。
 
 Windows 用 exe は lease の前に checkout で `windows.build` を実行して作る (Sandbox を build の間借りたままにしない)。
-build 前に tracked ファイルの変更が無かった checkout では、build が書き換えた tracked ファイルを戻す (checkout を汚すと op-run の `op apply verify-commit` gate で止まる)。
+build 前に tracked ファイルの変更が無かった checkout では、build が書き換えた tracked ファイルを戻す (checkout を汚さない)。
 
 | 状況 | `WINDOWS_REQUIRES_RUNTIME` | `WINDOWS_DETAIL` |
 |---|---|---|
@@ -60,7 +54,7 @@ build 前に tracked ファイルの変更が無かった checkout では、buil
 | lease が exit 2、または exit 0 で endpoint か capabilities が無い | `windows unavailable` | lease の `details.reason` |
 
 lease を取る前に、前の段の holder ファイルが残っていないかを見る。残るのは 4 章の返却が失敗した (lease が残った) ときで、
-Review Fix Loop で同じ checkout の段を再実行するとここに来る。期限内の lease は holder が同じでも busy になるため
+同じ checkout で段を再実行するとここに来る。期限内の lease は holder が同じでも busy になるため
 (`decide_lease`)、ファイルを消して借り直すと自分の lease で `windows busy` になり、4 章も返さなくなる。
 そのためファイルの holder で先に返し、exit 0 (返した / lease がもう無い) のときはファイルを消して借りる。
 release が exit 1 で `details.result: not_holder` を返したときは、前の段の lease は TTL 切れで回収され、いまは他の holder が持っている。
@@ -68,7 +62,7 @@ release が exit 1 で `details.result: not_holder` を返したときは、前�
 同じ exit 1 の `unavailable` とは `.details.result` で分ける。
 
 ```bash
-: "${CHECKOUT:?}" "${LEASE_HOLDER:?op-run は task_id}"
+: "${CHECKOUT:?}" "${LEASE_HOLDER:?op-verify は opverify-<YYYYMMDD-HHMMSS>}"
 : "${WIN_DRIVER:?verify_harness.windows.driver}" "${WIN_BUILD:?verify_harness.windows.build}" "${WIN_APP:?verify_harness.windows.app}"
 RV_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/op-verify-runner/$(basename "$CHECKOUT")"
 RV_LEASE_FILE="$RV_DIR/controller-lease-holder"
@@ -142,7 +136,7 @@ export WINDOWS_ENDPOINT WINDOWS_CAPABILITIES WINDOWS_PROVISION_JSON WINDOWS_REQU
 ```
 
 `RV_LEASE_ABORT` が空でなければ、verify-runner を spawn せず、段を 5 章の「結果が得られない」(`skipped`、`skip_reason` なし) で記録し、
-`RV_LEASE_ABORT` を人間に報告する (op-run は 6.3 の note と PR コメント)。`requires_runtime` としては扱わない。
+`RV_LEASE_ABORT` を人間に報告する。`requires_runtime` としては扱わない。
 `RV_LEASE_ABORT` になる経路は 3 つあり、lease と holder ファイルの残り方が違う。
 
 | 経路 | lease | holder ファイル |
@@ -165,9 +159,9 @@ lease が exit 2 (エラー) で終わった段も holder ファイルを書き�
 
 | 渡す値 | 内容 |
 |---|---|
-| model | `opus`。実機操作専任のため `fable` は使わない (cluster が Fable 承認済みでも波及させない) |
-| checkout | 検証する worktree の絶対パス (op-run は apply worktree を再利用し、新規 worktree を作らない) |
-| head_sha | checkout の HEAD (op-run は push 済みの PR head) |
+| model | `opus`。実機操作専任のため `fable` は使わない |
+| checkout | 検証する worktree の絶対パス |
+| head_sha | checkout の HEAD |
 | scenarios | Issue の成功条件と diff から controller が組む (画面・操作・期待結果、任意で `wait_for`)。組めなければ空にし、verify-runner の既定に任せる |
 | windows_endpoint | 1.1 で借りたときの `WINDOWS_ENDPOINT` (lease の `details.provision.relay.webdriver_url`) |
 | windows_capabilities | 1.1 で借りたときの `WINDOWS_CAPABILITIES` (lease の `details.provision.driver.capabilities`。New Session の `capabilities.alwaysMatch` の中身) |
@@ -221,7 +215,7 @@ spawn 失敗・30 分応答なし・JSON 欠落は結果が得られなかった
 2. controller が自分で probe する。verify-runner は返る前に stop を済ませていることが多く、その start の JSON には届かない。
    そのため controller が checkout で start → probe → stop を 1 回行う。
    同じ checkout の verify-runner がすべて返った後に行う (stop がその run を止めてしまうため)。
-   start の JSON と probe の出力は checkout の外に置く (checkout を汚すと op-run の `op apply verify-commit` gate で止まる)
+   start の JSON と probe の出力は checkout の外に置く (checkout を汚さない)
 
    ```bash
    : "${CHECKOUT:?}" "${HARNESS_START:?verify_harness.start}" "${HARNESS_STOP:?verify_harness.stop}"
@@ -243,7 +237,7 @@ spawn 失敗・30 分応答なし・JSON 欠落は結果が得られなかった
 |---|---|
 | `START_EXIT != 0` (controller の start が失敗し、probe を実行していない) | 確かめられなかった。正当な skip として扱わない。`skipped` / `all_means_failed` で記録し、start の stderr 末尾 (`$RV_CTRL_DIR/start.stderr`) を人間に報告する |
 | `PROBE_EXIT == 0` (probe は通る = 契約違反) で、この段でまだ再 spawn していない | 同じ入力で verify-runner を 1 回だけ再 spawn する。prompt に「前回は all_means_failed を返したが controller の `op verify probe` は通った (出力: `$RV_CTRL_DIR/probe.json`)。expert-verify §3 の手段を順にすべて試すこと」を足す。返却は 2 章の頭から処理し直す |
-| 再 spawn 後の返却も `all_means_failed` | probe をやり直さず、再 spawn もしない。`skipped` / `all_means_failed` で記録し、人間に報告する (op-run は 6.3 の note と PR コメント)。段は止めずに先へ進む |
+| 再 spawn 後の返却も `all_means_failed` | probe をやり直さず、再 spawn もしない。`skipped` / `all_means_failed` で記録し、人間に報告する。段は止めずに先へ進む |
 | `PROBE_EXIT == 1` (start は成功し、probe が届かない) | ランタイムが無いことが確かめられた正当な skip。`skipped` / `all_means_failed` で記録し、probe の出力パスを報告に載せる |
 | `PROBE_EXIT == 2` | 確かめられなかった。`skipped` / `all_means_failed` で記録し、人間に報告する |
 
@@ -286,7 +280,7 @@ export MISSING EVIDENCE_PATHS_JSON
   checkout を cwd にして `verify_harness.stop` を 1 回実行する。2.1 で controller が stop を実行した後に返った runner
   (2.1 の再 spawn など) に `deferred` が無ければ、重ねて実行しない
 - 同じ checkout の verify-runner が 1 本でも動いている間は実行しない
-- exit code と stderr の末尾を残す。非 0 はプロセスや state が残ったことを示すので報告に載せる (op-run は 6.3 の note と PR コメント)
+- exit code と stderr の末尾を残す。非 0 はプロセスや state が残ったことを示すので報告に載せる
 
 ```bash
 : "${CHECKOUT:?}" "${HARNESS_STOP:?verify_harness.stop}"
@@ -318,8 +312,8 @@ export RELEASE_EXIT
 
 ## 5. state 記録
 
-結果は次の値で 1 件に確定させる。記録先は op-run では PR body の op-review-state の `post_checks["verify-runner"]`
-(書き方は 6.1)。他の controller も entry の shape はこの表に揃える。
+結果は次の値で 1 件に確定させる。`--pr` のときの記録先は PR body の op-review-state の `post_checks["verify-runner"]`
+(書き方は 6 章)。それ以外も entry の shape はこの表に揃える。
 
 | 状況 | `post_check_result` | 追加 field |
 |---|---|---|
@@ -330,22 +324,20 @@ export RELEASE_EXIT
 | skipped (2 章の判定後) | `skipped` | `skip_reason` / `requires_runtime` |
 | 結果が得られない / 証跡欠落が残った | `skipped` | なし |
 
-- 追加 field は表の行で決まり、表に無い field は verify-runner が返していても載せない (6.1 の jq はこの表に従う)
+- 追加 field は表の行で決まり、表に無い field は verify-runner が返していても載せない (6 章の jq はこの表に従う)
 - `gaps[]` (ハーネスが自動でやらず手作業で補った工程) だけは表の外の規則で、結果にかかわらず (表で「なし」の行でも) 空でなければ載せる
 - `repro_steps` は fail したシナリオの手順を `[<シナリオ名>] <手順>` の 1 行ずつにする
-- ハーネスの起動失敗には再現手順が無いため Review Fix Loop に入れない。PR の変更が原因か環境が原因かを controller は決められないので、
+- ハーネスの起動失敗は、PR の変更が原因か環境が原因かを controller は決められないので、
   `needs_human_decision` で記録して先へ進み (止めない)、start の stderr 末尾を人間に報告する
 
-## 6. op-run での結果の扱い (CO)
+## 6. state push (`--pr` のとき)
 
-### 6.1 state push
-
-post-check の state push (`post-check-dispatcher.md`「判定後処理テンプレ」) と同じ形。label は遷移しない (runtime verify 用の label は無い)。
+label は遷移しない (runtime verify 用の label は無い)。`SESSION_ID` は `opverify-<YYYYMMDD-HHMMSS>` (`run.md` 手順 4)。
 
 ```bash
-: "${PR_NUMBER:?}" "${WORKTREE_PATH:?}" "${OP_RUN_SESSION_ID:?}" "${RESULT:?pass|pass_with_notes|block|needs_human_decision|skipped}"
+: "${PR_NUMBER:?}" "${CHECKOUT:?}" "${SESSION_ID:?}" "${RESULT:?pass|pass_with_notes|block|needs_human_decision|skipped}"
 : "${RUNTIME_VERIFY_ROUND:?この PR で段を実行した回数 (1 始まり。同じ段の中の再 spawn は数えない)}"
-VERIFIED_HEAD_SHA=$(git -C "$WORKTREE_PATH" rev-parse HEAD)
+VERIFIED_HEAD_SHA=$(git -C "$CHECKOUT" rev-parse HEAD)
 
 jq -n --arg r "$RESULT" --arg sha "$VERIFIED_HEAD_SHA" --argjson round "$RUNTIME_VERIFY_ROUND" \
   --arg skip "${SKIP_REASON:-}" --argjson ev "${EVIDENCE_PATHS_JSON:-[]}" --argjson runner "${RUNNER_JSON:-{\}}" \
@@ -361,39 +353,7 @@ jq -n --arg r "$RESULT" --arg sha "$VERIFIED_HEAD_SHA" --argjson round "$RUNTIME
    + (($runner.requires_runtime // []) as $rr | if $with_rr and ($rr | length) > 0 then {requires_runtime:$rr} else {} end)
    + (($runner.gaps // []) as $g | if ($g | length) > 0 then {gaps:$g} else {} end)' \
   | op review state push --pr "$PR_NUMBER" --apply-json - \
-      --write-id "${OP_RUN_SESSION_ID}-postcheck-verify-runner-r${RUNTIME_VERIFY_ROUND}" --session "$OP_RUN_SESSION_ID"
+      --write-id "${SESSION_ID}-postcheck-verify-runner-r${RUNTIME_VERIFY_ROUND}" --session "$SESSION_ID"
 ```
 
-spawn していない場合 (ハーネス未導入 / 結果が得られない) は `RUNNER_JSON` を空のままにする。
-ハーネス未導入でもこの push は行う (`Manual: skipped` を機械で確かめられるようにする)。
-
-### 6.2 判定後の進み方
-
-| `post_check_result` | 動作 |
-|---|---|
-| `pass` / `pass_with_notes` / `skipped` / `needs_human_decision` | フェーズ6 (global review) へ進む。PR は止めない |
-| `block` | review を呼ばず Review Fix Loop に入れる (下記) |
-
-`block` のときは `review-fix-loop.md` 4.5-4 の手順 2 と 4 の経路で、cluster の apply expert (入力 `expert`) を同じ `apply_model` で再 spawn する。
-handoff 本文は fail したシナリオの `name` / `expected` / `actual` / `repro_steps` / `evidence` (実在を確かめたパス)。
-review attempt がまだ無ければ label 遷移はしない。Review Fix Loop の中で本段を再実行して `block` になった場合は、4.5-4 の手順 1 と 3 の label 遷移も行う。
-push 後はフェーズ5.5 → 本段を再実行してから review へ進む。
-block からの再実装は PR ごとに 2 回まで。3 回目の `block` は verdict `needs_human_decision`
-(blocker_reason に要約、失敗シナリオの全文は PR コメント)。
-
-### 6.3 PR 本文・PR コメント・ClusterSummary
-
-- PR 本文 (フェーズ4 の PR 作成時): `_shared/pr-templates.md`「自動検証」表の既存の `Manual required` 行に書く。
-  1 章の起動条件はこの時点で評価できる
-
-  | 状況 | `Manual required` 行 |
-  |---|---|
-  | 起動条件に当たらない | apply 報告のとおり |
-  | 当たる + ハーネス未導入 | `yes` / `Manual: skipped (ハーネス未導入)。/op-skill:op-verify --init でハーネスを導入すると runtime verify 段で実機検証される` |
-  | 当たる + ハーネスあり | `yes` / `runtime verify 段 (verify-runner) で実施。結果は op-review-state の post_checks["verify-runner"]` |
-
-- PR コメント (段を実行したとき 1 件、自然文、HTML marker を付けない): 結果、検証したシナリオ、証跡のパス、
-  `requires_runtime` の範囲と理由、`gaps`、stop / release の非 0、`RV_LEASE_ABORT`、2.1 の確認結果
-- ClusterSummary の `runtime_verify_note` (`cluster-orchestrator-directives.md` フェーズ8): 人間に伝えることがあるときだけ 1〜2 文。
-  ハーネス未導入 (`/op-skill:op-verify --init` を案内) / `requires_runtime` で未検証の範囲 (`Windows build 失敗` はログのパスを添えて必ず書く) / `all_means_failed` を受け入れた経緯 /
-  ハーネスの起動失敗 / stop・release の非 0 / `RV_LEASE_ABORT`。`pass` だけなら書かない
+spawn していない場合 (結果が得られない) は `RUNNER_JSON` を空のままにする。

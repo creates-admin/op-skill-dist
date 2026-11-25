@@ -167,39 +167,10 @@ review / post-check の結果の唯一の機械記録であり、機械管理領
 
 ---
 
-## op-run: review 結果コメント (review-expert)
-
-Direct Mode で review-expert がユーザー許可後に投稿する場合の骨組み。OP-managed (op-run / op-codev) では review-expert は投稿せず、
-controller が記録する (`op review publish-approval` / `op review state push`、書式は op-run skill の `references/global-review-spawn.md` 4-2-b)。
-Direct Mode の投稿は op-review-state に書かない。
-
-```markdown
-## <🔧 修正必要 (needs-fix) | 🧐 専門判断が必要 (needs-specialist-review) | ⛔ blocked (自動継続不能)>
-
-review round: <N> / reviewed head: <sha>
-
-<判定理由。needs-fix は 3 条件 AND (same-pr 内で修正可能 / 単一 expert で完結 / 既知パターン) を明記、
- 1 つでも欠けるなら needs-specialist-review。blocked は scope_out 違反 / 人間判断必要 / loop 上限超過 / Issue 再設計必要 のいずれか>
-
-### Findings
-
-#### RVW-001 (<critical | high | medium | low>, <Security / Abuse | Workflow / UX | Test | Compatibility | Release | Spec | Refactor>)
-- 推奨修正担当: <expert 名 | なし>
-- 修正後に必要な post-check: <ux-ui-audit-expert | security-expert | なし>
-
-<問題説明と推奨方針>
-
----
-🤖 review-expert による独立 global review
-```
-
----
-
 ## op-run: Security Post-check Result (security-expert 出力)
 
 apply 後の PR diff を security-expert が独立に issue 固有再監査した結果の人間向けコメント。機械記録は state 文書の
-`post_checks["security-expert"]`、8 観点の semantics は expert-security skill の `post-check-policy.md`、判定後の分岐は
-op-run skill の `references/post-check-dispatcher.md` 3.5-B-2。
+`post_checks["security-expert"]`、8 観点の semantics は expert-security skill の `post-check-policy.md`。
 
 ```markdown
 ## Security Post-check Result
@@ -223,7 +194,7 @@ PASS | PASS_WITH_NOTES | BLOCK | NEEDS_HUMAN_DECISION (post-check head: <sha> / 
 | 8 | UX/UI auxiliary post-check 必要性 | NO / YES | <YES なら理由。ux-ui-audit-expert post-check が追加実行される> |
 
 ### Notes (PASS_WITH_NOTES 時)
-- フェーズ4 review-expert に伝えたい軽微な観点を箇条書き
+- 後のレビューに伝えたい軽微な観点を箇条書き
 
 ### Required Changes (BLOCK 時)
 - 実装で追加すべきコード / 修正すべき差分を具体的に記述

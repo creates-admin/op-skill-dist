@@ -7,9 +7,7 @@ exploration-only spawn (investigation / post-check / review) は対象外 (`comm
 
 | caller | 実行主体 | base 指定 |
 |--------|---------|-----------|
-| op-run | ClusterOrchestrator (`cluster-orchestrator-directives.md` フェーズ2-3 / フェーズ4 push 直前) | `--base-ref "${OP_RUN_BASE_REF}"` |
-| op-codev | controller が Step B-1 でインライン実行 (配線の正本は op-codev skill) | `--base-sha "${IU_BASE_SHA}"` |
-| その他 (Direct apply 等) | controller がインライン実行 | `--base-sha` |
+| apply を spawn した skill (op-prune / op-verify `--init` 等) | controller がインライン実行 | `--base-ref "${BASE_REF}"` か `--base-sha` |
 
 ## 2. 手順 (PR open / push の前に実行)
 
@@ -25,7 +23,7 @@ exploration-only spawn (investigation / post-check / review) は対象外 (`comm
 ### 2-2. `op apply verify-commit`
 
 ```bash
-op apply verify-commit --worktree "${WT_PATH}" --base-ref "${OP_RUN_BASE_REF}" \
+op apply verify-commit --worktree "${WT_PATH}" --base-ref "${BASE_REF}" \
   --reported-json "${COMMITS_ADDED_JSON}"
 # exit 0 = pass / 1 = block (blocking_reasons) / 99 = 内部エラー (fail-closed)
 ```

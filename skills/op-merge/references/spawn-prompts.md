@@ -1,27 +1,5 @@
 # op-merge の spawn prompt
 
-## 監査の review-expert
-
-フェーズ2 で、diff が大きい・意図が読み切れない PR の判断材料にする。
-
-```
-Agent({
-  subagent_type: "op-skill:review-expert",
-  model: "opus",
-  isolation: "worktree",
-  description: "merge-audit PR #<N>",
-  prompt: """
-    invocation_mode: op_managed
-    <`_shared/spawn-prompt-common.md` §2 (exploration-only) / §4 を全文>
-
-    あなたはこの PR を書いていない独立 reviewer です。op-merge から呼ばれました。
-    PR #<N> (branch origin/pr/<N>、base origin/<base>) が Issue #<M> の成功条件を満たし、マージしてよい状態かを read-only で判定してください。
-    コード修正・commit・push・PR コメント・label 操作・`op review state push` はしない。
-    返却: verdict (approve | needs-fix | blocked) / 根拠 3 行以内 / 主要 finding (severity・file・1 行要約)
-  """
-})
-```
-
 ## コンフリクト解消の expert
 
 4-2。`<expert>` は `op run expert-resolve` で解決した apply expert。
@@ -50,18 +28,15 @@ Agent({
 
 ## 解消 commit の軽量レビュー
 
-4-2-r。解消した expert とは別 context で、解消 commit だけを見る。
+4-2-r。解消した expert とは別 context で、解消 commit だけを見る。`op-skill:*` の expert は使わない。
 
 ```
 Agent({
-  subagent_type: "op-skill:review-expert",
+  subagent_type: "general-purpose",
   model: "opus",
   description: "merge-resolution review: PR #<N>",
   prompt: """
-    invocation_mode: op_managed
-    <`_shared/spawn-prompt-common.md` §2 (exploration-only) / §4 を全文>
-
-    op-merge のコンフリクト解消 commit を軽くレビューしてください。read-only (編集・commit・push 禁止)。
+    あなたはこのコードを書いていません。op-merge のコンフリクト解消 commit を軽くレビューしてください。read-only (編集・commit・push 禁止)。
     - 作業ディレクトリ: <worktree_path>、対象: merge commit <sha> (`git show --cc <sha>` と `git diff <headRefOid> <sha>`)
     - PR の意図: <PR 本文の要約 / Issue #<M> の成功条件>、base 側の変更: <この run でマージした PR と要約>
     - 確認するのは次の 3 点だけ:

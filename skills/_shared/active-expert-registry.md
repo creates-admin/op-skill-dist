@@ -16,13 +16,11 @@ agent 名から skill ディレクトリ名を機械生成しない (対応は�
 | `test-expert` | `skills/expert-test/` | yes | no | no |
 | `designer-expert` | `skills/expert-design/` | yes | no | no |
 | `ux-ui-audit-expert` | `skills/expert-ux-ui-audit/` | no | yes | no |
-| `review-expert` | `skills/expert-review/` | no | no | yes |
 | `security-expert` | `skills/expert-security/` | yes | yes | specialist |
 
-- `Runtime apply`: op-run フェーズ2 の apply executor にできるか。agent file は `agents/<Agent>.md`
-- `Issue post-check`: op-run フェーズ3.5 の Issue 固有再監査を担当できるか
-- `Global review`: op-run フェーズ4 の PR 全体監査。`specialist` = security specialist として参加
-- `review-expert` は Global review 専任。`<!-- op-post-check-expert: review-expert -->` は禁止
+- `Runtime apply`: apply executor にできるか。agent file は `agents/<Agent>.md`
+- `Issue post-check`: Issue 固有の再監査を担当できるか
+- `Global review`: PR 全体監査。`specialist` = security specialist として参加
 - `refactor-expert` は Issue post-check を持たない (architecture debt は `op-fingerprint-bulk` で追跡)
 - 表の名前は bare canonical 名 (routing / marker / fingerprint / `op run expert-resolve` 出力で使う)。
   Agent tool の `subagent_type` にだけ `op-skill:<name>` を渡す (`_shared/expert-spawn.md`「Plugin scoped-name 規約」)
@@ -31,12 +29,12 @@ agent 名から skill ディレクトリ名を機械生成しない (対応は�
 ## Utility Workers (registry 非追加 / spawn 非対象)
 
 専用 OP skill の controller だけが `subagent_type` に直接渡して spawn する worker。
-op-scan / op-patrol / op-run の routing・cluster 化の対象外。spawn 時は scoped 名 `op-skill:<name>`、marker 値は bare 名。
+op-scan / op-patrol の routing の対象外。spawn 時は scoped 名 `op-skill:<name>`、marker 値は bare 名。
 
 | Agent | Skill directory | 呼び出し元 |
 |---|---|---|
 | `scout` | `skills/expert-scout/` | op-report / op-intake |
 | `spec-expert` | `skills/expert-spec/` | op-spec / op-spec-patrol |
-| `verify-runner` | `skills/expert-verify/` | op-run (CO の runtime verify 段) / op-codev (verify フェーズ) / op-verify |
+| `verify-runner` | `skills/expert-verify/` | op-verify |
 
 `op-run-expert: spec-expert` marker は `op run expert-resolve` が `feature-expert` へ正規化する。

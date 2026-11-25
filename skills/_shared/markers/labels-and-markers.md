@@ -48,7 +48,7 @@ OP が GitHub Issue / PR に埋める hidden marker (`<!-- op-* -->`) と label 
 <!-- op-spec-ref: op-sweep#decision-12 -->
 
 - `op-fingerprint`: 正規化規則と重複判定は `dedup-policy.md` / `op core fingerprint` / `op scan dedup`。
-- `op-depends-on`: 依存が無い Issue には書かない (空 value は lint error)。消費は `op issue dep-graph` / op-loop。merge を止める効果は無い。
+- `op-depends-on`: 依存が無い Issue には書かない (空 value は lint error)。消費は `op issue dep-graph` (op-merge の順序決定) と op-thread (積み重ねるか待つかの判断)。merge を止める効果は無い。
 - `op-spec-ref`: dangling 検出は `op spec-patrol check-links`。routing には使わない。
 
 ### `op-spec-patrol-run` / `op-spec-patrol-checkpoint`

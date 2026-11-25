@@ -26,7 +26,7 @@ scenarios が無ければ、diff が触れた画面を開いて描画と主要�
 
 windows_endpoint か windows の理由が渡されたら、controller が Windows での検証が要ると判定したことを示す (3 章「Windows 実行先」)。
 Windows の貸し借りは controller が「lease → try { verify-runner の検証 } finally { release }」の形で持つ
-(`skills/op-run/references/runtime-verify-dispatcher.md` 1.1 と 4 章)。verify-runner は lease も release もしない。
+(op-verify skill の `references/runtime-verify-dispatcher.md` 1.1 と 4 章)。verify-runner は lease も release もしない。
 
 ## 2. 手順
 

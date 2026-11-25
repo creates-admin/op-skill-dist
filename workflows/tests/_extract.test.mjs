@@ -237,9 +237,8 @@ test("matchDelimiter は template literal 内 ${} が brace を誘発しても�
 // defense-in-depth として API 契約を決定論的テストで固定する。
 
 test("readSource は workflowsDir 配下に存在するファイルを正常に読む", () => {
-  // op-run-discover.js は workflowsDir 直下に存在するため正常に読める
-  // (op-run-review.js は ADR-0016 ClusterOrchestrator 移行で削除済み)
-  const src = readSource("op-run-discover.js");
+  // op-survey.js は workflowsDir 直下に存在するため正常に読める
+  const src = readSource("op-survey.js");
   assert.ok(typeof src === "string");
   assert.ok(src.length > 0);
   // normalizeArgs が存在することを簡易確認

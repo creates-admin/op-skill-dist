@@ -139,7 +139,7 @@ op-scan / op-patrol / op-plan / op-architect / op-report / op-spec 派生 Issue 
 | `debug` | debug-expert | `null` | `pro-debug-expert` |
 | `refactor` | refactor-expert | `null` / security-expert / ux-ui-audit-expert (file IO・path・capability・shell・secret 系は security、UI state・flow・a11y・visual 系は ux-ui。`expert-refactor/references/post-check-policy.md`) | `pro-refactor-expert` |
 | `optimize` | optimize-expert | `null` | `pro-optimize-expert` |
-| `security` | security-expert | security-expert | `pro-security-expert` (op-run が apply を debug-expert に回す場合は `pro-debug-expert` + `pro-security-expert`) |
+| `security` | security-expert | security-expert | `pro-security-expert` (apply を debug-expert に回す場合は `pro-debug-expert` + `pro-security-expert`) |
 | `ux-ui` | designer-expert | ux-ui-audit-expert | `pro-designer-expert` + `pro-ux-ui-audit-expert` |
 | `design` (UI files に触る) | designer-expert | ux-ui-audit-expert | `pro-designer-expert` + `pro-ux-ui-audit-expert` |
 | `design` (token・config のみ) | designer-expert | `null` | `pro-designer-expert` |

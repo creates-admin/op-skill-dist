@@ -134,7 +134,7 @@ risk が high なら 2 を推奨する。結果はメモに追加し、フェー
 - depends_on (先に完了が必要な issue の index)
 
 計画に新しい業務機能 (`op spec-patrol coverage --json` の `details.feature_map.features` に無い機能) があれば、
-その機能の正本を作る Issue (正本作成 issue) を分解に加える。op-run はこの Issue を apply しない。
+その機能の正本を作る Issue (正本作成 issue) を分解に加える。この Issue は op-spec で進め、op-thread には回さない。
 
 - タイトル: `[spec-expert] 正本: <機能名>`。marker は `op-fingerprint` (domain `feature`) だけ、ラベルは `auto-report` だけ
 - 本文の 1 行目: `実施: /op-skill:op-spec`。本文: 機能名、paths の案、どの実装 issue の機能か
@@ -154,7 +154,7 @@ UI issue にはフェーズ5 で `デザインモック: <URL>` 行を足す。�
 ## フェーズ5: デザインモック (UI issue がある場合のみ)
 
 UI issue が無ければフェーズ6 へ進む。画面は `_shared/design-system.md` の規則で組む。モックの結果、登録済みの部品で表現できない
-見た目が要る場合は、その部品を部品 issue (書式は `_shared/design-system.md`「部品 issue」。op-component で作り込み、op-run には回さない)
+見た目が要る場合は、その部品を部品 issue (書式は `_shared/design-system.md`「部品 issue」。op-component で作り込み、op-thread には回さない)
 として分解に加え、画面 issue を `op-depends-on` でつなぐ。
 
 ### 5-0. surface グルーピング

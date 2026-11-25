@@ -1,18 +1,18 @@
 ---
 name: op-architect
-description: 新規プロジェクトの初期構築 + ADR 必要な大規模設計判断を対話で進めるスキル。決定事項を ADR 化し、初期マイルストーンを op-run 互換の指示書 Issue として起票する。「op-architect」「ADR」「初期構築」「アーキ設計」等のキーワードで起動。機能追加 (ADR 不要) は op-plan を使う。
+description: 新規プロジェクトの初期構築 + ADR 必要な大規模設計判断を対話で進めるスキル。決定事項を ADR 化し、初期マイルストーンを指示書 Issue として起票する。「op-architect」「ADR」「初期構築」「アーキ設計」等のキーワードで起動。機能追加 (ADR 不要) は op-plan を使う。
 effort: max
 ---
 
 # op-architect: 対話駆動の初期設計 + ADR + 初期 Issue 起票
 
-新規プロジェクトについて、対話から設計判断を引き出し、重要判断を ADR に記録し、初期マイルストーンを op-run 互換 Issue に分解して起票する。
+新規プロジェクトについて、対話から設計判断を引き出し、重要判断を ADR に記録し、初期マイルストーンを指示書 Issue に分解して起票する。
 既存プロジェクトへの機能追加・新領域追加は `/op-skill:op-plan` を使う。
 
 原則:
 
 - Direct Mode 固定 (`_shared/invocation-mode.md`「Direct 固定 skill に op_managed が渡った場合」)。
-- スケルトン生成・実装は op-run / feature-expert に委ねる (`--scaffold` 時のみ feature-expert に雛形生成を委譲)。
+- スケルトン生成・実装は op-thread / feature-expert に委ねる (`--scaffold` 時のみ feature-expert に雛形生成を委譲)。
 - 並列化・自動モードは持たない。git init / ADR commit / ラベル作成 / 起票はすべてユーザー確認後に行う。
 - ADR は決定の直後に書く。1 論点決定 = 1 ADR (または bootstrap-brief 追記) を 1 commit。後でまとめて書かない。
 - 「お任せ」を記録する。推奨案で進めた論点は ADR の Context に「ユーザー指定なし、推奨案で進めた」と明記する。
@@ -244,7 +244,7 @@ UI を持つ種別 (Tauri v2 + Vue 3 / Vue 3 SPA / Nuxt / Flutter) で `ui_impac
 
 ---
 
-## フェーズ5: Issue 起票 (op-run 互換)
+## フェーズ5: Issue 起票
 
 ### 5-1. Issue 本文
 

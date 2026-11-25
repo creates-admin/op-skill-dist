@@ -9,8 +9,8 @@
 
 | 順 | PR | タイトル | 由来 | CI | conflict | review | Issue | 重複 | 判定 | 理由 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | #210 | ... | op-run | pass | なし | approve (最新 head) | #42 成功条件充足 | #212: 2 files | merge 可 | 基盤変更で #212 が依存 |
-| 2 | #212 | ... | op-run | pass | あり | approve | #43 充足 | #210: 2 files | merge 可 | #210 後に conflict 解消 |
+| 1 | #210 | ... | op-thread | pass | なし | 記録なし | #42 成功条件充足 | #212: 2 files | merge 可 | 基盤変更で #212 が依存 |
+| 2 | #212 | ... | op-thread | pass | あり | 記録なし | #43 充足 | #210: 2 files | merge 可 | #210 後に conflict 解消 |
 | 3 | #230→#231 | ... | op-thread (積み重ね、draft) | pass (2 段とも) | なし | 記録なし | #50・#51 充足 | - | merge 可 | 一番上 #231 の名指しでまとめてマージ。ready にしてから、stack を作ってマージ |
 | - | #215 | ... | 人間 | fail | なし | 記録なし | なし | - | 要修正 | test_x が fail |
 

@@ -14,7 +14,7 @@ designer-expert は UI を飾らない。design system の意図を読み取り�
 | モード | 呼び出し元 | 内容 | 書き込み |
 |---|---|---|---|
 | Summary | op-explore / op-plan / op-architect / op-component (モック作成の前) | 既存 design token / component / layout パターンの要約 | なし |
-| Apply | op-run / op-codev / op-component | モック + Issue に従い、既存 design system / component で実装 | worktree 内 commit まで (push しない) |
+| Apply | op-thread / op-component | モック + Issue に従い、既存 design system / component で実装 | worktree 内 commit まで (push しない) |
 | Scan / Patrol | op-scan / op-patrol | design system 整合・視覚秩序の監査 | なし |
 | refute | op-scan / op-patrol | 自 domain finding の反証 (`~/.claude/skills/_shared/refute-contract.md`) | なし |
 

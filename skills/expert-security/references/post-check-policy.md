@@ -1,6 +1,6 @@
 # post-check-policy.md — Security post-check
 
-op-run の post-check で、apply 担当 (security-expert / debug-expert) が実装した PR を Issue 固有に再監査する。
+post-check で、apply 担当 (security-expert / debug-expert) が実装した PR を Issue 固有に再監査する。
 
 最初に worktree の `git rev-parse HEAD` が spawn prompt の head SHA と一致するか確認し、不一致なら BLOCK で報告する。
 diff だけで判定せず、元 Issue の success_criteria / scope_in / scope_out と照合する。
@@ -31,7 +31,7 @@ diff だけで判定せず、元 Issue の success_criteria / scope_in / scope_o
 
    不要な例: backend のみの修正 / 画面に出ない log・error 文字列 / UI に影響しない capability JSON / frontend が既存の error path で
    扱える IPC 入力検証 / UI から呼ばれない command の削除。
-   aux post-check の実行・再実行 (head が進んだ場合) と結果の記録は op-run が行う。
+   aux post-check の実行・再実行 (head が進んだ場合) と結果の記録は controller が行う。
 
 ## 判定 4 種
 
@@ -43,7 +43,7 @@ diff だけで判定せず、元 Issue の success_criteria / scope_in / scope_o
 | NEEDS_HUMAN_DECISION | 観点 7 が NG (`legitimate_workflow_preserved: false`) / security risk と UX のトレードオフで方針が複数ありうる / 大規模な capability 再設計・認証モデル・token 保存・updater 設計の見直しが必要 / DB migration を伴う互換性問題 |
 
 `legitimate_workflow_preserved: false` は BLOCK にしない (NEEDS_HUMAN_DECISION)。aux post-check の結果は本判定に含めない
-(aux の実行と合成は op-run が行う)。
+(aux の実行と合成は controller が行う)。
 
 典型:
 

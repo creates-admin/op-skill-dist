@@ -13,7 +13,7 @@ scan はコードを変更しない。起票は人間承認後 (`--auto` は品�
 ## Expert Runtime and Routing Metadata Contract
 
 spawn 可否の正本は `_shared/runtime-contract.md` / `active-expert-registry.md` / `planned-experts.md`。
-scan で spawn するのは active expert のみ (planned / scout / spec-expert は spawn しない)。review-expert は spawn せず、routing 値にも書かない。
+scan で spawn するのは active expert のみ (planned / scout / spec-expert は spawn しない)。
 
 ---
 
@@ -201,9 +201,9 @@ refactor finding は以下を追加で付与する (op-patrol も同じ表を使
 | `finding_type == architecture_debt` | `op:architecture-debt` (op-patrol が既存 debt Issue を探す正本ラベル。付け忘れると重複起票) |
 | `finding_type == staged_refactor` | `op:staged-refactor` |
 | `finding_type == needs_spec_decision` または `needs_human_decision.decision_type == spec` | `needs:spec-decision` |
-| `blocking == true` | `op:blocking-finding` (op-run で最優先・単独実行) |
+| `blocking == true` | `op:blocking-finding` (最優先・単独で実装する) |
 | `needs_human_decision.required == true` | `needs:human-decision` (block 全体を本文に転写) |
-| 上記かつ `can_continue_without_decision == true` かつ `finding_type != needs_spec_decision` | `needs:human-decision-followup` (op-run は safe_first_step のみ apply し、blocked_actions を守る) |
+| 上記かつ `can_continue_without_decision == true` かつ `finding_type != needs_spec_decision` | `needs:human-decision-followup` (実装側は safe_first_step のみ apply し、blocked_actions を守る) |
 | `needs_human_decision.decision_type == boundary` | `needs:boundary-decision` (単独では apply を止めない) |
 | `seen_count >= 3` または `affected_paths` 増加 | `needs:triage` (op-patrol のみ) |
 
@@ -239,5 +239,5 @@ refute の限界の明示は `refute-contract.md` §7.2。
 
 ## 特殊モード
 
-- `--from-issue #N` (op-run からの委譲を含む): `references/from-issue-mode.md` を読む。
+- `--from-issue #N`: `references/from-issue-mode.md` を読む。
 - `--from-merged-pr <PR>`: `references/from-merged-pr-mode.md` を読む。

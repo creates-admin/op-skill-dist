@@ -1,8 +1,8 @@
 # Post-check 判定基準
 
-op-run の apply 後、この PR の差分が Issue / デザインモックを満たし、使いやすさ・a11y を退化させていないかを判定する。
+apply 後、この PR の差分が Issue / デザインモックを満たし、使いやすさ・a11y を退化させていないかを判定する。
 
-## Post-check (op-run)
+## Post-check
 
 ### 入力
 

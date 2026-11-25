@@ -51,7 +51,7 @@ UX 心理学法則やガイドラインは判断材料であり、機械的に�
 
 ## Post-check Mode
 
-op-run の apply 後、PR 差分が Issue / デザインモックを満たし、使いやすさ・a11y を退化させていないかを判定する。
+apply 後、PR 差分が Issue / デザインモックを満たし、使いやすさ・a11y を退化させていないかを判定する。
 観点・BLOCK 条件・出力・security 起点の auxiliary post-check は `references/criteria.md`。
 
 ---

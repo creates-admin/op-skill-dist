@@ -1,6 +1,6 @@
 # op-architect フェーズ4.5: スケルトン雛形生成 (`--scaffold` 時のみ)
 
-フェーズ4 の承認直後、Issue 起票の前に、M1 (スケルトン) を feature-expert に直接生成させる。op-run の 1 周を省略するためのモード。
+フェーズ4 の承認直後、Issue 起票の前に、M1 (スケルトン) を feature-expert に直接生成させる。Issue からの実装 1 周を省略するためのモード。
 
 ## 4.5-1. 進む条件
 
@@ -51,7 +51,7 @@ Agent({
 ## 4.5-4. 失敗時
 
 検証が fail しても rollback しない。失敗内容と feature-expert の出力を提示し、
-「差分を残して手動修正へ」か「M1 を Issue 化して op-run へ」をユーザーに選ばせる。
+「差分を残して手動修正へ」か「M1 を Issue 化して op-thread へ」をユーザーに選ばせる。
 
 ## 4.5-5. feature-expert が使えない場合
 

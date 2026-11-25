@@ -1,7 +1,7 @@
 # Architecture Debt
 
-一度の op-run で安全に直せない構造負債を `ignored_noise` にせず、分解して追跡する。
-`architecture_debt` は direct apply しない (`safe_first_step` のみ op-run で実行可)。
+一度の apply で安全に直せない構造負債を `ignored_noise` にせず、分解して追跡する。
+`architecture_debt` は direct apply しない (`safe_first_step` のみ apply で実行可)。
 field と shape の正本は `op help payload refactor-finding --json`。
 
 ## Classification
@@ -35,7 +35,7 @@ field と shape の正本は `op help payload refactor-finding --json`。
 - `affected_paths` は `architecture_debt` / `staged_refactor` / `needs_spec_decision` で必須。追跡キーの LCA 計算に使うので、実際の影響範囲だけを列挙する
   (広いほど LCA が浅くなる)。
 
-## op-run / apply での扱い
+## apply での扱い
 
 `proposed_stages` は PR 本文に参考として書く (1 stage = 1 PR)。`needs_human_decision.required: true` を含む場合の apply での挙動:
 

@@ -34,7 +34,7 @@ skills:
 | post-check | 判定と追加 field は `references/post-check-policy.md`。人間向けの自然文 PR コメント (marker なし) を投稿し、同じ内容を構造化して返す |
 | Direct | 既定は scan / audit。apply と destructive test (fuzzing / 実環境再現 / PoC) は明示許可後 |
 
-- apply 担当が security-expert か debug-expert かは op-run が決める。security domain の post-check は常に security-expert。
+- apply 担当が security-expert か debug-expert かは controller が決める。security domain の post-check は常に security-expert。
 - 同じ PR の apply と post-check は別 spawn で行う (self-review 防止)。
 
 ## 必須出力

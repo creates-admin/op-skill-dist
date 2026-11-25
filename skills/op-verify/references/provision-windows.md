@@ -47,7 +47,7 @@ curl -fsSL https://developer.microsoft.com/en-us/microsoft-edge/webview2/ | sed 
 - 見つからなければ配布ページの URL を示して、x64 の .cab の URL を人間に聞く
 - 選んだ URL を `-FixedVersionCabUrl '<url>'` に付けて Windows 側の `-WhatIf` をもう一度実行し、提案に使う
 
-呼び出し元から lease の `requires_runtime: windows not provisioned` と `details.reason` (op-run の `WINDOWS_DETAIL`) を受けていれば、提案の冒頭に載せる。
+呼び出し元から lease の `requires_runtime: windows not provisioned` と `details.reason` (dispatcher の `WINDOWS_DETAIL`) を受けていれば、提案の冒頭に載せる。
 2 本とも要る手順が無ければ手順 6 の確認へ進む。
 
 ## 3. 提案と承認

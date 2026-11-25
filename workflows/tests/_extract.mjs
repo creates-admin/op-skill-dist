@@ -7,7 +7,7 @@
  *   op-*.js は Dynamic Workflows runtime が「文字列評価する前提」の named workflow script で、
  *   トップレベルに `phase()` / `await parallel()` / `return {...}` を持つ (= 通常の ESM import では
  *   実行されない / runtime グローバル `phase`/`agent`/`parallel`/`pipeline`/`args` に依存する)。
- *   そのため `import { dedupFindings } from "../op-run-review.js"` 方式は runtime 互換を壊しかねない。
+ *   そのため `import { dedupFindings } from "../op-scan-audit.js"` 方式は runtime 互換を壊しかねない。
  *   Issue #608「既知の落とし穴」が推奨する option (a): runtime に一切触れず、ソース文字列から
  *   対象の純関数宣言 + 依存する top-level const のみを brace-balanced で切り出し、隔離した
  *   vm context で評価して関数参照を取り出す方式を実装する。これで op-*.js 本体は不変のまま、
@@ -179,7 +179,7 @@ function buildParts(src, consts, functions) {
 /**
  * 機能概要: workflow script から純関数群と依存定数を取り出し、隔離 vm context で評価して
  *           関数参照 map を返す。本体の workflow 実行 body (phase/parallel/return) は評価しない。
- * @param {string} scriptName  例 "op-run-review.js"
+ * @param {string} scriptName  例 "op-scan-audit.js"
  * @param {object} opts
  *   - functions: string[]  取り出す関数名
  *   - consts: string[]     先に評価しておく依存定数名 (VERDICT_RANK 等)

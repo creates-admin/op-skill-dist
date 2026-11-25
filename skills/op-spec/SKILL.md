@@ -14,7 +14,7 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 
 1. 人間起動専用 — op-spec 自体を OP-managed で起動しない (`_shared/invocation-mode.md`「Direct 固定 skill に op_managed が渡った場合」)。spawn する spec-expert には `op_managed` を渡す
 2. 3 者照合 — 深掘りは spec-expert を isolated context で spawn し、正本 (あるべき姿) ⟷ code (実態) ⟷ human (domain 知識) を突き合わせる
-3. 段階的育成 — 選択した feature/issue に verdict が付くまで進める。承認なしの一括 write / 一括 verdict はしない。実装はしない (op-run / op-codev へ handoff)
+3. 段階的育成 — 選択した feature/issue に verdict が付くまで進める。承認なしの一括 write / 一括 verdict はしない。実装はしない (op-thread へ handoff)
 
 ## 参照
 
@@ -154,13 +154,13 @@ derived issue として起票できる。起票するかは per-gap で human �
 
 | verdict | 意味 | 操作 |
 |---------|------|------|
-| ✅ 実装する | 方向性が定まった | verdict コメント + op-run / op-codev への handoff 候補 |
+| ✅ 実装する | 方向性が定まった | verdict コメント + op-thread への handoff 候補 |
 | ✏️ 方向修正して実装する | 修正方針付きで実装 (分割 / 統合を内包) | 修正方向を記録 |
 | ⛔ やめる | 前提が崩れた / 不要 | 理由付きで close (`op issue close --issue N --comment ...`) |
 | ⏸️ 保留 | 判断材料が足りない | `needs:human-decision` ラベル |
 
 ✅ / ✏️ の issue 本文には `<!-- op-spec-ref: <feature>#<decision> -->` を書き、正本の決定行 `realizes #NN` と対で張る
-(片方だけにしない)。op-run / op-codev は `op-spec-ref` を辿って binding な正本を読む。
+(片方だけにしない)。op-thread は `op-spec-ref` を辿って binding な正本を読む。
 
 ### 3-3. done 判定
 
@@ -188,7 +188,7 @@ grep -rlE "\[\[${F}(/|\]\])" .claude/rules/*.md 2>/dev/null | grep -v "/${F}\.md
 
 ## handoff
 
-✅ / ✏️ の issue を op-run / op-codev へ回すか human に確認する (自動起動しない)。各 issue は
+✅ / ✏️ の issue を op-thread へ回すか human に確認する (自動起動しない)。各 issue は
 「title + verdict + `op-spec-ref`」の 1 行で示し、中身は正本に委ねる。
 
 ---

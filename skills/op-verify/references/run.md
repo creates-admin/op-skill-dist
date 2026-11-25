@@ -4,7 +4,7 @@
 
    | 指定 | checkout |
    |---|---|
-   | `--pr <N>` / `--branch <name>` | head を fetch し、`git worktree add --detach "$HOME/cwork/worktrees/<repo>/verify-<pr-N か branch>-<YYYYMMDD-HHMMSS>" <head SHA>` で作る (`skills/op-run/references/global-review-spawn.md` の review worktree と同じ作り方。fork PR は対象外) |
+   | `--pr <N>` / `--branch <name>` | head を fetch し、`git worktree add --detach "$HOME/cwork/worktrees/<repo>/verify-<pr-N か branch>-<YYYYMMDD-HHMMSS>" <head SHA>` で作る (HEAD が head SHA と一致することを確かめる。fork PR は対象外) |
    | `--checkout <path>` | そのパス |
    | 省略 | 現在の checkout |
 
@@ -19,7 +19,7 @@
 
 2. scenarios を組む: `--scenario` があればそれ。無ければ PR 本文の `Fixes #N` の Issue の成功条件と diff から組み、人間に確認する。
    組めなければ空にする (verify-runner が diff の触れた画面の描画と主要操作だけを確かめる)。
-3. dispatcher を controller = op-verify として使う (`skills/op-run/references/runtime-verify-dispatcher.md`)。
+3. dispatcher (`references/runtime-verify-dispatcher.md`) を使う。
    - 起動条件の節の diff 判定はしない (人間が明示して起動したため)。ハーネスの有無の扱いは手順 1 で済んでいる
    - Windows 判定: `--windows` があるか、checkout の `verify_harness.runtime` が `windows` か、
      `git -C <checkout> diff --name-only <BASE_SHA>...HEAD` が `verify_harness.windows_paths` に当たれば当たりとする
@@ -32,6 +32,6 @@
    - verify-runner の spawn は同 dispatcher の spawn の節どおり (`subagent_type: "op-skill:verify-runner"`、model `opus`、Fable は使わない。windows_endpoint / windows_capabilities / windows の理由 / windows_provision も同節の表どおり)
    - 返却は同 dispatcher の skip の扱いの節 → 証跡の実在確認の節 → 保留 stop の引き取りの節の順に処理する
    - 結果の値は同 dispatcher の state 記録の節の表で 1 件に確定させる
-4. 記録: `--pr` なら、同 dispatcher の op-run での結果の扱いの節の state push と同じ entry を PR の op-review-state に push する
-   (write-id と session は `opverify-<YYYYMMDD-HHMMSS>`。label は遷移しない)。それ以外は完了報告だけに載せる。
+4. 記録: `--pr` なら、同 dispatcher 6 章の state push で PR の op-review-state に push する
+   (session は `opverify-<YYYYMMDD-HHMMSS>`。label は遷移しない)。それ以外は完了報告だけに載せる。
 5. 1 で作った worktree は残す (証跡が checkout 内に置かれうるため)。パスを報告し、片付けは人間 (`git worktree remove`) に任せる。

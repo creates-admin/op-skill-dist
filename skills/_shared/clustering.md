@@ -38,7 +38,7 @@ CLI は module を使わない。controller はラベル `module:*` / `area:*` �
 
 ### Step 3: カテゴリ推定
 
-category (= domain) と apply / post-check expert は `op run expert-resolve` で解決する (op-run skill の `references/expert-resolution.md`)。
+category (= domain) と apply / post-check expert は `op run expert-resolve` で解決する。
 marker / ラベルは routing hint であり spawn authorization ではない (`runtime-contract.md` §9)。
 
 ### Step 4: 一次グルーピング (module + category)
@@ -94,7 +94,7 @@ CLI は `files_declared` の重複だけを検出する。controller は次も�
 
 ### Stage 2: Post-investigation conflict check (探知フェーズ後)
 
-各 expert は修正フェーズの前に探知フェーズを行い、investigation report (`expert-report-schemas.md`「investigation report schema」) を返す。
+各 expert は修正フェーズの前に探知フェーズを行い、investigation report (`files_likely_to_modify` / `needs_serialization` を含む) を返す。
 controller は `files_likely_to_modify` で `op run cluster recheck` を実行し、Stage 1 と同じ検証をやり直す。
 
 | Stage 2 結果 | 対処 |
@@ -105,4 +105,4 @@ controller は `files_likely_to_modify` で `op run cluster recheck` を実行�
 | 重複ありつつ両方 Critical | ユーザーに通知、優先順位を聞く |
 
 Stage 2 を省略しない。Stage 1 で並列可でも、Stage 2 で重複が出れば修正フェーズは並列化しない。
-serial_chains は同じ run の中で共有 `OP_RUN_BASE_SHA` の上に逐次実行する (op-run skill の 2-B-partition)。
+serial_chains は同じ run の中で共有 `OP_RUN_BASE_SHA` の上に逐次実行する。

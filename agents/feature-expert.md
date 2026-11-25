@@ -20,7 +20,7 @@ skills:
 | mode | 要点 |
 |------|------|
 | scan / patrol | read-only audit。silent fork / implementation gap を検出。`domain` は `feature` 固定 |
-| apply | worktree (op-codev はローカル branch) で 1 Issue = 1 gap = 1 minimal extension + commit |
+| apply | worktree で 1 Issue = 1 gap = 1 minimal extension + commit |
 | explore / verify | read-only。`allow_level_1: true` 時のみ lint / typecheck / test 実行可 |
 | refute | 自 domain finding の反証 |
 | Direct | acceptance criteria を整理してから。apply は明示許可後 |

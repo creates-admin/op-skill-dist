@@ -49,7 +49,7 @@ Claude Design (`/design` Artifact) は作り込み中の作業台であり、正
 
 ## 部品 issue
 
-部品の新規作成・変更・登録状態の修正は、op-run ではなく op-component で行う。そのための Issue (op-plan の分解、op-spec の派生 issue、
+部品の新規作成・変更・登録状態の修正は、op-thread ではなく op-component で行う。そのための Issue (op-plan の分解、op-spec の派生 issue、
 op-spec-patrol の指摘から作る) は次の形にする:
 
 - タイトル: `[designer-expert] 部品: <部品名> — <内容>`
@@ -57,7 +57,7 @@ op-spec-patrol の指摘から作る) は次の形にする:
 - 本文の 1 行目: `実施: /op-skill:op-component <部品名> --issue <N>` (`<N>` は起票後の番号。起票時は `--issue` を省いてよい)
 - 本文: 必要な variant / 状態、なぜ必要か (どの画面・どの gap から来たか)
 
-op-run は本文に `実施: /op-skill:op-component` を含む Issue を実装対象にしない。
+本文に `実施: /op-skill:op-component` を含む Issue は op-component で実施し、op-thread には回さない。
 
 ## 部品一覧と実物のずれ
 

@@ -17,7 +17,7 @@
 
 同じ literal でも意味が違うもの (`"open"` が status / mode / event で別意味など) は分けて数える。
 
-### apply 中の局所共通化下限 (op-run — 2 箇所基準)
+### apply 中の局所共通化下限 (2 箇所基準)
 
 scope_in 内に同じ意味の literal が 2 箇所以上あり意味同一性が確認できれば、scan finding が無くても局所共通化してよい。
 

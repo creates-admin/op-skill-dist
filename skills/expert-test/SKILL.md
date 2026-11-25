@@ -26,7 +26,7 @@ description: test-expert に preload される方法論。
 | feature-expert | 機能 1 件あたりの受入テスト (happy path) 1〜2 本 |
 | security-expert | IPC / file IO / shell の境界テスト・fuzz |
 | test-expert | 上記以外すべて: スイート audit / ゴミ除去 / カバレッジ拡張 / fixture 整理 |
-| refactor-expert / review-expert | 書かない |
+| refactor-expert | 書かない |
 
 他 expert は範囲外のテスト不足を完了報告の `delegated_test_issue_request[]` で返し、controller が test-expert 向けに起票する。
 他 expert の「ついで」テストには apply で手を入れない。scan では他 expert が残したゴミも検出対象。
@@ -101,7 +101,7 @@ read-only (Level 0)。テスト・既存の coverage report・CI 履歴・git bl
 スイート実行時間の異常 (CI ログ上 > 5 分等) を検出する。実行しないと確定できないものは `evidence_grade: requires_runtime`。
 finding を組み立てる前に `references/scan-contract.md` を Read する。
 
-### apply (op-run / op-prune)
+### apply (op-thread / op-prune)
 
 5 ステップに従う。flaky / 危険な外部依存 / Critical 機能の error path を先に対応し、削除候補は quarantine まで (物理削除は別 PR)。
 Issue の `recommendation` (op-prune では承認 items の recommendation) を実装計画としてそのまま使う。

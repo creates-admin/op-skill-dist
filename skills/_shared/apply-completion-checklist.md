@@ -7,7 +7,7 @@ controller 側の検証は `apply-completion-verify.md`。
 
 | モード | 適用 |
 |--------|------|
-| apply Run Mode (`op-run` / `op-codev` 経由 または Direct apply) | 適用する (`op-run` / `op-codev` 経由は §2-A の commit 先行順序) |
+| apply Run Mode (controller 経由 または Direct apply) | 適用する (controller 経由は §2-A の commit 先行順序) |
 | scan / detect / review / post-check / gate 判定 / patrol 巡回 | 適用しない |
 
 非適用モードでは `code_review_invoked: false`、`code_review_skip_reason: "<mode名>, no apply performed"` を完了報告に記載する。
@@ -26,8 +26,8 @@ controller 側の検証は `apply-completion-verify.md`。
 
 - invoke 先は built-in の `Skill({skill: "code-review", args: "<effort> <target>"})`。read-only で使う (`--fix` / `--comment` を付けない)。
   target は commit 前 (§2) なら付けない (working tree の差分を見る)、commit 後 (§2-A) なら自分の branch。
-- branch を target にすると default branch との差分が対象になる。base が default branch でないとき (積み重ね・op-codev の IU・
-  default branch に無い `OP_RUN_BASE_SHA`) は、自分の diff (`<base>...HEAD`) の外の指摘を外す。
+- branch を target にすると default branch との差分が対象になる。base が default branch でないとき (積み重ね・
+  default branch に無い `BASE_SHA`) は、自分の diff (`<base>...HEAD`) の外の指摘を外す。
 - findings の severity は `important` (merge 前に直すべき不具合。Critical / High より広い) / `nit` / `pre_existing` (diff の外の既存の不具合)。
   自己修正するのは important だけ。nit と pre_existing は code_review_result に書いて formal review に委ねる。
 - effort は controller が渡した `code_review_effort`。`auto` / 未指定なら `high`。`max` は Issue / cluster に明示があるときだけ。
@@ -38,12 +38,11 @@ controller 側の検証は `apply-completion-verify.md`。
 `Skill({skill: "code-review", ...})` を実際に呼んで失敗したときだけ、`code_review_invoked: false` にし、返ってきたエラー文言を
 verbatim で `code_review_skip_reason` に書く。呼ばずに「使えないはず」と判断しない。自分でレビューを代行して `true` を名乗らない。
 
-自己検証は best-effort であり、merge 可否の判定権は controller が spawn する独立レビュー
-(op-run フェーズ4 global review / op-codev Step B-2) にある。
+自己検証は best-effort であり、merge 可否は controller 側の独立レビュー (別 context の `/code-review`) と人の判断で決まる。
 
-## 2-A. commit 先行経路 (op-run / op-codev)
+## 2-A. commit 先行経路 (controller 経由)
 
-op-run / op-codev 経由の apply-expert は commit を先に打ってから自己検証する。順序を §2 (自己検証 → commit) に戻さない。
+controller 経由の apply-expert は commit を先に打ってから自己検証する。順序を §2 (自己検証 → commit) に戻さない。
 
 ```
 1. 実装完了
@@ -66,14 +65,14 @@ op-run / op-codev 経由の apply-expert は commit を先に打ってから自�
 - [ ] 実装・code-review・自己修正の変更をすべて commit 済 (自己修正は追加 commit)。code-review 完了 ≠ 実装完了
 - [ ] git status --porcelain が空 (untracked な新規ファイルも含む。未 commit 分は push されず失われ、
       controller の `op apply verify-commit` が UNCOMMITTED_CHANGES で block する)
-- [ ] commits_added に "${OP_RUN_BASE_SHA}..HEAD" の全 SHA を SHA 文字列の配列で記入 (1 件以上。object でラップしない)
+- [ ] commits_added に "${BASE_SHA}..HEAD" の全 SHA を SHA 文字列の配列で記入 (1 件以上。object でラップしない)
 - [ ] 完了報告は canonical completion_report の形式。code-review の findings JSON 配列をそのまま返さない
       (findings は code_review_result / self_review_result に要約して載せる)
 ```
 
 ```bash
-: "${OP_RUN_BASE_SHA:?OP_RUN_BASE_SHA must be set by controller}"
-git log --format='%H' "${OP_RUN_BASE_SHA}..HEAD"   # 件数 == commits_added 要素数 (1 以上)
+: "${BASE_SHA:?spawn prompt の base SHA}"
+git log --format='%H' "${BASE_SHA}..HEAD"   # 件数 == commits_added 要素数 (1 以上)
 git status --porcelain                             # 空であること
 ```
 

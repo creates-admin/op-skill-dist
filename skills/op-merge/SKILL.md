@@ -76,13 +76,13 @@ git diff --stat origin/<base>...origin/pr/<N>
 | conflict | `merge-tree` の結果と `mergeable`。conflict 自体は保留理由にならない (フェーズ4 で解消する) |
 | draft | 保留理由にしない。名指しの後に 4-4 で ready にする |
 | 積み重ね | 段の並び (下から) と stack の有無。conflict は段ごとに、その段の base (一番下は default branch、それ以外は 1 つ下の段の head ブランチ) に対して見る |
-| review | `pro-reviewed` / `pro-review-blocked` / `pro-review-needs-fix` / `needs:human-decision` ラベル、state の最新 `review_result` と `reviewed_head_sha == headRefOid` か。op-run 由来でない PR は `found: false` になるので「review 記録なし」と明示する |
+| review | `pro-reviewed` / `pro-review-blocked` / `pro-review-needs-fix` / `needs:human-decision` ラベル、state の最新 `review_result` と `reviewed_head_sha == headRefOid` か。state が無い PR は `found: false` になるので「review 記録なし」と明示する |
 | Issue 妥当性 | `Fixes #M` の Issue の成功条件を diff が満たすか。司令官が diff を読んで判断する |
 | 重複ファイル | 他の対象 PR と変更ファイルが重なるか (PR 番号とファイル数) |
 | fork | `headRepositoryOwner` が origin と違う PR は branch に push できないため、conflict があれば保留 |
 
-diff が大きい・意図が読み切れない PR は、判断材料として review-expert を read-only で spawn してよい
-(prompt は `references/spawn-prompts.md`「監査の review-expert」)。
+diff が大きい・意図が読み切れない PR は、判断材料として `Skill({skill: "code-review", args: "high <PR 番号>"})` を回してよい
+(read-only。`--comment` / `--fix` を付けない)。
 
 各 PR を `merge 可` / `要修正` / `保留` に分け、理由を 1 行で書く。例: CI fail・review needs-fix・成功条件の未達は
 `要修正`、`needs:human-decision`・判断材料不足・fork で conflict・積み重ねの段の conflict は `保留`。
@@ -158,8 +158,8 @@ spawn の prompt は `references/spawn-prompts.md`「コンフリクト解消の
 
 #### 4-2-r. 解消 commit の軽量レビュー (別 context)
 
-解消した expert とは別 context の review-expert に、**解消 commit だけ**を read-only でレビューさせる
-(PR 全体の再レビューはしない。PR 本体は op-run の review 済みという前提)。
+解消した expert とは別 context の built-in agent に、**解消 commit だけ**を read-only でレビューさせる
+(`/code-review` は commit 単位を対象にできないため。PR 全体は PR を出した側の `/code-review` で済んでいる前提)。
 
 prompt は `references/spawn-prompts.md`「解消 commit の軽量レビュー」。
 
@@ -204,7 +204,7 @@ merge-async は受け付けた時点で返る。同じ呼び出しを数秒お�
 - 紐づく Issue (積み重ねは各段の Issue) を `op issue view <M> --include meta` で確認し、OPEN のままなら
   `op issue close --issue <M> --comment "PR #<N> のマージで解決"`。
 - `op run worktree cleanup --task-id <id> --success` を、4-2 の worktree と、head が `auto/<task-id>` で
-  `~/cwork/worktrees/<repo>/<task-id>/` が残っている op-run の worktree に対して行う。
+  `~/cwork/worktrees/<repo>/<task-id>/` が残っている worktree に対して行う。
 
 次の PR は新しい base に対して 4-1 から行う。
 

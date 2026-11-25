@@ -11,10 +11,9 @@ plugin 内 component は `op-skill:` prefix 付きで登録される。Agent too
 
 ### 規約
 
-- active expert 9 体と utility worker (`scout` / `spec-expert`) を spawn するときは `subagent_type: "op-skill:<name>"` を渡す
-- bare 名が正本。`op run expert-resolve` 出力 / registry / marker 値 / fingerprint / `apply-prompt-directives.md` の
-  `${EXPERT}` 節 lookup / payload の `expert` field はすべて bare 名。前置は `subagent_type` 引数の境界でのみ行う
-- 動的 spawn (ClusterOrchestrator の apply / review 等) は `"op-skill:" + <resolved bare expert>` で組み立てる
+- active expert 8 体と utility worker (`scout` / `spec-expert` / `verify-runner`) を spawn するときは `subagent_type: "op-skill:<name>"` を渡す
+- bare 名が正本。`op run expert-resolve` 出力 / registry / marker 値 / fingerprint / payload の `expert` field はすべて bare 名。前置は `subagent_type` 引数の境界でのみ行う
+- 動的 spawn (Issue の `op-run-expert` から決める apply 等) は `"op-skill:" + <resolved bare expert>` で組み立てる
 
 ### 前置しない例外
 
@@ -23,18 +22,18 @@ plugin 内 component は `op-skill:` prefix 付きで登録される。Agent too
 
 ## expert spawn は subagent であること (teammate 化させない)
 
-- 戻り値契約 (ClusterSummary 等) を持つ skill を回す環境では `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` を設定しない
-- spawn に個体名を付けない。識別は `description` (例: `"ClusterOrchestrator: c1"`) で行う。prompt で「teammate として」「チームを作って」と要求しない
-- `run_in_background` は既定に委ね、CO 配下も同期直列に固定しない。`In-process teammates cannot spawn background agents` が返った場合のみ `false` で再送する
+- 戻り値契約を持つ skill を回す環境では `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` を設定しない
+- spawn に個体名を付けない。識別は `description` (例: `"merge-conflict: PR #210"`) で行う。prompt で「teammate として」「チームを作って」と要求しない
+- `run_in_background` は既定に委ね、配下の spawn も同期直列に固定しない。`In-process teammates cannot spawn background agents` が返った場合のみ `false` で再送する
 
 ## subagent 内からの spawn
 
 - 実行環境によっては subagent に Agent tool が渡されない (subagent から配下を spawn できない)
-- 配下を spawn する subagent (CO 等) は起動直後に Agent tool の有無を確かめ、無ければ何も実行せず専用の verdict で返す
+- 配下を spawn する subagent は起動直後に Agent tool の有無を確かめ、無ければ何も実行せず専用の verdict で返す
 - 呼出側はその verdict を受けたら、同じ run の残りを subagent に頼らず、その手順書を自分の context で実行して配下を直接 spawn する
 - 環境変数やホスト種別から推測して事前に切り替えない (判定は subagent 自身のツール一覧だけで行う)
 
-## spawn の3パターン
+## spawn の2パターン
 
 prompt 冒頭に「あなたはこのコードを <書いた / 書いていない>」を明記する (review は「書いていない」)。
 
@@ -46,19 +45,10 @@ prompt 冒頭に「あなたはこのコードを <書いた / 書いていな�
 
 ### パターン2: apply 用 (worktree 内で実装)
 
-- `isolation: "worktree"` 必須。model は `model-selection.md` §5.3 (§7.2 の承認を得た spawn のみ `fable`)
-- prompt は `spawn-prompt-common.md` §1 / §2 (apply) / §4 を含み、ブランチ名・触ってよいファイルを明示する
+- `isolation: "worktree"` 必須。model は `model-selection.md` §5.3 (人間が自分から指定した spawn のみ `fable`、§7.2)
+- prompt は `spawn-prompt-common.md` §1 / §2 (apply) / §4 を含み、ブランチ名・base SHA (`BASE_SHA`)・触ってよいファイルを明示する
 - commit まで行い push しない (push は司令官)。返却は `_shared/expert-report-schemas.md`「修正完了報告 schema」
-- op-run では ClusterOrchestrator が apply → PR → post-check → review → round 管理を完結させ ClusterSummary だけを返す
-  (正本: op-run skill の `cluster-orchestrator-directives.md`)。CO が配下を spawn できない環境では controller が同書を実行する
-  (「subagent 内からの spawn」)
-
-### パターン3: review 用
-
-- review-expert は apply とは別 worktree・別 context で spawn する (同一 context でロールを名乗るだけは不可)。read-only、fable 禁止
-- 判定は approve / needs-fix / needs-specialist-review / blocked の 4 値。返却は `op help payload review-finding`、投稿・記録は controller
-- 独立性手順・禁止事項・判定基準の正本は `agents/review-expert.md` と expert-review skill。Review Fix Loop の再委任は
-  op-run skill の `references/review-fix-loop.md`
+- review は apply とは別 context の `/code-review` で行う (expert を review に spawn しない)
 
 ### 正本 (.claude/rules) の Read
 

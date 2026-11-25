@@ -48,11 +48,11 @@ Tier2 の GitHub 操作は `~/.claude/skills/_shared/github-channel.md` に従�
 op cleanup worktree-candidates --older-than "$N" --json
 
 # Tier2: label で open PR / Issue を列挙する (close はしない)
-op cleanup pr-candidates --label auto-fix --json        # op-run が作成した PR
+op cleanup pr-candidates --label auto-fix --json        # OP が作成した PR
 op cleanup issue-candidates --label auto-report --json  # op-scan / op-patrol 等が起票した Issue
 ```
 
-Tier1 の保護理由 (`protection_reasons`): `in_use` (`git worktree list` に登録済み = op-run 進行中等) / `within_grace` (最終更新から `--older-than` 日未満)。
+Tier1 の保護理由 (`protection_reasons`): `in_use` (`git worktree list` に登録済み = 作業中等) / `within_grace` (最終更新から `--older-than` 日未満)。
 
 Tier2 の CLI は age を採点しない (`--stale-days` は理由ラベル表示のみ)。候補は指定 label の open 全件なので、
 最終更新日を確認して stale と判断したものだけを人間に提示する。

@@ -77,7 +77,7 @@ expert 出力 / 完了報告 / PR 本文 / commit message を含め、次をし�
 
 ## Direct 固定 skill に op_managed が渡った場合
 
-Direct Mode 固定の OP skill (op-plan / op-codev / op-spec / op-loop / op-explore / op-doctor / op-rules 等) は人間が起動し、
+Direct Mode 固定の OP skill (op-plan / op-spec / op-explore / op-doctor / op-rules 等) は人間が起動し、
 人間 gate を対話で通す前提で動く。その skill 自体の起動に `invocation_mode: op_managed` が渡されたら契約違反として、
 何も書き込まずに停止して報告する (呼び出し元が OP-managed なら `needs_human_decision` (`can_continue_without_decision: false`) で返す)。
 その skill が内部で spawn する worker には `op_managed` を渡す。

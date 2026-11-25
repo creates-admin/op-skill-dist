@@ -36,7 +36,7 @@ planned-skip は、PR コメントに「post-check 未実施」と自然文で�
 
 Issue / PR marker、cluster annotation、scan finding の推奨 expert 名、`recommended_expert`、`op-run-expert`、
 `op-post-check-expert` はすべて routing metadata であり実行権限ではない。scan-time / patrol-time / apply-fix / review の
-spawn context は権限を継承しない。scan-time spawn は `op-scan`、patrol-time は `op-patrol`、apply/fix は `op-run` が解決する。
+spawn context は権限を継承しない。scan-time spawn は `op-scan`、patrol-time は `op-patrol`、apply/fix は apply を spawn する skill が解決する。
 
 ## 7. Unregistered Expert Rule
 

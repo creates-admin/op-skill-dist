@@ -51,7 +51,7 @@ bulk_group は `security:<concern>` 形式 (一覧は `source-sink-analysis.md` 
 ### post-check
 
 `references/post-check-policy.md` に従う。worktree の HEAD と指定 head SHA の一致確認 → PR diff と元 Issue の照合 → 8 観点 → 判定 4 種 →
-PR コメント + 構造化返却。PR 全体の lens (Workflow / UX / Test / Compatibility / Release / Spec / Refactor) は review-expert の担当なので重複監査しない。
+PR コメント + 構造化返却。PR 全体の lens (Workflow / UX / Test / Compatibility / Release / Spec / Refactor) は PR のレビュー (`/code-review`) の担当なので重複監査しない。
 
 ## 出力契約
 
@@ -62,7 +62,7 @@ PR コメント + 構造化返却。PR 全体の lens (Workflow / UX / Test / Co
 | 領域 | 担当 |
 |---|---|
 | 露出面調査・経路遮断 (IPC / file IO / path / capability / shell / secret / updater / parser / InDesign COM) | 本 expert |
-| PR 全体の 7 lens 横断 review (Security/Abuse lens 含む) | review-expert。本 expert は Issue 固有の security 深掘り post-check のみ |
+| PR 全体の 7 lens 横断 review (Security/Abuse lens 含む) | PR のレビュー (`/code-review`)。本 expert は Issue 固有の security 深掘り post-check のみ |
 | a11y / 状態網羅 / UI 監査 | ux-ui-audit-expert。本 expert は UI / workflow に影響する mitigation で `requires_aux_post_check: true` を返すだけ |
 | バグ修正 / 機能実装 / 構造改善 / 性能改善 | debug / feature / refactor / optimize-expert。本 expert は露出面に直結する場合のみ apply |
 | security regression test 以外のテスト全般 | test-expert (finding として指摘のみ) |

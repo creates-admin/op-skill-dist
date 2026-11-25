@@ -12,8 +12,8 @@ description: 実機検証ハーネスを導入・実行・育成するスキル�
 - ハーネスとテストの変更は feature-expert が worktree で apply → PR する経路だけで行う。司令官はコードを編集しない。マージは人間 (op-merge 可)。
 - Issue は起票しない。gap (ハーネスが自動でやらず手作業で補った工程) は完了報告と PR の op-review-state に載せ、`--grow` で還元する。
   検証中に見つかった Critical / High 級の不具合は報告に載せ、`/op-skill:op-report` を案内する。
-- 他 skill との境界: op-adopt は未導入を診断して `--init` を案内するだけ。op-run / op-codev の自動の実機検証段は
-  `skills/op-run/references/runtime-verify-dispatcher.md` が正本で、本 skill の通常モードも同じ dispatcher を使う。
+- 他 skill との境界: op-adopt は未導入を診断して `--init` を案内するだけ。実機検証の段の手順の正本は
+  `references/runtime-verify-dispatcher.md`。
 
 ## 起動
 
@@ -65,7 +65,7 @@ op run base-sha --base-ref "origin/$BASE_REF" | jq -r '.payload.base_sha'   # �
 
 ## 通常モード: 実機検証
 
-checkout を決める → scenarios を組む → `skills/op-run/references/runtime-verify-dispatcher.md` を controller = op-verify として使う → 記録 → worktree は残す。
+checkout を決める → scenarios を組む → `references/runtime-verify-dispatcher.md` を使う → 記録 → worktree は残す。
 手順は `references/run.md`。
 
 ## `--grow`: ハーネスの育成

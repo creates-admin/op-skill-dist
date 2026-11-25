@@ -1,6 +1,6 @@
 # op-scan `--from-issue` モード (Issue 正規化)
 
-人間立て Issue / 古い形式 Issue を、指示書フル版の派生 Issue として再起票する。op-run からの委譲が主用途。
+人間立て Issue / 古い形式 Issue を、指示書フル版の派生 Issue として再起票する。
 既存 Issue を起点に scope を推定 → audit → 再起票する逆向きフローで、severity フィルタは無効。
 
 ```
@@ -70,7 +70,7 @@ severity 制約の緩和と引き続き禁止する事項は workflow の from-i
 
 > 🔍 op-scan が指示書フル版を #${NEW_ISSUE} として起票しました。
 >
-> この Issue は op-run で実装可能な形式に正規化された派生 Issue (#${NEW_ISSUE}) に
+> この Issue は op-thread で実装可能な形式に正規化された派生 Issue (#${NEW_ISSUE}) に
 > 置き換えられます。今後の議論・実装は派生 Issue 側で進めてください。
 
 ```bash

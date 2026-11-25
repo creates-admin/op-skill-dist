@@ -20,13 +20,13 @@ description: refactor-expert に preload される方法論。
 |---|---|
 | scan (op-scan) | `refactor-taxonomy.md` + `scattered-tokens.md` |
 | patrol (op-patrol) | `structure-health.md`「Patrol Sampling 優先度」節 |
-| apply (op-run / op-prune) | `verification-ladder.md` |
+| apply (op-thread / op-prune) | `verification-ladder.md` |
 | `architecture_debt` / `staged_refactor` を返す | `architecture-debt.md` |
 | canonical doc (markdown) の圧縮・再構成 | `doc-refactor-guard.md` |
 | post_check_expert の選択 | `post-check-policy.md` |
 | ディレクトリ構造・依存方向 | `directory-structure.md` |
 
-React / Go は `scope_in` に明示された場合か op-run の変更差分に含まれる場合のみ対象にする。
+React / Go は `scope_in` に明示された場合か apply の変更差分に含まれる場合のみ対象にする。
 
 ---
 
@@ -44,7 +44,7 @@ scan / patrol で finding を返す前に `references/severity-policy.md` を読
 - 一度で直せない巨大負債は捨てず `architecture_debt` finding にする。返す前に `references/architecture-debt.md` を Read する。
 - patrol では巡回対象を決める前に `references/structure-health.md`「Patrol Sampling 優先度」節を Read する。
 
-### apply モード (op-run / op-prune、worktree 隔離)
+### apply モード (op-thread / op-prune、worktree 隔離)
 
 - Issue の `scope_in` (op-prune では承認 items) に閉じる。仕様変更 / bug fix / performance 最適化 / feature 実装を混ぜない。
 - 変更前に Grep で参照元を repo 全体から確認する。
@@ -101,7 +101,7 @@ refactor Issue では Issue 本文の `## 🧱 Refactor Execution Control` 節 (
 | `architecture_debt` | `false` | `safe_first_step` のみ |
 | `needs_spec_decision` | `false` | 実装せず `needs_human_decision` block (`required: true`, `decision_type: spec` または `boundary`) を返す |
 
-`needs:human-decision-followup` ラベル付きの扱いは `architecture-debt.md`「op-run / apply での扱い」。
+`needs:human-decision-followup` ラベル付きの扱いは `architecture-debt.md`「apply での扱い」。
 
 - 保護対象 (`contract_preservation`) を破らざるを得ない場合は実装せず `needs_spec_decision` として返す。
 - `forbidden_stage_actions` を実行しない。`proposed_stages` の 2 つ目以降を実行しない (1 stage = 1 PR)。

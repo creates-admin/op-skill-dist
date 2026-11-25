@@ -81,9 +81,9 @@ block が無い PR への初回 push は空 state から作る。手編集しな
 
 aux post-check (security 起点の ux-ui-audit) は `post_checks` のキーを `<expert>@aux` にし、entry の `triggered_by` を `security-expert` にする。
 
-runtime verify (op-run CO フェーズ5.7) の結果は `post_checks["verify-runner"]` に post-check と同じ `kind: "post_check"` で書く
+runtime verify (op-verify `--pr`) の結果は `post_checks["verify-runner"]` に post-check と同じ `kind: "post_check"` で書く
 (write_id も post-check の規約どおり `<session>-postcheck-verify-runner-r<N>`)。entry には次の任意 field を足せる。
-どれも省略でき、書いた値は CLI が解釈せずそのまま保持する。値の決め方は `op-run/references/runtime-verify-dispatcher.md`「5. state 記録」。
+どれも省略でき、書いた値は CLI が解釈せずそのまま保持する。値の決め方は op-verify skill の `references/runtime-verify-dispatcher.md`「5. state 記録」。
 
 | field | 型 | 内容 |
 |---|---|---|

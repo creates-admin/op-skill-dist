@@ -2,7 +2,7 @@
 
 ## 1. 適用範囲
 
-apply Run Mode で commit を打つ全 expert (Direct apply / op-run 経由の両方)。
+apply Run Mode で commit を打つ全 expert (Direct apply / controller 経由の両方)。
 scan / patrol / review / gate / post-check モードは対象外。
 完了報告 schema は `_shared/expert-report-schemas.md`、完了手順は `_shared/apply-completion-checklist.md`。
 
@@ -22,7 +22,7 @@ scan / patrol / review / gate / post-check モードは対象外。
 - header は 1 行。`<type>` は `fix` / `feat` / `refactor` / `perf` / `test` / `style` / `docs` / `chore`。
 - 本文は日本語。判定根拠 (なぜその修正が正しいか) を残す。
 - 複数 Issue は列挙する (`(Fixes #12 #15)` または本文に `Fixes #12` / `Fixes #15` を各行)。
-- push しない。push と PR open は op-run では ClusterOrchestrator、Direct apply では司令官が行う。
+- push しない。push と PR open は controller (司令官) が行う。
 
 ## 3. `Fixes` と `Refs` の使い分け
 

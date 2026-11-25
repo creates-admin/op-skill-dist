@@ -93,7 +93,7 @@ apply 系 expert 共通の検証段階。コマンドは「検証コマンド (�
 - scan / patrol / detect は Level 0 のみ (`severity-rubric.md`「scan 実行レベル」)。
 - apply は Level 1〜3。壊し得る境界で決める: 型・シグネチャ → 1 / ロジック・分岐・状態遷移 → 2 / 依存・ビルド構成・IPC 境界・公開 API → 3。迷ったら上に倒す。
 - Level 4 は controller が明示指示した場合のみ。Level 5 は apply で実施せず、apply とは別の runtime verify 段で行う
-  (op-run の CO フェーズ5.7 / op-codev の verify フェーズ。手順は `op-run/references/runtime-verify-dispatcher.md`)。
+  (op-verify。手順は op-verify skill の `references/runtime-verify-dispatcher.md`)。
   apply の完了報告には「未実行: Level 5 (runtime verify 段で実施)」と書く。
 - Level 5 の検証環境は対象 repo のハーネスが用意する (契約は `verify-harness.md`)。
 - コマンドは存在確認してから実行する。未導入のツールは失敗ではなく「未実行: Level X (理由)」と完了報告に書く。
@@ -115,9 +115,9 @@ apply / review agent は PR 本文の「検証レベル」セクションに以�
 Ladder との対応: Static = Level 1、Unit = Level 2、Build = Level 3、Integration = Level 4、Manual = Level 5 相当。
 
 
-## UI 影響判定 path パターン (op-architect / op-run 共通)
+## UI 影響判定 path パターン
 
-op-architect (UI 影響マイルストーン抽出) / op-run (post-check 起動判定) はこの節を参照する。
+op-architect (UI 影響マイルストーン抽出) / op-plan / op-verify (実機検証の起動判定) はこの節を参照する。
 
 ### UI 影響あり (いずれかにマッチ)
 

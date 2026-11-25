@@ -40,7 +40,7 @@ I/O surface が変わらない構造整理は `null`。gotchas に「path_values
 1. `gotchas` に書く (例: `"Compatibility lens 重点確認: serialized format に近接、migration 整合確認"`)
 2. apply report の `recommended_followup_experts` (`{expert, reason, scope}`。`post_check_expert` とは別フィールド)
 3. Issue / PR 本文の Refactor Execution Control 節の `forbidden_stage_actions` / `gotchas`
-4. global review (review-expert) に任せる
+4. PR のレビュー (`/code-review`) に任せる
 
 ## 複数 post-check が必要に見えるケース → Issue 分割
 

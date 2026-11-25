@@ -19,7 +19,7 @@ UI の見た目は文章で指示せず、`/design` Artifact のモックで人�
 ## 利用
 
 - Issue 本文: `デザインモック: <artifact URL>` の 1 行 (採用 artboard 名があれば併記)。
-- op-run の apply / ux-ui post-check: spawn prompt にモック URL を渡し、`Artifact({action:"read", url})` で参照させる。
+- apply / ux-ui post-check: spawn prompt にモック URL を渡し、`Artifact({action:"read", url})` で参照させる。
   モックは見た目の目標であり、実装は対象 repo の既存 design system / component を使う。
 - モックと既存 design system が両立しない等、実装前に判断が要るものは apply 担当が needs_human_decision で返す。
   post-check ではモックとの差分のうち判断が要るもの (モックに無い状態など) を BLOCK にせず notes に記載する。
