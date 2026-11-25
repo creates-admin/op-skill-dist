@@ -34,7 +34,7 @@ op-adopt は人間が承認した地図から、層の正本 (`kind: layer`) の
 - ラベル: 診断の「済」にかかわらず、canonical ラベルの作成を確認して承認後に `op repo init` を実行する (既存ラベルは skip される。
   `--dry-run` は作成済みかを判定せず全件を列挙するだけなので判定に使わない)。
 - `op-config.yaml`: 無ければ空に近い最小ファイルを作る (値は推測で埋めない。キーの意味は `_shared/op-config-schema.md`)。
-- `REVIEW.md`: ルートに無ければ `references/review-md-template.md` の 3 つの値 (重要とするもの・毎回見ること・レビューしないパス) を人間に聞いて埋めた案を見せ、承認後に置く。
+- `REVIEW.md`: ルートに無ければ `references/review-md-template.md` の 3 つの値 (重要とするもの・毎回見ること・レビューしないパス) を人間に聞いて埋め、Important の既定の基準 (1〜2 行目) も repo に合わせて直してもらった案を見せ、承認後に置く。
   重要とするものが無ければその行を消し、毎回見ることは「なし」から始める。2 つ目のコメント (置き換える値) は消し、1 つ目 (ルールを足す基準) は残す。既にあれば触らない。
 
 ## フェーズ2: 正本の土台
@@ -75,6 +75,8 @@ UI を持つ repo で `design_system` が未設定なら、`/op-skill:op-compone
 
 ## フェーズ6: commit と PR
 
+- 先に、置いた・変えたファイルの一覧 (`git status --short`) と診断表の前後を見せ、「commit して PR にする / ここで止める (変更は作業ツリーに残す)」を聞く。
+  止めるなら branch・commit・PR を作らず、完了報告の PR の行を「なし (作業ツリーに残した)」にして終える。
 - branch は `auto/adopt-<YYYYMMDD-HHMMSS>` (`_shared/worktree-ops.md`)。フェーズ1〜3 の変更を 1 PR にまとめる。
 - `op pr create`。`.claude/` と `REVIEW.md` も含めて自分で commit する。本文に診断表 (前後)、承認した地図 (kind・キー・paths・概要・優先度。作った層の正本と、op-spec へ渡す業務領域・機能の別)、次にやること (`/op-skill:op-spec` (mode `missing`) の順番、`/op-skill:op-component --init`、`/op-skill:op-verify --init`、`/op-skill:op-doctor`) を書く。
 - マージは `/op-skill:op-merge` または人間が GitHub で行う。
@@ -84,6 +86,6 @@ UI を持つ repo で `design_system` が未設定なら、`/op-skill:op-compone
 ```
 ## op-adopt 完了
 | 領域 | 前 | 後 |
-- PR: #<N>
+- PR: #<N> (止めたときは「なし (作業ツリーに残した)」)
 - 次: /op-skill:op-spec (mode missing: <key1> → <key2> …) / /op-skill:op-component --init / /op-skill:op-verify --init / /op-skill:op-doctor
 ```
