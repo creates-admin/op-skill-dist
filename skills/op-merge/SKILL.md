@@ -70,25 +70,8 @@ git diff --stat origin/<base>...origin/pr/<N>
 | 重複ファイル | 他の対象 PR と変更ファイルが重なるか (PR 番号とファイル数) |
 | fork | `headRepositoryOwner` が origin と違う PR は branch に push できないため、conflict があれば保留 |
 
-diff が大きい・意図が読み切れない PR は、判断材料として review-expert を read-only で spawn してよい:
-
-```
-Agent({
-  subagent_type: "op-skill:review-expert",
-  model: "opus",
-  isolation: "worktree",
-  description: "merge-audit PR #<N>",
-  prompt: """
-    invocation_mode: op_managed
-    <`_shared/spawn-prompt-common.md` §2 (exploration-only) / §4 を全文>
-
-    あなたはこの PR を書いていない独立 reviewer です。op-merge から呼ばれました。
-    PR #<N> (branch origin/pr/<N>、base origin/<base>) が Issue #<M> の成功条件を満たし、マージしてよい状態かを read-only で判定してください。
-    コード修正・commit・push・PR コメント・label 操作・`op review state push` はしない。
-    返却: verdict (approve | needs-fix | blocked) / 根拠 3 行以内 / 主要 finding (severity・file・1 行要約)
-  """
-})
-```
+diff が大きい・意図が読み切れない PR は、判断材料として review-expert を read-only で spawn してよい
+(prompt は `references/spawn-prompts.md`「監査の review-expert」)。
 
 各 PR を `merge 可` / `要修正` / `保留` に分け、理由を 1 行で書く。例: CI fail・review needs-fix・成功条件の未達は
 `要修正`、draft・`needs:human-decision`・判断材料不足・fork で conflict は `保留`。
@@ -104,17 +87,7 @@ Agent({
 
 監査表とマージ順を提示し、AskUserQuestion で計画全体の承認を 1 回だけ取る。
 
-```
-## op-merge 計画 (base: main)
-
-| 順 | PR | タイトル | 由来 | CI | conflict | review | Issue | 重複 | 判定 | 理由 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | #210 | ... | op-run | pass | なし | approve (最新 head) | #42 成功条件充足 | #212: 2 files | merge 可 | 基盤変更で #212 が依存 |
-| 2 | #212 | ... | op-run | pass | あり | approve | #43 充足 | #210: 2 files | merge 可 | #210 後に conflict 解消 |
-| - | #215 | ... | 人間 | fail | なし | 記録なし | なし | - | 要修正 | test_x が fail |
-
-方式: squash
-```
+表の形は `references/report-templates.md`「計画」。
 
 選択肢: 「この計画で実行」/「一部を除外して実行 (除外する PR 番号を指定)」/「中止」。
 除外指定があれば順序を組み直して表示し、除外 PR に依存する PR も除外する。承認後はフェーズ4 で追加の確認をしない。
@@ -150,27 +123,7 @@ jq -n --argjson n <M> --arg body "$BODY" --argjson labels "$LABELS_JSON" \
   | jq -r '.payload.apply_expert // "feature-expert"'
 ```
 
-```
-Agent({
-  subagent_type: "op-skill:<expert>",
-  model: "opus",
-  description: "merge-conflict: PR #<N>",
-  prompt: """
-    invocation_mode: op_managed
-    <`_shared/spawn-prompt-common.md` §2 (apply) / §4 を全文>
-
-    あなたは <expert> です。op-merge から呼ばれました。PR #<N> に base を取り込み、コンフリクトを解消してください。
-    - 作業ディレクトリ: <worktree_path> (PR head <headRefOid> から作成済み)
-    - 取り込む base: origin/<base> (<base sha>)。`git merge --no-ff origin/<base>` で取り込む
-    - PR の意図: <PR 本文の要約 / Issue #<M> の成功条件>
-    - base 側で入った変更: <この run でマージした PR 番号と要約>
-    - 両側の意図を保って解消する。一方の変更を捨てる・仕様判断が要る衝突は解消せず needs_human_decision で返す
-    - 解消後に検証コマンド (対象 repo の CLAUDE.md、無ければ `_shared/project-profile.md`) を実行し、pass したら merge commit を作る
-    - rebase / reset / force-push / push はしない。衝突の解消に必要な箇所以外は編集しない
-    返却: 修正完了報告 schema (`_shared/expert-report-schemas.md`) + resolved_files[] + 衝突ごとの解消方針 1 行
-  """
-})
-```
+spawn の prompt は `references/spawn-prompts.md`「コンフリクト解消の expert」。
 
 - `status: completed` かつ検証 pass → 4-2-r (軽量レビュー) → pass なら司令官が
   `git -C <worktree_path> push origin HEAD:<headRefName>` (fast-forward のみ。拒否されたら PR が更新されているので保留) → 4-3。
@@ -182,26 +135,7 @@ Agent({
 解消した expert とは別 context の review-expert に、**解消 commit だけ**を read-only でレビューさせる
 (PR 全体の再レビューはしない。PR 本体は op-run の review 済みという前提)。
 
-```
-Agent({
-  subagent_type: "op-skill:review-expert",
-  model: "opus",
-  description: "merge-resolution review: PR #<N>",
-  prompt: """
-    invocation_mode: op_managed
-    <`_shared/spawn-prompt-common.md` §2 (exploration-only) / §4 を全文>
-
-    op-merge のコンフリクト解消 commit を軽くレビューしてください。read-only (編集・commit・push 禁止)。
-    - 作業ディレクトリ: <worktree_path>、対象: merge commit <sha> (`git show --cc <sha>` と `git diff <headRefOid> <sha>`)
-    - PR の意図: <PR 本文の要約 / Issue #<M> の成功条件>、base 側の変更: <この run でマージした PR と要約>
-    - 確認するのは次の 3 点だけ:
-      1. 両側の変更が失われていない (片側の hunk の取りこぼし・巻き戻しがない)
-      2. 解消に不要な変更が混ざっていない
-      3. expert の検証結果が妥当 (該当テストが実行されている)
-    返却: { verdict: "pass" | "fail", findings: [ { file, line, problem } ] }  (fail は具体的な根拠がある場合のみ)
-  """
-})
-```
+prompt は `references/spawn-prompts.md`「解消 commit の軽量レビュー」。
 
 - `pass` → push して 4-3。
 - `fail` → push せず保留。worktree を `--failure` で隔離し、findings を完了報告に載せる。
@@ -212,21 +146,7 @@ CI が無い repo でフェーズ3 に「CI なし」と承認済みなら読ま
 (見分け方は op-thread の `references/github-rest.md`「チェック」)。4-1 の update-branch の後は、
 `op pr view <N> --include meta` の `head_ref_oid` がフェーズ2 から変わったのを確かめてから読む。
 
-下の読み直しを `run_in_background` で起動し、完了通知を待つ。
-
-```bash
-# <head sha> は push 後の head。出力は pass / fail / none / pending / error
-for i in $(seq 1 15); do
-  C=$(gh api --paginate 'repos/{owner}/{repo}/commits/<head sha>/check-runs' --jq '.check_runs[] | .conclusion // "pending"') || { R=error; break; }
-  if [ -z "$C" ]; then if [ "$i" -ge 3 ]; then R=none; else R=pending; fi
-  elif echo "$C" | grep -qx pending; then R=pending
-  elif echo "$C" | grep -qvxE 'success|skipped|neutral'; then R=fail
-  else R=pass; fi
-  [ "$R" != pending ] && break
-  [ "$i" -lt 15 ] && sleep 60
-done
-echo "$R"
-```
+`references/ci-wait.md` の読み直しを `run_in_background` で起動し、完了通知を待つ。
 
 - `pass` → 4-4。`fail` → 保留。
 - `none` (3 分たっても check-runs が 0 件。paths で絞った CI など) → 4-4。完了報告に「CI が走らなかった」と書く。
@@ -253,21 +173,4 @@ op pr view <N> --include meta    # state が MERGED になったことを確認
 
 ## フェーズ5: 完了報告
 
-```
-## op-merge 完了 (base: main)
-
-### マージした PR
-- #210 <タイトル> (squash) — close: #42
-- #212 <タイトル> (squash) — conflict 解消あり、close: #43
-
-### 解消したコンフリクト
-- #212: src/foo.rs — #210 の API 変更に合わせて呼び出し側を更新 (feature-expert、検証 pass、解消レビュー pass)
-
-### 保留した PR
-- #214: CI fail (test_y) → 修正して再実行
-- #216: 解消に仕様判断が必要 (<needs_human_decision.reason>) → 方針を決めて /op-skill:op-merge #216。隔離 worktree: <path>
-- #217: #216 に依存するため保留
-
-### 計画から外した PR (フェーズ2 で要修正 / 保留)
-- #215: CI fail → PR 作成者が修正
-```
+`references/report-templates.md`「完了報告」の形で、マージした PR・解消したコンフリクト・保留した PR (理由と人間がやること)・計画から外した PR を載せる。

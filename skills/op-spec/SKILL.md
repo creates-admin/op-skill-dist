@@ -28,6 +28,7 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 | `references/spec-trim.md` | trim mode の手順。1-0 で trim を選んだ時に読む |
 | `references/spec-consolidate.md` | consolidate mode の手順。1-0 で consolidate を選んだ時に読む |
 | `references/spec-pr.md` | 正本を write した後の PR 手順。write したら読む |
+| `references/present-templates.md` | 人への提示の形 (worklist・3 者照合の結果・進捗)。提示するときに読む |
 
 ---
 
@@ -76,16 +77,7 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 - lane は hint。🟢 寄り = state `exists` で issue 1 本・前提明快、🔍 寄り = `missing` / `stale` / ⚠ / issue 同士が食い違う。最終振り分けは人間。
 - blind skip 禁止: 全行を hint 付きで提示する。controller の独断で行を drop しない。外すのは人間が判断したものだけ。
 
-```
-[mode: issue-driven] pending issue を feature (正本) 主役で整理しました。lane は hint です。
-
-# | feature      | 正本 state | issue    | lane    | premise hint
-1 | billing      | stale     | #12, #15 | 🔍deep  | ⚠ #15 は旧仕様前提の疑い
-2 | auth/session | missing   | #20      | 🔍deep  | 正本なし → lazy 構築
-3 | op-sweep     | exists    | #22      | 🟢quick | confidence 高
-
-どの feature を深掘りしますか？ (番号 / 「全部」/ lane 変更も可)
-```
+提示の形は `references/present-templates.md`「worklist」。
 
 ---
 
@@ -101,23 +93,9 @@ issue に方向性 verdict を付けるところまで回す。issue は揺れ�
 
 ### 2-2. present (human に提示)
 
-返却 (`diff_summary` / `domain_questions` / `premise_check` / `proposed_spec_update[]`) を根拠付きで提示する:
+返却 (`diff_summary` / `domain_questions` / `premise_check` / `proposed_spec_update[]`) を根拠付きで提示する。
 
-```
-feature: billing の 3 者照合結果です。
-
-[差分]
-- spec_stale: 正本「既定値 7 日」⟷ code は 14 日 (src/billing/charge.rs::default_grace)
-- code_deviation: 正本「auto/* のみ」⟷ code が release/* も対象
-
-[domain question — あなたの判断が必要]
-- ? なぜ grace を 14 日に延ばしたか (code に理由なし)
-
-[premise check]
-- #15 の前提「この関数は X を返す」→ 実コードは Y (premise_violated)
-
-どう解消しますか？ (正本を code に合わせる / code を正本に合わせる / 方向修正 など)
-```
+提示の形は `references/present-templates.md`「3 者照合の結果」。
 
 ### 2-3. align (human の domain 知識で解消)
 
@@ -186,15 +164,9 @@ derived issue として起票できる。起票するかは per-gap で human �
 
 ### 3-3. done 判定
 
-done = 選択した範囲の全 feature/issue に verdict (⏸️ を含む) が付いた状態。進捗は feature 主役で示す:
+done = 選択した範囲の全 feature/issue に verdict (⏸️ を含む) が付いた状態。進捗は feature 主役で示す。
 
-```
-[進捗] 選択した feature: 3 件
-  ✓ done    | billing      | #12 ✅ / #15 ✏️
-  ✓ done    | op-sweep     | #22 ⛔
-  … pending | auth/session | #20 (深掘り途中)
-→ done: 2 / 3。残り auth/session を続けますか？
-```
+形は `references/present-templates.md`「進捗」。
 
 全 done になったら ripple-check → handoff に進むか、完了を報告して締める。
 

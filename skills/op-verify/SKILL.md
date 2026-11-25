@@ -45,155 +45,32 @@ op run base-sha --base-ref "origin/$BASE_REF" | jq -r '.payload.base_sha'   # �
 
 `--provision-windows` は `op-config.yaml` を読まず、フェーズ0 の後に「`--provision-windows`: Windows 検証の環境の準備」へ進む。
 `--init` / `--grow` は repo ルートの `op-config.yaml` の `verify_harness` を読む。
-通常モードはここでは読まず、手順 1 で決めた checkout のルートで判定する (`--pr` の head にだけハーネスがある場合を取りこぼさないため)。
+通常モードはここでは読まず、通常モードの手順 1 (`references/run.md`) で決めた checkout のルートで判定する (`--pr` の head にだけハーネスがある場合を取りこぼさないため)。
 
 | `verify_harness` | `--init` | `--grow` |
 |---|---|---|
 | 無い | `--init` へ進む | `--init` を案内して終了 |
 | ある | `op verify conformance` を実行する。pass で `.claude/skills/verify/SKILL.md` もあれば「導入済み」と報告して終了。pass で verify SKILL.md だけ無ければ「`--init`: verify SKILL.md だけを足す」へ進む。fail なら理由を示し、`--grow` と同じ apply で直すか人間に聞く | `--grow` へ進む |
 
-テンプレートは `<skill_dir>/templates/` にある。skill_dir はこの skill の Base directory (Skill 読み込み時に表示される絶対パス)。
-相対パスは plugin 配布では解決しないため、司令官が絶対パスに解決して expert に渡す。
-
-| パス | 内容 |
-|---|---|
-| `templates/common/verify-harness.mjs` | start / stop / smoke の本体。run_id による namespace 化・PID の本人確認停止・実 bind ポートの照合・失敗時の自己回収を持つ (契約 §1〜§3) |
-| `templates/common/verify-skill.md` | 対象 repo の `.claude/skills/verify/SKILL.md` のひな形 (契約 §8)。冒頭のコメントに置き換える値がある |
-| `templates/web/stack.mjs` + `op-config.snippet.yaml` | Web: dev server を空きポートで起動し、Playwright のブラウザを解決する (`driver: playwright`) |
-| `templates/tauri-linux/stack.mjs` + `op-config.snippet.yaml` | Tauri Linux: ビルド → Xvfb → tauri-driver (WebKitGTK)。`driver: webdriver`、capabilities を start の JSON の `webdriver_capabilities` で渡す |
+テンプレートの場所と一覧は `references/init.md`「テンプレート」。
 
 ## `--init`: ハーネスの導入
 
-1. 診断 (read-only): `op-skill:feature-expert` を exploration-only で spawn する (model は Sonnet)。
-   spawn prompt は `~/.claude/skills/_shared/spawn-prompt-common.md` §1〜§5 (§2 は exploration-only) と次を含める:
-
-   ```
-   ~/.claude/skills/_shared/verify-harness.md を Read し、この repo に契約どおりのハーネスを置くための材料を集める。
-   返却 (JSON のみ):
-     { "stack": "web | tauri | other",
-       "targets": [ { "name": "<target 名>", "launch": "<起動コマンド>", "port_option": "<ポートの渡し方 (引数 / 環境変数)>",
-                      "fixed_port_sources": ["<ポートを固定している箇所 file:line>"] } ],
-       "auth": "<ログインが要るか、要るなら dev 用のログイン手段>",
-       "playwright": "<依存にあるか・版>", "tauri": "<ビルドコマンドと実行ファイルのパス。tauri 以外は null>",
-       "placement": "<scripts の置き場所の候補 (repo の慣習)>", "existing_e2e": "<既存 E2E の有無と置き場所>",
-       "blockers": ["<テンプレートのままでは契約を満たせない事情>"] }
-   ```
-
-2. 導入計画を人間に提示して承認を得る: 使うテンプレート、置き場所 (既定 `scripts/verify/`)、target 名と起動コマンド、
-   ポートの渡し方、認証の扱い、追加する依存 (Playwright が無ければ devDependency に足すか)、smoke で見る要素、
-   `.gitignore` に足す行 (`.verify/`)、`.claude/skills/verify/SKILL.md` を置くこと (既にあれば上書きせず、ハーネスを呼ぶ手順との差分を示す。`.claude/` が gitignore されていれば `!.claude/skills/verify/` の例外を足す)。`stack: other` や `blockers` があれば、テンプレートでは足りない点を示して進め方を聞く。
-   キャンセルならここで終了する。
-3. apply (worktree):
-
-   ```bash
-   op run worktree create --task-prefix "verify-init" --base-ref "<BASE_REF>" --base-sha "<BASE_SHA>"
-   # → payload の task_id / worktree_path / branch を控える
-   ```
-
-   `op-skill:feature-expert` を新規に spawn する (isolation は付けない。model は Opus = `model-selection.md` §5.3 の `integration`)。
-   spawn prompt は `spawn-prompt-common.md` §1〜§5 (§2 は apply、フェーズ名 = verify-init-apply) と次を含める:
-
-   ```
-   作業ディレクトリ: <worktree_path> (branch <branch>、base <BASE_SHA>)。push はしない。
-   指示書: 承認済みの導入計画 (下に貼る) が Issue 指示書に当たる。契約は ~/.claude/skills/_shared/verify-harness.md。
-   手本: <skill_dir>/templates/common/verify-harness.mjs と <skill_dir>/templates/<web|tauri-linux>/ (絶対パス)。
-     両方の .mjs を計画の置き場所へコピーし、stack.mjs の TODO を計画どおりに直す。op-config.snippet.yaml を op-config.yaml の
-     verify_harness 節として足し、コマンドのパスを置き場所に合わせる。.gitignore に計画の行を足す。
-     <skill_dir>/templates/common/verify-skill.md を .claude/skills/verify/SKILL.md へコピーし、冒頭のコメントどおりに値を
-     verify_harness の宣言から埋めてコメントを消す (既にあるファイルは計画で承認された差分だけ直す)。
-   触ってよいもの: ハーネスのファイル、op-config.yaml の verify_harness 節、.gitignore、.claude/skills/verify/SKILL.md、計画で承認された依存の追加。
-     アプリのコードやポートの固定をやめるための変更が要るなら実施せず needs_human_decision で返す。
-   検証: `op verify conformance --dir <worktree_path>` が exit 0 になるまで直す。最後の出力 JSON を完了報告に含める。
-   完了報告は expert-report-schemas.md「修正完了報告 schema」(issue: null / cluster_id: "verify-init")。
-   ```
-
-4. 完了後は `~/.claude/skills/_shared/apply-completion-verify.md` に従う
-   (`op apply verify-commit --worktree <worktree_path> --base-ref <BASE_REF> --reported-json '<commits_added>'`)。
-   続けて司令官が `op verify conformance --dir <worktree_path>` を自分で実行し、exit 0 を確かめる (自己申告だけで PR にしない)。
-   `.claude/skills/verify/SKILL.md` も Read し、先頭が `name: verify` の frontmatter で、`{{` とひな形のコメントが残っておらず、
-   コマンドが `verify_harness` の start / smoke / stop と一致し、`git -C <worktree_path> ls-files --error-unmatch .claude/skills/verify/SKILL.md` が exit 0 であることを確かめる。
-   fail なら failures を添えて同じ expert に 1 回だけ戻す。それでも fail なら `op run worktree cleanup --task-id <task_id> --failure` して報告する。
-5. PR: フェーズ「PR」の手順で作る。タイトルは `verify(init): <stack> harness`。
-
-verify SKILL.md は `verify_harness` に start / stop / smoke があるときだけ扱う (`verify-harness.md` §8)。
+診断 → 導入計画の人間承認 → feature-expert が worktree で apply → 司令官が `op verify conformance` と verify SKILL.md を確かめる → PR。
+手順と spawn prompt は `references/init.md`「手順」。
 
 ### `--init`: verify SKILL.md だけを足す
 
-1. ひな形を `verify_harness` の宣言で埋めた案を人間に示して承認を得る (gitignore の例外が要ればそれも)。キャンセルならここで終了する。
-2. apply: `--init` の 3 と同じ手順 (task-prefix `verify-skill`、フェーズ名 verify-skill-apply、model は Sonnet = §5.3 の `extension`)。
-   指示書は承認した案。ハーネスと op-config.yaml は触らず、触ってよいものは `.claude/skills/verify/SKILL.md` と `.gitignore` の例外の行だけ。
-3. `--init` の 4 の確認をする。
-4. PR: タイトルは `verify(skill): add verify SKILL.md`。
+ひな形を埋めた案の人間承認 → apply → 確認 → PR。手順は `references/init.md`「verify SKILL.md だけを足す」。
 
 ## 通常モード: 実機検証
 
-1. checkout を決める。
-
-   | 指定 | checkout |
-   |---|---|
-   | `--pr <N>` / `--branch <name>` | head を fetch し、`git worktree add --detach "$HOME/cwork/worktrees/<repo>/verify-<pr-N か branch>-<YYYYMMDD-HHMMSS>" <head SHA>` で作る (`skills/op-run/references/global-review-spawn.md` の review worktree と同じ作り方。fork PR は対象外) |
-   | `--checkout <path>` | そのパス |
-   | 省略 | 現在の checkout |
-
-   checkout のルートの `op-config.yaml` の `verify_harness` を読む (dispatcher の起動条件の節と同じく検証対象 checkout の宣言で判定する)。
-   無ければ `--init` を案内して終了する (作った worktree のパスは報告する)。
-
-   `--pr` / `--branch` で作った worktree には依存が入っていないため、ハーネスを起動する前に checkout のルートで入れる。
-   パッケージマネージャは lockfile で判定する (`~/.claude/skills/_shared/project-profile.md`「検証コマンド (スタック別)」):
-   `pnpm-lock.yaml` → `pnpm install --frozen-lockfile` / `yarn.lock` → `yarn install --frozen-lockfile` / `package-lock.json` → `npm ci`。
-   lockfile が無ければ入れない。失敗したら verify-runner を spawn せず、stderr の末尾を添えて `needs_human_decision` で報告する。
-   `--checkout` と省略時は人間の checkout なので入れない。
-
-2. scenarios を組む: `--scenario` があればそれ。無ければ PR 本文の `Fixes #N` の Issue の成功条件と diff から組み、人間に確認する。
-   組めなければ空にする (verify-runner が diff の触れた画面の描画と主要操作だけを確かめる)。
-3. dispatcher を controller = op-verify として使う (`skills/op-run/references/runtime-verify-dispatcher.md`)。
-   - 起動条件の節の diff 判定はしない (人間が明示して起動したため)。ハーネスの有無の扱いは手順 1 で済んでいる
-   - Windows 判定: `--windows` があるか、checkout の `verify_harness.runtime` が `windows` か、
-     `git -C <checkout> diff --name-only <BASE_SHA>...HEAD` が `verify_harness.windows_paths` に当たれば当たりとする
-   - 当たれば段全体を「lease → try { 検証 } finally { release }」の形で進める。手順と fence は同 dispatcher 1.1 と 4 章が正本で、ここでは書き直さない
-     1. lease: 同 dispatcher 1.1 を `CHECKOUT=<checkout>`、`LEASE_HOLDER=opverify-<YYYYMMDD-HHMMSS>` (手順 4 の session と同じ値) で実行する
-     2. try: `RV_LEASE_ABORT` が空なら verify-runner を spawn し、返却を下の順に処理する。空でなければ spawn せず、同 dispatcher 1.1 のとおり「結果が得られない」で記録して `RV_LEASE_ABORT` を報告に載せる
-     3. finally: try がどの経路で終わっても、同 dispatcher 4 章 (保留 stop の引き取り → Windows の返却) を実行する。release の非 0 は報告に載せる
-   - Windows 用 exe の build と lease のオプションは、checkout の `verify_harness.windows` の宣言から同 dispatcher 1.1 が組む。Windows 側の失敗は `requires_runtime` の正当な skip として扱う
-   - 当たらなければ lease を取らず、windows_endpoint も windows の理由も渡さない
-   - verify-runner の spawn は同 dispatcher の spawn の節どおり (`subagent_type: "op-skill:verify-runner"`、model `opus`、Fable は使わない。windows_endpoint / windows_capabilities / windows の理由 / windows_provision も同節の表どおり)
-   - 返却は同 dispatcher の skip の扱いの節 → 証跡の実在確認の節 → 保留 stop の引き取りの節の順に処理する
-   - 結果の値は同 dispatcher の state 記録の節の表で 1 件に確定させる
-4. 記録: `--pr` なら、同 dispatcher の op-run での結果の扱いの節の state push と同じ entry を PR の op-review-state に push する
-   (write-id と session は `opverify-<YYYYMMDD-HHMMSS>`。label は遷移しない)。それ以外は完了報告だけに載せる。
-5. 1 で作った worktree は残す (証跡が checkout 内に置かれうるため)。パスを報告し、片付けは人間 (`git worktree remove`) に任せる。
+checkout を決める → scenarios を組む → `skills/op-run/references/runtime-verify-dispatcher.md` を controller = op-verify として使う → 記録 → worktree は残す。
+手順は `references/run.md`。
 
 ## `--grow`: ハーネスの育成
 
-1. 候補を集める。
-   - gap: `--from` の JSON の `gaps[]`、`--pr <N>` なら `op review state pull --pr <N>` の `post_checks["verify-runner"].gaps`、
-     どちらも無ければこの会話の通常モードの完了報告の `gaps[]`
-   - regression spec 昇格候補: `--from` の JSON かこの会話の通常モードの完了報告の `scenarios[]` のうち、人間が繰り返し確かめたいと言うもの
-     (契約 §6: 昇格は人間の承認を経たものだけ。網羅的な spec スイートは作らない)。
-     op-review-state の記録には `scenarios[]` が残らないため、`--pr` で起動してこの会話に通常モードの報告も無いときは gap だけを候補にする
-2. 提示して選んでもらう:
-
-   ```
-   ## op-verify --grow 候補
-
-   | id | 種別 | 工程 / シナリオ | 手作業で補ったこと | ハーネスに足すこと |
-   |---|---|---|---|---|
-   | G1 | gap | ... | ... | ... |
-   | S1 | spec | ... | - | regression spec に昇格 |
-   | V1 | skill | - | - | verify SKILL.md をひな形から作る |
-
-   どれを還元しますか?  1. すべて  2. id を選択 (例: G1, S1)  3. キャンセル
-   ```
-
-   V1 は `.claude/skills/verify/SKILL.md` が無く、`verify_harness` に start / stop / smoke があるときだけ載せる。
-
-3. apply: `--init` の 3〜4 と同じ手順 (task-prefix `verify-grow`、フェーズ名 verify-grow-apply、model は Sonnet = §5.3 の `extension`)。
-   指示書は選ばれた候補の JSON。触ってよいものはハーネスのファイル・op-config.yaml の verify_harness 節・regression spec
-   (既存 E2E の置き場所に置き、start 済みの run に対して通ることを確かめる)・`.claude/skills/verify/SKILL.md`。
-   verify SKILL.md には、昇格した spec を「繰り返し確かめる流れ」に実行コマンドで足し、ハーネスへ還元した gap を「手作業で補う工程」から消す
-   (還元できず手作業のまま残す gap はそこに足す)。V1 が選ばれたらひな形から作る。verify SKILL.md が無く V1 も選ばれていなければ触らない。
-   conformance が exit 0 であることと、`--init` の手順 4 の verify SKILL.md の確認は同じく必須。
-4. PR: タイトルは `verify(grow): <要約>`。
+候補 (gap / regression spec 昇格 / verify SKILL.md) を集める → 人間が選ぶ → apply → PR。手順と提示の形は `references/grow.md`。
 
 ## `--provision-windows`: Windows 検証の環境の準備
 
@@ -215,13 +92,4 @@ op pr create --base "<BASE_REF>" --head "<branch>" --title "<タイトル>" --bo
 
 ## 完了報告
 
-```
-## op-verify <init | 実機検証 | grow> (provision-windows の報告は references/provision-windows.md)
-- 対象: <repo / PR #N / branch / checkout>
-- 結果: <PR URL と conformance の結果 | pass / pass_with_notes / block / needs_human_decision / skipped (skip_reason)>
-- シナリオ: <name: pass / fail (expected / actual / repro_steps)>
-- 証跡: <実在を確かめたパス>
-- 未検証の範囲: <requires_runtime の scope と reason> (`windows not provisioned` なら `/op-skill:op-verify --provision-windows` を案内)
-- gap: <step / manual_workaround / suggestion> (あれば `/op-skill:op-verify --grow` を案内)
-- stop / 後片付け: <stop の exit と stderr 末尾、Windows を借りたときは release の exit と `RV_LEASE_ABORT`、残した worktree のパス>
-```
+形は `references/report.md`。
