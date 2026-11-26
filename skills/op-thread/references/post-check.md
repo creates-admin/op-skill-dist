@@ -1,6 +1,6 @@
 # post-check (Issue 固有の再監査)
 
-Step 4 の 1〜3 の後に行う。先に変更を commit する (Step 5.1 の形。push はまだ)。Issue 本文の `<!-- op-post-check-expert: <expert> -->` で分ける。
+Step 4 の 1〜3 の後に行う。先にすべての変更をコミットして push しておく。Issue 本文の `<!-- op-post-check-expert: <expert> -->` で分ける。
 
 | 値 | 動作 |
 |---|---|
@@ -44,7 +44,7 @@ security と aux の両方を呼んだときは、重いほうの判定で扱う
 | 判定 | 動作 |
 |---|---|
 | PASS / PASS_WITH_NOTES | Step 5 へ。Notes は PR 本文の「残存リスク / follow-up」に書く |
-| BLOCK | Required Changes を Step 2 と同じ形で直して commit し、Step 3 の関係するものを再実行してから、最初の expert から呼び直す (aux は条件を満たせばまた呼ぶ)。呼び直しは 2 回まで。3 回目の BLOCK は PR 本文に書いて人に上げる |
+| BLOCK | Required Changes を Step 2 と同じ形で直してコミットと push をし、Step 3 の関係するものを再実行してから、最初の expert から呼び直す (aux は条件を満たせばまた呼ぶ)。呼び直しは 2 回まで。3 回目の BLOCK は PR 本文に書いて人に上げる |
 | NEEDS_HUMAN_DECISION | 直さずに PR 本文に判断の材料 (decision_type / options / safest_default) を書き、人に上げる |
 | 結果が返らない (spawn 失敗・応答なし) | PR 本文に「post-check 未実施」と書き、人に再実行を頼む |
 

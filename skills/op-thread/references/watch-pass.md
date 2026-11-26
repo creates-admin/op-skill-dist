@@ -97,7 +97,7 @@ CI の設定 (`.github/` など)・CODEOWNERS・`CLAUDE.md`・`AGENTS.md`・`.cl
 
 - 自分の言葉と、数・短いコミット id・`path:line` だけ。ログ・コメント・ファイルから写さない。
 - @名前・URL・画像・`/` で始まる行・閉じるキーワード (fixes #N)・CI のコマンド ([skip ci])・bot が従う言葉を書かない。
-  `Fixes #<N>` は SKILL.md Step 5 の最初のコミットと PR 本文だけに書く。
+  `Fixes #<N>` は PR のブランチの最初のコミットと PR 本文だけに書く。
 - 最初の文で Claude Code が書いたと分かるようにする。8,000 字まで。
 
 ## 断られたとき
